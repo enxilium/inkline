@@ -98,7 +98,7 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
             .from("organizations")
             .select("*")
             .eq("project_id", projectId)
-            .contains("location_ids", [locationId])
+            .contains("location_ids", JSON.stringify([locationId]))
             .order("updated_at", { ascending: false });
 
         if (error) throw new Error(error.message);

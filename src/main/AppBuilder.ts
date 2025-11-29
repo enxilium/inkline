@@ -44,6 +44,7 @@ import { DeleteProject } from "../@core/application/use-cases/project/DeleteProj
 import { ExportManuscript } from "../@core/application/use-cases/project/ExportManuscript";
 import { LoadProjectList } from "../@core/application/use-cases/project/LoadProjectList";
 import { OpenProject } from "../@core/application/use-cases/project/OpenProject";
+import { ReorderProjectItems } from "../@core/application/use-cases/project/ReorderProjectItems";
 import { CreateCharacter } from "../@core/application/use-cases/world/CreateCharacter";
 import { CreateLocation } from "../@core/application/use-cases/world/CreateLocation";
 import { CreateOrganization } from "../@core/application/use-cases/world/CreateOrganization";
@@ -91,6 +92,7 @@ import { DeleteProjectController } from "../@interface-adapters/controllers/proj
 import { ExportManuscriptController } from "../@interface-adapters/controllers/project/ExportManuscriptController";
 import { LoadProjectListController } from "../@interface-adapters/controllers/project/LoadProjectListController";
 import { OpenProjectController } from "../@interface-adapters/controllers/project/OpenProjectController";
+import { ReorderProjectItemsController } from "../@interface-adapters/controllers/project/ReorderProjectItemsController";
 import { CreateCharacterController } from "../@interface-adapters/controllers/world/CreateCharacterController";
 import { CreateLocationController } from "../@interface-adapters/controllers/world/CreateLocationController";
 import { CreateOrganizationController } from "../@interface-adapters/controllers/world/CreateOrganizationController";
@@ -199,6 +201,7 @@ type UseCaseMap = {
         exportManuscript: ExportManuscript;
         loadProjectList: LoadProjectList;
         openProject: OpenProject;
+        reorderProjectItems: ReorderProjectItems;
     };
     world: {
         createCharacter: CreateCharacter;
@@ -428,6 +431,7 @@ export class AppBuilder {
                     repo.organization,
                     repo.asset
                 ),
+                reorderProjectItems: new ReorderProjectItems(repo.project),
             },
             world: {
                 createCharacter: new CreateCharacter(
@@ -609,6 +613,9 @@ export class AppBuilder {
                 ),
                 openProject: new OpenProjectController(
                     useCases.project.openProject
+                ),
+                reorderProjectItems: new ReorderProjectItemsController(
+                    useCases.project.reorderProjectItems
                 ),
             },
             world: {

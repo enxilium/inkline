@@ -59,7 +59,7 @@ export class OpenProject {
             throw new Error("Project not found.");
         }
 
-        const [chapters, characters, locations, scrapNotes, organizations] =
+        const [chapters, rawCharacters, rawLocations, rawScrapNotes, rawOrganizations] =
             await Promise.all([
                 this.chapterRepository.findByProjectId(projectId),
                 this.characterRepository.findByProjectId(projectId),
@@ -69,6 +69,28 @@ export class OpenProject {
             ]);
 
         chapters.sort((a, b) => a.order - b.order);
+
+        const sortByIds = <T extends { id: string }>(
+            items: T[],
+            ids: string[]
+        ): T[] => {
+            const map = new Map(items.map((i) => [i.id, i]));
+            const sorted: T[] = [];
+            ids.forEach((id) => {
+                const item = map.get(id);
+                if (item) {
+                    sorted.push(item);
+                    map.delete(id);
+                }
+            });
+            map.forEach((item) => sorted.push(item));
+            return sorted;
+        };
+
+        const characters = sortByIds(rawCharacters, project.characterIds);
+        const locations = sortByIds(rawLocations, project.locationIds);
+        const scrapNotes = sortByIds(rawScrapNotes, project.scrapNoteIds);
+        const organizations = sortByIds(rawOrganizations, project.organizationIds);
 
         const charactersByLocation = new Map<string, string[]>();
         const trackCharacter = (

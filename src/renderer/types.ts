@@ -66,3 +66,11 @@ export type WorkspaceDocumentRef = {
     kind: WorkspaceDocumentKind;
     id: string;
 };
+
+export type UseCaseShortcut = {
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    run: () => Promise<void>;
+};

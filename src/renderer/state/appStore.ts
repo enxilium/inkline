@@ -198,6 +198,10 @@ type AppStore = {
     deleteLocation: (locationId: string) => Promise<void>;
     deleteOrganization: (organizationId: string) => Promise<void>;
     reorderChapters: (newOrder: string[]) => Promise<void>;
+    reorderScrapNotes: (newOrder: string[]) => Promise<void>;
+    reorderCharacters: (newOrder: string[]) => Promise<void>;
+    reorderLocations: (newOrder: string[]) => Promise<void>;
+    reorderOrganizations: (newOrder: string[]) => Promise<void>;
     setAutosaveStatus: (status: AutosaveStatus) => void;
     setAutosaveError: (message: string | null) => void;
     setLastSavedAt: (timestamp: number | null) => void;
@@ -664,9 +668,15 @@ export const useAppStore = create<AppStore>((set, get) => {
             });
 
             set((state) => {
-                const nextChapters = state.chapters.filter(
+                const filtered = state.chapters.filter(
                     (c) => c.id !== chapterId
                 );
+                
+                // Re-index orders to close the gap
+                const nextChapters = filtered
+                    .sort((a, b) => a.order - b.order)
+                    .map((c, index) => ({ ...c, order: index }));
+
                 let nextActive = state.activeDocument;
                 if (
                     state.activeDocument?.kind === "chapter" &&
@@ -836,6 +846,114 @@ export const useAppStore = create<AppStore>((set, get) => {
                     autosaveError: createErrorMessage(
                         error,
                         "Failed to save chapter order."
+                    ),
+                });
+            }
+        },
+        reorderScrapNotes: async (newOrder) => {
+            const projectId = get().projectId.trim();
+            if (!projectId) return;
+
+            set((state) => {
+                const map = new Map(state.scrapNotes.map((i) => [i.id, i]));
+                const reordered = newOrder
+                    .map((id) => map.get(id))
+                    .filter((i): i is WorkspaceScrapNote => !!i);
+                return { scrapNotes: reordered };
+            });
+
+            try {
+                await rendererApi.project.reorderProjectItems({
+                    projectId,
+                    kind: "scrapNote",
+                    orderedIds: newOrder,
+                });
+            } catch (error) {
+                set({
+                    autosaveError: createErrorMessage(
+                        error,
+                        "Failed to save scrap note order."
+                    ),
+                });
+            }
+        },
+        reorderCharacters: async (newOrder) => {
+            const projectId = get().projectId.trim();
+            if (!projectId) return;
+
+            set((state) => {
+                const map = new Map(state.characters.map((i) => [i.id, i]));
+                const reordered = newOrder
+                    .map((id) => map.get(id))
+                    .filter((i): i is WorkspaceCharacter => !!i);
+                return { characters: reordered };
+            });
+
+            try {
+                await rendererApi.project.reorderProjectItems({
+                    projectId,
+                    kind: "character",
+                    orderedIds: newOrder,
+                });
+            } catch (error) {
+                set({
+                    autosaveError: createErrorMessage(
+                        error,
+                        "Failed to save character order."
+                    ),
+                });
+            }
+        },
+        reorderLocations: async (newOrder) => {
+            const projectId = get().projectId.trim();
+            if (!projectId) return;
+
+            set((state) => {
+                const map = new Map(state.locations.map((i) => [i.id, i]));
+                const reordered = newOrder
+                    .map((id) => map.get(id))
+                    .filter((i): i is WorkspaceLocation => !!i);
+                return { locations: reordered };
+            });
+
+            try {
+                await rendererApi.project.reorderProjectItems({
+                    projectId,
+                    kind: "location",
+                    orderedIds: newOrder,
+                });
+            } catch (error) {
+                set({
+                    autosaveError: createErrorMessage(
+                        error,
+                        "Failed to save location order."
+                    ),
+                });
+            }
+        },
+        reorderOrganizations: async (newOrder) => {
+            const projectId = get().projectId.trim();
+            if (!projectId) return;
+
+            set((state) => {
+                const map = new Map(state.organizations.map((i) => [i.id, i]));
+                const reordered = newOrder
+                    .map((id) => map.get(id))
+                    .filter((i): i is WorkspaceOrganization => !!i);
+                return { organizations: reordered };
+            });
+
+            try {
+                await rendererApi.project.reorderProjectItems({
+                    projectId,
+                    kind: "organization",
+                    orderedIds: newOrder,
+                });
+            } catch (error) {
+                set({
+                    autosaveError: createErrorMessage(
+                        error,
+                        "Failed to save organization order."
                     ),
                 });
             }
