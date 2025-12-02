@@ -4,7 +4,7 @@ import classNames from "clsx";
 import { Button } from "./ui/Button";
 
 type ToolbarButtonProps = {
-    label: string;
+    label: React.ReactNode;
     onClick: () => void;
     isActive?: boolean;
     disabled?: boolean;

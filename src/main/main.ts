@@ -21,6 +21,11 @@ const createWindow = (): void => {
         height: 600,
         width: 800,
         show: false,
+        transparent: true,
+        vibrancy: "under-window",
+        visualEffectState: "active",
+        titleBarStyle: "hidden",
+        ...(process.platform !== "darwin" ? { titleBarOverlay: true } : {}),
         webPreferences: {
             preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
         },

@@ -14,6 +14,7 @@ export const rendererConfig: Configuration = {
                     loader: "ts-loader",
                     options: {
                         transpileOnly: true,
+                        configFile: "tsconfig.renderer.json",
                     },
                 },
             },

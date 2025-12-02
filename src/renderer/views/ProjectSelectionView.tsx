@@ -68,49 +68,49 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     };
 
     return (
-        <section className="project-panel">
+        <div>
             <div>
                 <p className="panel-label">Projects</p>
-                <h2>Select a project</h2>
+                <h2>Welcome to Inkline</h2>
                 <p className="panel-subtitle">
-                    Load an existing manuscript or start something new.
+                    What are we working on today?
                 </p>
             </div>
-            <div className="project-actions">
-                <Button
-                    type="button"
-                    variant="ghost"
-                    onClick={onRefresh}
-                    disabled={status === "loading"}
-                >
-                    {status === "loading" ? "Refreshing…" : "Refresh"}
-                </Button>
-                <form className="create-project-form" onSubmit={handleSubmit}>
-                    <Label htmlFor="new-project-title" className="sr-only">
-                        Project title
-                    </Label>
-                    <Input
-                        id="new-project-title"
-                        type="text"
-                        value={draftTitle}
-                        onChange={(event) => setDraftTitle(event.target.value)}
-                        placeholder="Project title"
-                        disabled={isSubmitting}
-                    />
+            <div className="projects">
+                <div className="project-actions">
                     <Button
-                        type="submit"
-                        variant="primary"
-                        disabled={isSubmitting}
+                        type="button"
+                        variant="ghost"
+                        onClick={onRefresh}
+                        disabled={status === "loading"}
                     >
-                        {isSubmitting ? "Creating…" : "Create"}
+                        {status === "loading" ? "Refreshing…" : "Refresh"}
                     </Button>
-                </form>
-            </div>
-            {error ? <span className="card-hint is-error">{error}</span> : null}
-            {localError ? (
-                <span className="card-hint is-error">{localError}</span>
-            ) : null}
-            <ScrollArea className="project-scroll">
+                    <form className="create-project-form" onSubmit={handleSubmit}>
+                        <Label htmlFor="new-project-title" className="sr-only">
+                            New Project Title
+                        </Label>
+                        <Input
+                            id="new-project-title"
+                            type="text"
+                            value={draftTitle}
+                            onChange={(event) => setDraftTitle(event.target.value)}
+                            placeholder="New Project Title"
+                            disabled={isSubmitting}
+                        />
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            disabled={isSubmitting}
+                        >
+                            {isSubmitting ? "Creating…" : "Create"}
+                        </Button>
+                    </form>
+                </div>
+                {error ? <span className="card-hint is-error">{error}</span> : null}
+                {localError ? (
+                    <span className="card-hint is-error">{localError}</span>
+                ) : null}
                 <div className="project-grid">
                     {status === "loading" ? (
                         <div className="project-card is-placeholder">
@@ -120,24 +120,15 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                         </div>
                     ) : projects.length ? (
                         projects.map((project) => (
-                            <div key={project.id} className="project-card">
+                            <div key={project.id} className="project-card" onClick={() => onOpenProject(project)}>
+                                {/*project.cover ? <img src={project.cover} alt={`${project.title} cover`} /> : null*/}
                                 <div>
-                                    <h3>{project.title}</h3>
+                                    <div>{project.title}</div>
                                     <p className="panel-subtitle">
                                         Updated{" "}
                                         {formatTimestamp(project.updatedAt)}
                                     </p>
                                 </div>
-                                <Button
-                                    type="button"
-                                    variant="primary"
-                                    onClick={() => onOpenProject(project)}
-                                    disabled={openingProjectId === project.id}
-                                >
-                                    {openingProjectId === project.id
-                                        ? "Opening…"
-                                        : "Open"}
-                                </Button>
                                 <Button
                                     type="button"
                                     variant="ghost"
@@ -162,10 +153,10 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                         </p>
                     )}
                 </div>
-            </ScrollArea>
+            </div>
             {selectionError ? (
                 <span className="card-hint is-error">{selectionError}</span>
             ) : null}
-        </section>
+        </div>
     );
 };

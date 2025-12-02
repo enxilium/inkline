@@ -149,10 +149,12 @@ type AppStore = {
     scrapNotes: WorkspaceScrapNote[];
     assets: WorkspaceAssets;
     activeDocument: WorkspaceDocumentRef | null;
+    openTabs: WorkspaceDocumentRef[];
     autosaveStatus: AutosaveStatus;
     autosaveError: string | null;
     lastSavedAt: number | null;
     shortcutStates: ShortcutStates;
+    draggedDocument: { id: string; kind: string; title: string } | null;
     bootstrapSession: () => Promise<void>;
     setAuthField: (field: keyof typeof initialAuthForm, value: string) => void;
     toggleAuthMode: () => void;
@@ -166,6 +168,8 @@ type AppStore = {
     returnToProjects: () => Promise<void>;
     logout: () => Promise<void>;
     setActiveDocument: (selection: WorkspaceDocumentRef) => void;
+    closeTab: (selection: WorkspaceDocumentRef) => void;
+    reorderTabs: (newOrder: WorkspaceDocumentRef[]) => void;
     updateChapterLocally: (
         chapterId: string,
         patch: Partial<WorkspaceChapter>
@@ -207,6 +211,7 @@ type AppStore = {
     setLastSavedAt: (timestamp: number | null) => void;
     setShortcutState: (id: string, state: ShortcutStates[string]) => void;
     resetShortcutState: (id: string) => void;
+    setDraggedDocument: (doc: { id: string; kind: string; title: string } | null) => void;
 };
 
 export const useAppStore = create<AppStore>((set, get) => {
@@ -222,6 +227,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         | "scrapNotes"
         | "assets"
         | "activeDocument"
+        | "openTabs"
         | "autosaveStatus"
         | "autosaveError"
         | "lastSavedAt"
@@ -236,6 +242,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         scrapNotes: [] as WorkspaceScrapNote[],
         assets: emptyAssets,
         activeDocument: null as WorkspaceDocumentRef | null,
+        openTabs: [] as WorkspaceDocumentRef[],
         autosaveStatus: defaultAutosaveStatus,
         autosaveError: null,
         lastSavedAt: null,
@@ -313,6 +320,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             scrapNotes: payload.scrapNotes,
             assets: indexedAssets,
             activeDocument: nextSelection,
+            openTabs: nextSelection ? [nextSelection] : [],
             stage: "workspace",
             autosaveStatus: defaultAutosaveStatus,
             autosaveError: null,
@@ -344,9 +352,11 @@ export const useAppStore = create<AppStore>((set, get) => {
         scrapNotes: [],
         assets: emptyAssets,
         activeDocument: null,
+        openTabs: [],
         autosaveStatus: defaultAutosaveStatus,
         autosaveError: null,
         lastSavedAt: null,
+        draggedDocument: null,
         shortcutStates: defaultShortcutStates,
         bootstrapSession: async () => {
             ensureAuthSubscription();
@@ -509,7 +519,38 @@ export const useAppStore = create<AppStore>((set, get) => {
             }
         },
         setActiveDocument: (selection) => {
-            set({ activeDocument: selection });
+            set((state) => {
+                const exists = state.openTabs.some(
+                    (tab) => tab.kind === selection.kind && tab.id === selection.id
+                );
+                return {
+                    activeDocument: selection,
+                    openTabs: exists ? state.openTabs : [...state.openTabs, selection],
+                };
+            });
+        },
+        closeTab: (selection) => {
+            set((state) => {
+                const newTabs = state.openTabs.filter(
+                    (tab) => !(tab.kind === selection.kind && tab.id === selection.id)
+                );
+                
+                let nextActive = state.activeDocument;
+                if (
+                    state.activeDocument?.kind === selection.kind &&
+                    state.activeDocument.id === selection.id
+                ) {
+                    nextActive = newTabs.length > 0 ? newTabs[newTabs.length - 1] : null;
+                }
+
+                return {
+                    openTabs: newTabs,
+                    activeDocument: nextActive,
+                };
+            });
+        },
+        reorderTabs: (newOrder) => {
+            set({ openTabs: newOrder });
         },
         updateChapterLocally: (chapterId, patch) => {
             set((state) => ({
@@ -557,6 +598,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             set((state) => ({
                 chapters: [...state.chapters, response.chapter],
                 activeDocument: { kind: "chapter", id: response.chapter.id },
+                openTabs: [...state.openTabs, { kind: "chapter", id: response.chapter.id }],
             }));
         },
         createScrapNoteEntry: async () => {
@@ -576,6 +618,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     kind: "scrapNote",
                     id: response.scrapNote.id,
                 },
+                openTabs: [...state.openTabs, { kind: "scrapNote", id: response.scrapNote.id }],
             }));
         },
         createCharacterEntry: async () => {
@@ -595,6 +638,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     kind: "character",
                     id: response.character.id,
                 },
+                openTabs: [...state.openTabs, { kind: "character", id: response.character.id }],
             }));
         },
         createLocationEntry: async () => {
@@ -611,6 +655,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             set((state) => ({
                 locations: [...state.locations, response.location],
                 activeDocument: { kind: "location", id: response.location.id },
+                openTabs: [...state.openTabs, { kind: "location", id: response.location.id }],
             }));
         },
         createOrganizationEntry: async () => {
@@ -632,6 +677,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     kind: "organization",
                     id: response.organization.id,
                 },
+                openTabs: [...state.openTabs, { kind: "organization", id: response.organization.id }],
             }));
         },
         deleteProject: async (projectId) => {
@@ -677,18 +723,21 @@ export const useAppStore = create<AppStore>((set, get) => {
                     .sort((a, b) => a.order - b.order)
                     .map((c, index) => ({ ...c, order: index }));
 
+                const nextTabs = state.openTabs.filter(
+                    (t) => !(t.kind === "chapter" && t.id === chapterId)
+                );
+
                 let nextActive = state.activeDocument;
                 if (
                     state.activeDocument?.kind === "chapter" &&
                     state.activeDocument.id === chapterId
                 ) {
-                    nextActive = nextChapters.length
-                        ? { kind: "chapter", id: nextChapters[0].id }
-                        : null;
+                    nextActive = nextTabs.length > 0 ? nextTabs[nextTabs.length - 1] : null;
                 }
                 return {
                     chapters: nextChapters,
                     activeDocument: nextActive,
+                    openTabs: nextTabs,
                 };
             });
         },
@@ -707,18 +756,20 @@ export const useAppStore = create<AppStore>((set, get) => {
                 const nextNotes = state.scrapNotes.filter(
                     (n) => n.id !== scrapNoteId
                 );
+                const nextTabs = state.openTabs.filter(
+                    (t) => !(t.kind === "scrapNote" && t.id === scrapNoteId)
+                );
                 let nextActive = state.activeDocument;
                 if (
                     state.activeDocument?.kind === "scrapNote" &&
                     state.activeDocument.id === scrapNoteId
                 ) {
-                    nextActive = nextNotes.length
-                        ? { kind: "scrapNote", id: nextNotes[0].id }
-                        : null;
+                    nextActive = nextTabs.length > 0 ? nextTabs[nextTabs.length - 1] : null;
                 }
                 return {
                     scrapNotes: nextNotes,
                     activeDocument: nextActive,
+                    openTabs: nextTabs,
                 };
             });
         },
@@ -737,18 +788,20 @@ export const useAppStore = create<AppStore>((set, get) => {
                 const nextCharacters = state.characters.filter(
                     (c) => c.id !== characterId
                 );
+                const nextTabs = state.openTabs.filter(
+                    (t) => !(t.kind === "character" && t.id === characterId)
+                );
                 let nextActive = state.activeDocument;
                 if (
                     state.activeDocument?.kind === "character" &&
                     state.activeDocument.id === characterId
                 ) {
-                    nextActive = nextCharacters.length
-                        ? { kind: "character", id: nextCharacters[0].id }
-                        : null;
+                    nextActive = nextTabs.length > 0 ? nextTabs[nextTabs.length - 1] : null;
                 }
                 return {
                     characters: nextCharacters,
                     activeDocument: nextActive,
+                    openTabs: nextTabs,
                 };
             });
         },
@@ -767,18 +820,20 @@ export const useAppStore = create<AppStore>((set, get) => {
                 const nextLocations = state.locations.filter(
                     (l) => l.id !== locationId
                 );
+                const nextTabs = state.openTabs.filter(
+                    (t) => !(t.kind === "location" && t.id === locationId)
+                );
                 let nextActive = state.activeDocument;
                 if (
                     state.activeDocument?.kind === "location" &&
                     state.activeDocument.id === locationId
                 ) {
-                    nextActive = nextLocations.length
-                        ? { kind: "location", id: nextLocations[0].id }
-                        : null;
+                    nextActive = nextTabs.length > 0 ? nextTabs[nextTabs.length - 1] : null;
                 }
                 return {
                     locations: nextLocations,
                     activeDocument: nextActive,
+                    openTabs: nextTabs,
                 };
             });
         },
@@ -799,18 +854,20 @@ export const useAppStore = create<AppStore>((set, get) => {
                 const nextOrgs = state.organizations.filter(
                     (o) => o.id !== organizationId
                 );
+                const nextTabs = state.openTabs.filter(
+                    (t) => !(t.kind === "organization" && t.id === organizationId)
+                );
                 let nextActive = state.activeDocument;
                 if (
                     state.activeDocument?.kind === "organization" &&
                     state.activeDocument.id === organizationId
                 ) {
-                    nextActive = nextOrgs.length
-                        ? { kind: "organization", id: nextOrgs[0].id }
-                        : null;
+                    nextActive = nextTabs.length > 0 ? nextTabs[nextTabs.length - 1] : null;
                 }
                 return {
                     organizations: nextOrgs,
                     activeDocument: nextActive,
+                    openTabs: nextTabs,
                 };
             });
         },
@@ -982,6 +1039,9 @@ export const useAppStore = create<AppStore>((set, get) => {
                     [id]: { status: "idle" },
                 },
             }));
+        },
+        setDraggedDocument: (doc) => {
+            set({ draggedDocument: doc });
         },
     };
 });

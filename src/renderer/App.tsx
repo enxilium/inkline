@@ -7,6 +7,7 @@ import { AuthView } from "./views/AuthView";
 import { LoadingView } from "./views/LoadingView";
 import { ProjectSelectionView } from "./views/ProjectSelectionView";
 import { WorkspaceView } from "./views/WorkspaceView";
+import { ChevronLeftIcon } from "./components/ui/Icons";
 
 import "@fontsource-variable/inter/index.css";
 import "@fontsource/roboto/index.css";
@@ -25,6 +26,7 @@ import "@fontsource/crimson-pro/index.css";
 import "@fontsource/roboto-slab/index.css";
 import "@fontsource/ibm-plex-mono/index.css";
 
+import "flexlayout-react/style/dark.css";
 import "./styles.css";
 
 export const App: React.FC = () => {
@@ -51,6 +53,7 @@ export const App: React.FC = () => {
         deleteProject,
         openProject,
         logout,
+        returnToProjects,
     } = useAppStore();
 
     React.useEffect(() => {
@@ -166,32 +169,36 @@ export const App: React.FC = () => {
     };
 
     return (
-        <div className="app-shell">
-            <div className="top-nav">
-                <div className="nav-left">
-                    <div className="status-pill">Alpha build</div>
-                    <div className="brand-mark">Inkline Studio</div>
-                    {stage === "workspace" && activeProjectName ? (
-                        <div className="status-pill is-success">
-                            Active: {activeProjectName}
-                        </div>
-                    ) : null}
+        <>  
+            
+            {stage === "workspace" && activeProjectName ? (
+                null
+            ) : (
+                <div className="top-nav">
+                    <div className="nav-left">
+                        <div className="brand-mark">Inkline Studio</div>
+                    </div>
+                    <div className="nav-actions">
+                        {user ? (
+                            <div className="user-chip">{user.email}</div>
+                        ) : null}
+                        {user ? (
+                            <Button type="button" onClick={handleLogout}>
+                                Log out
+                            </Button>
+                        ) : null}
+                    </div>
                 </div>
-                <div className="nav-actions">
-                    {stage === "workspace" ? (
-                        <div className="status-pill">Workspace synced</div>
-                    ) : null}
-                    {user ? (
-                        <div className="user-chip">{user.email}</div>
-                    ) : null}
-                    {user ? (
-                        <Button type="button" onClick={handleLogout}>
-                            Log out
-                        </Button>
-                    ) : null}
-                </div>
+            )}
+            
+            
+            <div className="app-shell">
+
+
+                {renderStage()}
+
+
             </div>
-            {renderStage()}
-        </div>
+        </>
     );
 };

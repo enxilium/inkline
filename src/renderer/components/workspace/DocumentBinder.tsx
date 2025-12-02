@@ -16,6 +16,7 @@ import {
     useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
 
 import type {
     WorkspaceChapter,
@@ -27,6 +28,7 @@ import type {
     WorkspaceScrapNote,
 } from "../../types";
 import { Button } from "../ui/Button";
+import { ChevronLeftIcon, GripVerticalIcon } from "../ui/Icons";
 
 export type DocumentBinderProps = {
     chapters: WorkspaceChapter[];
@@ -47,6 +49,11 @@ export type DocumentBinderProps = {
     onDeleteLocation: (id: string) => void;
     onDeleteOrganization: (id: string) => void;
     onReorderChapters: (newOrder: string[]) => void;
+    onReorderScrapNotes: (newOrder: string[]) => void;
+    onReorderCharacters: (newOrder: string[]) => void;
+    onReorderLocations: (newOrder: string[]) => void;
+    onReorderOrganizations: (newOrder: string[]) => void;
+    onToggleCollapse?: () => void;
 };
 
 type BinderItem = {
@@ -72,6 +79,8 @@ const normalizeLabel = (value: string, fallback: string): string => {
 const sortAlphabetically = <T extends { label: string }>(items: T[]): T[] =>
     [...items].sort((a, b) => a.label.localeCompare(b.label));
 
+import { useAppStore } from "../../state/appStore";
+
 const SortableBinderItem = ({
     item,
     isActive,
@@ -92,19 +101,62 @@ const SortableBinderItem = ({
         isDragging,
     } = useSortable({ id: item.id });
 
+    const setDraggedDocument = useAppStore((state) => state.setDraggedDocument);
+
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
         zIndex: isDragging ? 1 : undefined,
         opacity: isDragging ? 0.5 : 1,
+        display: "flex",
+        alignItems: "center",
+    };
+
+    const handleDragStart = (e: React.DragEvent) => {
+        // Set data for FlexLayout to recognize
+        e.dataTransfer.setData("text/plain", item.label);
+        e.dataTransfer.effectAllowed = "copy";
+        
+        // Set global state for WorkspaceLayout to read
+        setDraggedDocument({
+            id: item.id,
+            kind: item.kind,
+            title: item.label,
+        });
+    };
+
+    const handleDragEnd = () => {
+        setDraggedDocument(null);
     };
 
     return (
-        <li ref={setNodeRef} style={style} {...attributes} {...listeners}>
+        <li ref={setNodeRef} style={style}>
+            <button
+                type="button"
+                className="binder-item-drag-handle"
+                style={{
+                    cursor: "grab",
+                    background: "transparent",
+                    border: "none",
+                    padding: "0 4px",
+                    color: "var(--text-muted)",
+                    display: "flex",
+                    alignItems: "center",
+                }}
+                {...attributes}
+                {...listeners}
+                aria-label="Reorder"
+            >
+                <GripVerticalIcon size={14} />
+            </button>
             <button
                 type="button"
                 className={"binder-item" + (isActive ? " is-active" : "")}
                 onClick={onSelect}
+                draggable={true}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                style={{ flex: 1, textAlign: "left" }}
             >
                 <span className="binder-item-label">{item.label}</span>
                 {item.meta ? (
@@ -146,6 +198,11 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     onDeleteLocation,
     onDeleteOrganization,
     onReorderChapters,
+    onReorderScrapNotes,
+    onReorderCharacters,
+    onReorderLocations,
+    onReorderOrganizations,
+    onToggleCollapse,
 }) => {
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -158,18 +215,46 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         })
     );
 
-    const handleDragEnd = (event: DragEndEvent) => {
+    const handleDragEnd = (event: DragEndEvent, sectionKind: WorkspaceDocumentKind) => {
         const { active, over } = event;
 
         if (active.id !== over?.id) {
-            const oldIndex = chapters.findIndex((c) => c.id === active.id);
-            const newIndex = chapters.findIndex((c) => c.id === over?.id);
+            let items: { id: string }[] = [];
+            let reorderFunc: ((newOrder: string[]) => void) | null = null;
 
-            if (oldIndex !== -1 && newIndex !== -1) {
-                const newOrder = arrayMove(chapters, oldIndex, newIndex).map(
-                    (c) => c.id
-                );
-                onReorderChapters(newOrder);
+            switch (sectionKind) {
+                case "chapter":
+                    items = chapters;
+                    reorderFunc = onReorderChapters;
+                    break;
+                case "scrapNote":
+                    items = scrapNotes;
+                    reorderFunc = onReorderScrapNotes;
+                    break;
+                case "character":
+                    items = characters;
+                    reorderFunc = onReorderCharacters;
+                    break;
+                case "location":
+                    items = locations;
+                    reorderFunc = onReorderLocations;
+                    break;
+                case "organization":
+                    items = organizations;
+                    reorderFunc = onReorderOrganizations;
+                    break;
+            }
+
+            if (reorderFunc) {
+                const oldIndex = items.findIndex((c) => c.id === active.id);
+                const newIndex = items.findIndex((c) => c.id === over?.id);
+
+                if (oldIndex !== -1 && newIndex !== -1) {
+                    const newOrder = arrayMove(items, oldIndex, newIndex).map(
+                        (c) => c.id
+                    );
+                    reorderFunc(newOrder);
+                }
             }
         }
     };
@@ -185,15 +270,6 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         }));
 
     const scrapNoteItems: BinderItem[] = scrapNotes
-        .slice()
-        .sort((a, b) => {
-            if (a.isPinned !== b.isPinned) {
-                return a.isPinned ? -1 : 1;
-            }
-            return normalizeLabel(a.title, "Untitled Note").localeCompare(
-                normalizeLabel(b.title, "Untitled Note")
-            );
-        })
         .map((note) => ({
             id: note.id,
             label: normalizeLabel(note.title, "Untitled Note"),
@@ -201,34 +277,29 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             kind: "scrapNote",
         }));
 
-    const characterItems: BinderItem[] = sortAlphabetically(
-        characters.map((character) => ({
+    const characterItems: BinderItem[] = characters.map((character) => ({
             id: character.id,
             label: normalizeLabel(character.name, "Untitled Character"),
             meta: character.race ? character.race : undefined,
             kind: "character",
-        }))
-    );
+        }));
 
-    const locationItems: BinderItem[] = sortAlphabetically(
-        locations.map((location) => ({
+    const locationItems: BinderItem[] = locations.map((location) => ({
             id: location.id,
             label: normalizeLabel(location.name, "Untitled Location"),
             meta: location.tags[0],
             kind: "location",
-        }))
-    );
+        }));
 
-    const organizationItems: BinderItem[] = sortAlphabetically(
-        organizations.map((organization) => ({
+    const organizationItems: BinderItem[] = organizations.map((organization) => ({
             id: organization.id,
             label: normalizeLabel(organization.name, "Untitled Organization"),
             meta: organization.locationIds.length
                 ? `${organization.locationIds.length} locations`
                 : undefined,
             kind: "organization",
-        }))
-    );
+        }));
+
 
     const sections: BinderSection[] = [
         {
@@ -271,11 +342,14 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     return (
         <aside className="binder-panel">
             <div className="binder-header">
-                <p className="panel-label">Documents</p>
-                <h2>Project binder</h2>
-                <p className="panel-subtitle">
-                    Jump between chapters, notes, and world entries.
-                </p>
+                <div className="panel-label-container">
+                    <p className="panel-label">Documents</p>
+                    <div className="panel-actions">
+                        <Button variant="icon" onClick={onToggleCollapse}>
+                            <ChevronLeftIcon />
+                        </Button>
+                    </div>
+                </div>
             </div>
             <div className="binder-sections">
                 {sections.map((section) => (
@@ -296,89 +370,35 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                             </Button>
                         </div>
                         {section.items.length ? (
-                            section.kind === "chapter" ? (
-                                <DndContext
-                                    sensors={sensors}
-                                    collisionDetection={closestCenter}
-                                    onDragEnd={handleDragEnd}
+                            <DndContext
+                                sensors={sensors}
+                                collisionDetection={closestCenter}
+                                onDragEnd={(e) => handleDragEnd(e, section.kind)}
+                                modifiers={[restrictToVerticalAxis, restrictToParentElement]}
+                            >
+                                <SortableContext
+                                    items={section.items.map((i) => i.id)}
+                                    strategy={verticalListSortingStrategy}
                                 >
-                                    <SortableContext
-                                        items={section.items.map((i) => i.id)}
-                                        strategy={verticalListSortingStrategy}
-                                    >
-                                        <ul className="binder-list">
-                                            {section.items.map((item) => {
-                                                const isActive =
-                                                    activeDocument?.kind ===
-                                                        item.kind &&
-                                                    activeDocument.id ===
-                                                        item.id;
-                                                return (
-                                                    <SortableBinderItem
-                                                        key={item.id}
-                                                        item={item}
-                                                        isActive={isActive}
-                                                        onSelect={() =>
-                                                            onSelect({
-                                                                kind: item.kind,
-                                                                id: item.id,
-                                                            })
-                                                        }
-                                                        onDelete={() => {
-                                                            if (
-                                                                window.confirm(
-                                                                    `Delete "${item.label}"?`
-                                                                )
-                                                            ) {
-                                                                section.onDelete(
-                                                                    item.id
-                                                                );
-                                                            }
-                                                        }}
-                                                    />
-                                                );
-                                            })}
-                                        </ul>
-                                    </SortableContext>
-                                </DndContext>
-                            ) : (
-                                <ul className="binder-list">
-                                    {section.items.map((item) => {
-                                        const isActive =
-                                            activeDocument?.kind ===
-                                                item.kind &&
-                                            activeDocument.id === item.id;
-                                        return (
-                                            <li key={item.id}>
-                                                <button
-                                                    type="button"
-                                                    className={
-                                                        "binder-item" +
-                                                        (isActive
-                                                            ? " is-active"
-                                                            : "")
-                                                    }
-                                                    onClick={() =>
+                                    <ul className="binder-list">
+                                        {section.items.map((item) => {
+                                            const isActive =
+                                                activeDocument?.kind ===
+                                                    item.kind &&
+                                                activeDocument.id ===
+                                                    item.id;
+                                            return (
+                                                <SortableBinderItem
+                                                    key={item.id}
+                                                    item={item}
+                                                    isActive={isActive}
+                                                    onSelect={() =>
                                                         onSelect({
                                                             kind: item.kind,
                                                             id: item.id,
                                                         })
                                                     }
-                                                >
-                                                    <span className="binder-item-label">
-                                                        {item.label}
-                                                    </span>
-                                                    {item.meta ? (
-                                                        <span className="binder-item-meta">
-                                                            {item.meta}
-                                                        </span>
-                                                    ) : null}
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    className="binder-item-delete"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
+                                                    onDelete={() => {
                                                         if (
                                                             window.confirm(
                                                                 `Delete "${item.label}"?`
@@ -389,15 +409,12 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                                                             );
                                                         }
                                                     }}
-                                                    aria-label="Delete"
-                                                >
-                                                    ×
-                                                </button>
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            )
+                                                />
+                                            );
+                                        })}
+                                    </ul>
+                                </SortableContext>
+                            </DndContext>
                         ) : (
                             <p className="binder-empty">
                                 No {section.title.toLowerCase()} yet.

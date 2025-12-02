@@ -500,22 +500,22 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                 }}
                             >
                                 <p
-                                    style={{
-                                        margin: "0 0 0.5rem",
-                                        color: "#ffb5c1",
-                                    }}
-                                >
-                                    Debug: Image not showing?
-                                </p>
-                                <a
-                                    href={portraitUrl}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    style={{
-                                        color: "#7c66ff",
-                                        textDecoration: "underline",
-                                    }}
-                                >
+                                        style={{
+                                            margin: "0 0 0.5rem",
+                                            color: "var(--text-error)",
+                                        }}
+                                    >
+                                        Debug: Image not showing?
+                                    </p>
+                                    <a
+                                        href={portraitUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            color: "var(--accent)",
+                                            textDecoration: "underline",
+                                        }}
+                                    >
                                     Open Image in Browser
                                 </a>
                             </div>
