@@ -3,7 +3,6 @@ import { ILocationRepository } from "../../../domain/repositories/ILocationRepos
 import { IOrganizationRepository } from "../../../domain/repositories/IOrganizationRepository";
 
 export interface SaveCharacterInfoRequest {
-    projectId: string;
     characterId: string;
     payload: {
         name?: string;
@@ -13,7 +12,6 @@ export interface SaveCharacterInfoRequest {
         traits?: string[];
         goals?: string[];
         secrets?: string[];
-        quote?: string;
         currentLocationId?: string | null;
         backgroundLocationId?: string | null;
         organizationId?: string | null;
@@ -29,16 +27,13 @@ export class SaveCharacterInfo {
     ) {}
 
     async execute(request: SaveCharacterInfoRequest): Promise<void> {
-        const { projectId, characterId, payload } = request;
+        const { characterId, payload } = request;
 
-        if (!projectId.trim() || !characterId.trim()) {
-            throw new Error("Project ID and Character ID are required.");
+        if (!characterId.trim()) {
+            throw new Error("Character ID is required.");
         }
 
-        const character = await this.characterRepository.findById(
-            projectId,
-            characterId
-        );
+        const character = await this.characterRepository.findById(characterId);
         if (!character) {
             throw new Error("Character not found for this project.");
         }
@@ -54,35 +49,30 @@ export class SaveCharacterInfo {
         if (payload.traits !== undefined) character.traits = payload.traits;
         if (payload.goals !== undefined) character.goals = payload.goals;
         if (payload.secrets !== undefined) character.secrets = payload.secrets;
-        if (payload.quote !== undefined) character.quote = payload.quote;
         if (payload.tags !== undefined) character.tags = payload.tags;
 
         if (payload.currentLocationId !== undefined) {
             character.currentLocationId = await this.resolveLocationId(
-                projectId,
                 payload.currentLocationId
             );
         }
 
         if (payload.backgroundLocationId !== undefined) {
             character.backgroundLocationId = await this.resolveLocationId(
-                projectId,
                 payload.backgroundLocationId
             );
         }
 
         if (payload.organizationId !== undefined) {
             character.organizationId = await this.resolveOrganizationId(
-                projectId,
                 payload.organizationId
             );
         }
 
         character.updatedAt = new Date();
-        await this.characterRepository.update(projectId, character);
+        await this.characterRepository.update(character);
 
         await this.syncLocationCaches(
-            projectId,
             character.id,
             previousCurrentLocationId,
             previousBackgroundLocationId,
@@ -92,7 +82,6 @@ export class SaveCharacterInfo {
     }
 
     private async resolveLocationId(
-        projectId: string,
         locationId: string | null
     ): Promise<string | null> {
         if (locationId === null) {
@@ -104,10 +93,7 @@ export class SaveCharacterInfo {
             return null;
         }
 
-        const location = await this.locationRepository.findById(
-            projectId,
-            trimmed
-        );
+        const location = await this.locationRepository.findById(trimmed);
         if (!location) {
             throw new Error("Location not found for this project.");
         }
@@ -115,7 +101,6 @@ export class SaveCharacterInfo {
     }
 
     private async resolveOrganizationId(
-        projectId: string,
         organizationId: string | null
     ): Promise<string | null> {
         if (organizationId === null) {
@@ -127,10 +112,8 @@ export class SaveCharacterInfo {
             return null;
         }
 
-        const organization = await this.organizationRepository.findById(
-            projectId,
-            trimmed
-        );
+        const organization =
+            await this.organizationRepository.findById(trimmed);
         if (!organization) {
             throw new Error("Organization not found for this project.");
         }
@@ -138,7 +121,6 @@ export class SaveCharacterInfo {
     }
 
     private async syncLocationCaches(
-        projectId: string,
         characterId: string,
         prevCurrent: string | null,
         prevBackground: string | null,
@@ -165,27 +147,19 @@ export class SaveCharacterInfo {
 
         await Promise.all([
             ...locationsToAdd.map((locationId) =>
-                this.addCharacterToLocation(projectId, characterId, locationId)
+                this.addCharacterToLocation(characterId, locationId)
             ),
             ...locationsToRemove.map((locationId) =>
-                this.removeCharacterFromLocation(
-                    projectId,
-                    characterId,
-                    locationId
-                )
+                this.removeCharacterFromLocation(characterId, locationId)
             ),
         ]);
     }
 
     private async addCharacterToLocation(
-        projectId: string,
         characterId: string,
         locationId: string
     ): Promise<void> {
-        const location = await this.locationRepository.findById(
-            projectId,
-            locationId
-        );
+        const location = await this.locationRepository.findById(locationId);
         if (!location) {
             return;
         }
@@ -193,19 +167,15 @@ export class SaveCharacterInfo {
         if (!location.characterIds.includes(characterId)) {
             location.characterIds.push(characterId);
             location.updatedAt = new Date();
-            await this.locationRepository.update(projectId, location);
+            await this.locationRepository.update(location);
         }
     }
 
     private async removeCharacterFromLocation(
-        projectId: string,
         characterId: string,
         locationId: string
     ): Promise<void> {
-        const location = await this.locationRepository.findById(
-            projectId,
-            locationId
-        );
+        const location = await this.locationRepository.findById(locationId);
         if (!location) {
             return;
         }
@@ -215,7 +185,7 @@ export class SaveCharacterInfo {
                 (id) => id !== characterId
             );
             location.updatedAt = new Date();
-            await this.locationRepository.update(projectId, location);
+            await this.locationRepository.update(location);
         }
     }
 }

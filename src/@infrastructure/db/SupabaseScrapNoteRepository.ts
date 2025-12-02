@@ -38,13 +38,12 @@ export class SupabaseScrapNoteRepository implements IScrapNoteRepository {
         if (error) throw new Error(error.message);
     }
 
-    async findById(projectId: string, id: string): Promise<ScrapNote | null> {
+    async findById(id: string): Promise<ScrapNote | null> {
         const client = SupabaseService.getClient();
         const { data, error } = await client
             .from("scrap_notes")
             .select("*")
             .eq("id", id)
-            .eq("project_id", projectId)
             .single();
 
         if (error || !data) return null;
@@ -66,7 +65,7 @@ export class SupabaseScrapNoteRepository implements IScrapNoteRepository {
         return (data as ScrapNoteRow[]).map(mapRowToScrapNote);
     }
 
-    async update(projectId: string, scrapNote: ScrapNote): Promise<void> {
+    async update(scrapNote: ScrapNote): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("scrap_notes")
@@ -76,17 +75,12 @@ export class SupabaseScrapNoteRepository implements IScrapNoteRepository {
                 is_pinned: scrapNote.isPinned,
                 updated_at: scrapNote.updatedAt.toISOString(),
             })
-            .eq("id", scrapNote.id)
-            .eq("project_id", projectId);
+            .eq("id", scrapNote.id);
 
         if (error) throw new Error(error.message);
     }
 
-    async updateContent(
-        projectId: string,
-        scrapNoteId: string,
-        content: string
-    ): Promise<void> {
+    async updateContent(scrapNoteId: string, content: string): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("scrap_notes")
@@ -94,19 +88,17 @@ export class SupabaseScrapNoteRepository implements IScrapNoteRepository {
                 content: content,
                 updated_at: new Date().toISOString(),
             })
-            .eq("id", scrapNoteId)
-            .eq("project_id", projectId);
+            .eq("id", scrapNoteId);
 
         if (error) throw new Error(error.message);
     }
 
-    async delete(projectId: string, id: string): Promise<void> {
+    async delete(id: string): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("scrap_notes")
             .delete()
-            .eq("id", id)
-            .eq("project_id", projectId);
+            .eq("id", id);
         if (error) throw new Error(error.message);
     }
 

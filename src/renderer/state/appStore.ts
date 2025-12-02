@@ -32,7 +32,6 @@ const defaultAutosaveStatus: AutosaveStatus = "idle";
 
 const emptyAssets: WorkspaceAssets = {
     images: {},
-    voices: {},
     bgms: {},
     playlists: {},
 };
@@ -120,7 +119,6 @@ const indexAssets = (bundle: WorkspaceAssetBundle): WorkspaceAssets => {
 
     return {
         images: mapById(bundle.images ?? []),
-        voices: mapById(bundle.voices ?? []),
         bgms: mapById(bundle.bgms ?? []),
         playlists: mapById(bundle.playlists ?? []),
     };
@@ -717,7 +715,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 const filtered = state.chapters.filter(
                     (c) => c.id !== chapterId
                 );
-                
+
                 // Re-index orders to close the gap
                 const nextChapters = filtered
                     .sort((a, b) => a.order - b.order)

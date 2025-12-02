@@ -57,7 +57,7 @@ export class MoveChapter {
             chapters.map((updatedChapter, index) => {
                 updatedChapter.order = index;
                 updatedChapter.updatedAt = now;
-                return this.chapterRepository.update(projectId, updatedChapter);
+                return this.chapterRepository.update(updatedChapter);
             })
         );
 

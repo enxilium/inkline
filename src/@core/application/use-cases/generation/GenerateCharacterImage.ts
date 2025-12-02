@@ -23,7 +23,8 @@ export class GenerateCharacterImage {
     ) {}
 
     async execute(
-        request: GenerateCharacterImageRequest
+        request: GenerateCharacterImageRequest,
+        onProgress: (progress: number) => void
     ): Promise<GenerateCharacterImageResponse> {
         const projectId = request.projectId.trim();
         const characterId = request.characterId.trim();
@@ -32,16 +33,15 @@ export class GenerateCharacterImage {
             throw new Error("Project ID and Character ID are required.");
         }
 
-        const character = await this.characterRepository.findById(
-            projectId,
-            characterId
-        );
+        const character = await this.characterRepository.findById(characterId);
         if (!character) {
             throw new Error("Character not found.");
         }
 
-        const portraitData =
-            await this.imageGenerationService.generatePortrait(character);
+        const portraitData = await this.imageGenerationService.generatePortrait(
+            character,
+            onProgress
+        );
         const uploadResult = await this.storageService.uploadAsset(
             portraitData,
             {
@@ -70,7 +70,7 @@ export class GenerateCharacterImage {
         );
         character.galleryImageIds.push(imageId);
         character.updatedAt = now;
-        await this.characterRepository.update(projectId, character);
+        await this.characterRepository.update(character);
 
         return { image };
     }

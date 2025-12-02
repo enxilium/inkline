@@ -1,10 +1,14 @@
-import { Controller } from "../Controller";
+import { Controller, IpcController } from "../Controller";
 import { GenerateOrganizationSong } from "../../../@core/application/use-cases/generation/GenerateOrganizationSong";
+import { IpcMainInvokeEvent } from "electron";
+
+type ExecuteParams = Parameters<GenerateOrganizationSong["execute"]>;
+type ControllerArgs = [ExecuteParams[0], ExecuteParams[1]?];
 
 export class GenerateOrganizationSongController
     implements
-        Controller<
-            Parameters<GenerateOrganizationSong["execute"]>,
+        IpcController<
+            ControllerArgs,
             Awaited<ReturnType<GenerateOrganizationSong["execute"]>>
         >
 {
@@ -13,8 +17,25 @@ export class GenerateOrganizationSongController
     ) {}
 
     async handle(
-        ...args: Parameters<GenerateOrganizationSong["execute"]>
+        ...args: ControllerArgs
     ): Promise<Awaited<ReturnType<GenerateOrganizationSong["execute"]>>> {
-        return this.generateOrganizationSong.execute(...args);
+        const [request, onProgress] = args;
+        return this.generateOrganizationSong.execute(
+            request,
+            onProgress || (() => {})
+        );
+    }
+
+    async handleWithEvent(
+        event: IpcMainInvokeEvent,
+        ...args: ControllerArgs
+    ): Promise<Awaited<ReturnType<GenerateOrganizationSong["execute"]>>> {
+        const [request] = args;
+        return this.generateOrganizationSong.execute(request, (progress) => {
+            event.sender.send("generation-progress", {
+                type: "audio",
+                progress,
+            });
+        });
     }
 }

@@ -10,7 +10,8 @@ export interface IImageGenerationService {
      * @returns Buffer containing the image data (e.g. PNG/JPEG).
      */
     generatePortrait(
-        subject: Character | Location | Organization
+        subject: Character | Location | Organization,
+        onProgress: (progress: number) => void
     ): Promise<ArrayBuffer>;
 
     /**

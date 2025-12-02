@@ -1,8 +1,12 @@
-import { ipcMain } from "electron";
+import { ipcMain, IpcMainInvokeEvent } from "electron";
 import {
     controllerChannels,
     type ControllerInstanceMap,
 } from "../@interface-adapters/controllers/contracts";
+import {
+    Controller,
+    IpcController,
+} from "../@interface-adapters/controllers/Controller";
 import { AnalyzeText } from "../@core/application/use-cases/analysis/AnalyzeText";
 import { EditChapters } from "../@core/application/use-cases/analysis/EditChapters";
 import { GeneralChat } from "../@core/application/use-cases/analysis/GeneralChat";
@@ -14,9 +18,7 @@ import { RegisterUser } from "../@core/application/use-cases/auth/RegisterUser";
 import { LoadStoredSession } from "../@core/application/use-cases/auth/LoadStoredSession";
 import { GenerateCharacterImage } from "../@core/application/use-cases/generation/GenerateCharacterImage";
 import { GenerateCharacterPlaylist } from "../@core/application/use-cases/generation/GenerateCharacterPlaylist";
-import { GenerateCharacterQuote } from "../@core/application/use-cases/generation/GenerateCharacterQuote";
 import { GenerateCharacterSong } from "../@core/application/use-cases/generation/GenerateCharacterSong";
-import { GenerateCharacterVoice } from "../@core/application/use-cases/generation/GenerateCharacterVoice";
 import { GenerateLocationImage } from "../@core/application/use-cases/generation/GenerateLocationImage";
 import { GenerateLocationPlaylist } from "../@core/application/use-cases/generation/GenerateLocationPlaylist";
 import { GenerateLocationSong } from "../@core/application/use-cases/generation/GenerateLocationSong";
@@ -62,9 +64,7 @@ import { RegisterUserController } from "../@interface-adapters/controllers/auth/
 import { GetAuthStateController } from "../@interface-adapters/controllers/auth/GetAuthStateController";
 import { GenerateCharacterImageController } from "../@interface-adapters/controllers/generation/GenerateCharacterImageController";
 import { GenerateCharacterPlaylistController } from "../@interface-adapters/controllers/generation/GenerateCharacterPlaylistController";
-import { GenerateCharacterQuoteController } from "../@interface-adapters/controllers/generation/GenerateCharacterQuoteController";
 import { GenerateCharacterSongController } from "../@interface-adapters/controllers/generation/GenerateCharacterSongController";
-import { GenerateCharacterVoiceController } from "../@interface-adapters/controllers/generation/GenerateCharacterVoiceController";
 import { GenerateLocationImageController } from "../@interface-adapters/controllers/generation/GenerateLocationImageController";
 import { GenerateLocationPlaylistController } from "../@interface-adapters/controllers/generation/GenerateLocationPlaylistController";
 import { GenerateLocationSongController } from "../@interface-adapters/controllers/generation/GenerateLocationSongController";
@@ -165,9 +165,7 @@ type UseCaseMap = {
     generation: {
         generateCharacterImage: GenerateCharacterImage;
         generateCharacterPlaylist: GenerateCharacterPlaylist;
-        generateCharacterQuote: GenerateCharacterQuote;
         generateCharacterSong: GenerateCharacterSong;
-        generateCharacterVoice: GenerateCharacterVoice;
         generateLocationImage: GenerateLocationImage;
         generateLocationPlaylist: GenerateLocationPlaylist;
         generateLocationSong: GenerateLocationSong;
@@ -217,8 +215,15 @@ const invokeController = <
     TController extends { handle: (...args: unknown[]) => unknown },
 >(
     controller: TController,
+    event: IpcMainInvokeEvent,
     args: unknown[]
 ): ReturnType<TController["handle"]> => {
+    if ("handleWithEvent" in controller) {
+        return (controller as any).handleWithEvent(
+            event,
+            ...(args as Parameters<TController["handle"]>)
+        ) as ReturnType<TController["handle"]>;
+    }
     return controller.handle(
         ...(args as Parameters<TController["handle"]>)
     ) as ReturnType<TController["handle"]>;
@@ -311,19 +316,7 @@ export class AppBuilder {
                     repo.asset,
                     svc.storage
                 ),
-                generateCharacterQuote: new GenerateCharacterQuote(
-                    repo.character,
-                    svc.audioGeneration,
-                    svc.storage,
-                    repo.asset
-                ),
                 generateCharacterSong: new GenerateCharacterSong(
-                    repo.character,
-                    svc.audioGeneration,
-                    svc.storage,
-                    repo.asset
-                ),
-                generateCharacterVoice: new GenerateCharacterVoice(
                     repo.character,
                     svc.audioGeneration,
                     svc.storage,
@@ -416,11 +409,7 @@ export class AppBuilder {
                     repo.chatConversation,
                     repo.user
                 ),
-                exportManuscript: new ExportManuscript(
-                    repo.project,
-                    repo.chapter,
-                    svc.export
-                ),
+                exportManuscript: new ExportManuscript(svc.export),
                 loadProjectList: new LoadProjectList(repo.project),
                 openProject: new OpenProject(
                     repo.project,
@@ -514,14 +503,8 @@ export class AppBuilder {
                     new GenerateCharacterPlaylistController(
                         useCases.generation.generateCharacterPlaylist
                     ),
-                generateCharacterQuote: new GenerateCharacterQuoteController(
-                    useCases.generation.generateCharacterQuote
-                ),
                 generateCharacterSong: new GenerateCharacterSongController(
                     useCases.generation.generateCharacterSong
-                ),
-                generateCharacterVoice: new GenerateCharacterVoiceController(
-                    useCases.generation.generateCharacterVoice
                 ),
                 generateLocationImage: new GenerateLocationImageController(
                     useCases.generation.generateLocationImage
@@ -670,8 +653,8 @@ export class AppBuilder {
                 const channel = controllerChannels[category][action];
                 const controller = this.controllers[category][action];
 
-                ipcMain.handle(channel, (_event, ...args) =>
-                    invokeController(controller, args)
+                ipcMain.handle(channel, (event, ...args) =>
+                    invokeController(controller, event, args)
                 );
             }
         }

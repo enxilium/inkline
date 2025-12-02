@@ -8,7 +8,6 @@ export type StorageScope =
     | "misc";
 export type StorageAssetType =
     | "image"
-    | "voice"
     | "bgm"
     | "playlist"
     | "document"

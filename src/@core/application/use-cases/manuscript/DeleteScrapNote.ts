@@ -24,10 +24,7 @@ export class DeleteScrapNote {
             throw new Error("Project not found.");
         }
 
-        const scrapNote = await this.scrapNoteRepository.findById(
-            projectId,
-            scrapNoteId
-        );
+        const scrapNote = await this.scrapNoteRepository.findById(scrapNoteId);
         if (!scrapNote) {
             throw new Error("Scrap note not found for this project.");
         }
@@ -42,6 +39,6 @@ export class DeleteScrapNote {
         }
 
         // 2. Delete Scrap Note (Self)
-        await this.scrapNoteRepository.delete(projectId, scrapNoteId);
+        await this.scrapNoteRepository.delete(scrapNoteId);
     }
 }

@@ -32,10 +32,7 @@ export class DeleteCharacter {
             throw new Error("Project not found.");
         }
 
-        const character = await this.characterRepository.findById(
-            projectId,
-            characterId
-        );
+        const character = await this.characterRepository.findById(characterId);
         if (!character) {
             throw new Error("Character not found for this project.");
         }
@@ -56,7 +53,7 @@ export class DeleteCharacter {
         await this.deleteCharacterAssets(projectId, character);
 
         // 4. Delete Character (Self)
-        await this.characterRepository.delete(projectId, characterId);
+        await this.characterRepository.delete(characterId);
     }
 
     private async deleteCharacterAssets(
@@ -65,13 +62,8 @@ export class DeleteCharacter {
     ): Promise<void> {
         await Promise.all([
             this.deleteGalleryImages(character.galleryImageIds, projectId),
-            this.deleteVoiceAsset(character.voiceId, projectId),
             this.deleteBgmAsset(character.bgmId, projectId),
             this.deletePlaylistAsset(character.playlistId, projectId),
-            this.deleteQuoteAudio(
-                character.quoteAudioUrl,
-                character.quoteAudioStoragePath
-            ),
         ]);
     }
 
@@ -85,10 +77,7 @@ export class DeleteCharacter {
         ].filter((id): id is string => !!id);
 
         const updates = locationIds.map(async (locationId) => {
-            const location = await this.locationRepository.findById(
-                projectId,
-                locationId
-            );
+            const location = await this.locationRepository.findById(locationId);
             if (!location) {
                 return;
             }
@@ -101,7 +90,7 @@ export class DeleteCharacter {
                 (id) => id !== character.id
             );
             location.updatedAt = new Date();
-            await this.locationRepository.update(projectId, location);
+            await this.locationRepository.update(location);
         });
 
         await Promise.all(updates);
@@ -112,41 +101,18 @@ export class DeleteCharacter {
         projectId: string
     ): Promise<void> {
         const deletions = imageIds.map(async (imageId) => {
-            const image = await this.assetRepository.findImageById(
-                projectId,
-                imageId
-            );
+            const image = await this.assetRepository.findImageById(imageId);
             if (!image) {
                 return;
             }
 
-            await this.assetRepository.deleteImage(projectId, imageId);
+            await this.assetRepository.deleteImage(imageId);
             await this.storageService.deleteFile(
                 image.storagePath || image.url
             );
         });
 
         await Promise.all(deletions);
-    }
-
-    private async deleteVoiceAsset(
-        voiceId: string | null,
-        projectId: string
-    ): Promise<void> {
-        if (!voiceId) {
-            return;
-        }
-
-        const voice = await this.assetRepository.findVoiceById(
-            projectId,
-            voiceId
-        );
-        if (!voice) {
-            return;
-        }
-
-        await this.assetRepository.deleteVoice(projectId, voiceId);
-        await this.storageService.deleteFile(voice.storagePath || voice.url);
     }
 
     private async deleteBgmAsset(
@@ -157,12 +123,12 @@ export class DeleteCharacter {
             return;
         }
 
-        const track = await this.assetRepository.findBGMById(projectId, bgmId);
+        const track = await this.assetRepository.findBGMById(bgmId);
         if (!track) {
             return;
         }
 
-        await this.assetRepository.deleteBGM(projectId, bgmId);
+        await this.assetRepository.deleteBGM(bgmId);
         await this.storageService.deleteFile(track.storagePath || track.url);
     }
 
@@ -174,30 +140,16 @@ export class DeleteCharacter {
             return;
         }
 
-        const playlist = await this.assetRepository.findPlaylistById(
-            projectId,
-            playlistId
-        );
+        const playlist =
+            await this.assetRepository.findPlaylistById(playlistId);
         if (!playlist) {
             return;
         }
 
-        await this.assetRepository.deletePlaylist(projectId, playlistId);
+        await this.assetRepository.deletePlaylist(playlistId);
         const target = playlist.storagePath || playlist.url;
         if (target) {
             await this.storageService.deleteFile(target);
         }
-    }
-
-    private async deleteQuoteAudio(
-        audioUrl: string | null,
-        storagePath: string | null
-    ): Promise<void> {
-        const target = storagePath || audioUrl;
-        if (!target) {
-            return;
-        }
-
-        await this.storageService.deleteFile(target);
     }
 }

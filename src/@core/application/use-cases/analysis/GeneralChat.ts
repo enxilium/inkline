@@ -14,10 +14,19 @@ export interface GeneralChatRequest {
     projectId: string;
     prompt: string;
     conversationId?: string;
+    contextDocuments?: {
+        type:
+            | "chapter"
+            | "character"
+            | "location"
+            | "organization"
+            | "scrapNote";
+        id: string;
+    }[];
 }
 
 export interface GeneralChatResponse {
-    reply: string;
+    stream: AsyncGenerator<string, void, unknown>;
     conversationId: string;
 }
 
@@ -51,10 +60,7 @@ export class GeneralChat {
             conversationId
         );
         const existingMessages =
-            await this.chatConversationRepository.getMessages(
-                normalizedProjectId,
-                conversation.id
-            );
+            await this.chatConversationRepository.getMessages(conversation.id);
         const context = await this.buildContext(normalizedProjectId);
 
         const userMessage = new ChatMessage(
@@ -63,12 +69,9 @@ export class GeneralChat {
             prompt,
             new Date()
         );
-        await this.chatConversationRepository.appendMessage(
-            normalizedProjectId,
-            userMessage
-        );
+        await this.chatConversationRepository.appendMessage(userMessage);
 
-        const reply = await this.aiTextService.chat(prompt, context, {
+        const stream = this.aiTextService.chat(prompt, context, {
             conversationId: conversation.id,
             history: [
                 ...existingMessages.map(({ role, content }) => ({
@@ -77,21 +80,34 @@ export class GeneralChat {
                 })),
                 { role: "user", content: prompt },
             ],
+            contextDocuments: request.contextDocuments,
         });
 
-        const assistantMessage = new ChatMessage(
-            conversation.id,
-            "assistant",
-            reply,
-            new Date()
-        );
+        const wrappedStream = (async function* (
+            repo: IChatConversationRepository,
+            projectId: string,
+            convId: string
+        ) {
+            let fullReply = "";
+            for await (const chunk of stream) {
+                fullReply += chunk;
+                yield chunk;
+            }
 
-        await this.chatConversationRepository.appendMessage(
+            const assistantMessage = new ChatMessage(
+                convId,
+                "assistant",
+                fullReply,
+                new Date()
+            );
+            await repo.appendMessage(assistantMessage);
+        })(
+            this.chatConversationRepository,
             normalizedProjectId,
-            assistantMessage
+            conversation.id
         );
 
-        return { reply, conversationId: conversation.id };
+        return { stream: wrappedStream, conversationId: conversation.id };
     }
 
     private async resolveConversation(
@@ -99,10 +115,8 @@ export class GeneralChat {
         conversationId?: string
     ): Promise<ChatConversation> {
         if (conversationId?.trim()) {
-            const conversation = await this.chatConversationRepository.findById(
-                projectId,
-                conversationId
-            );
+            const conversation =
+                await this.chatConversationRepository.findById(conversationId);
             if (!conversation) {
                 throw new Error("Conversation not found for this project.");
             }

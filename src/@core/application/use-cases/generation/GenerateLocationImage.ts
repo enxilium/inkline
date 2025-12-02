@@ -23,7 +23,8 @@ export class GenerateLocationImage {
     ) {}
 
     async execute(
-        request: GenerateLocationImageRequest
+        request: GenerateLocationImageRequest,
+        onProgress: (progress: number) => void
     ): Promise<GenerateLocationImageResponse> {
         const projectId = request.projectId.trim();
         const locationId = request.locationId.trim();
@@ -32,16 +33,15 @@ export class GenerateLocationImage {
             throw new Error("Project ID and Location ID are required.");
         }
 
-        const location = await this.locationRepository.findById(
-            projectId,
-            locationId
-        );
+        const location = await this.locationRepository.findById(locationId);
         if (!location) {
             throw new Error("Location not found.");
         }
 
-        const buffer =
-            await this.imageGenerationService.generatePortrait(location);
+        const buffer = await this.imageGenerationService.generatePortrait(
+            location,
+            onProgress
+        );
         const uploadResult = await this.storageService.uploadAsset(buffer, {
             scope: "location",
             scopeId: locationId,
@@ -67,7 +67,7 @@ export class GenerateLocationImage {
         );
         location.galleryImageIds.push(imageId);
         location.updatedAt = now;
-        await this.locationRepository.update(projectId, location);
+        await this.locationRepository.update(location);
 
         return { image };
     }
