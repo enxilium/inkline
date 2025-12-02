@@ -76,7 +76,6 @@ export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = (
 
             try {
                 await rendererApi.logistics.saveLocationInfo({
-                    projectId,
                     locationId: location.id,
                     payload,
                 });

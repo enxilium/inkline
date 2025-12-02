@@ -76,7 +76,6 @@ export const ConnectedOrganizationEditor: React.FC<ConnectedOrganizationEditorPr
 
             try {
                 await rendererApi.logistics.saveOrganizationInfo({
-                    projectId,
                     organizationId: organization.id,
                     payload,
                 });

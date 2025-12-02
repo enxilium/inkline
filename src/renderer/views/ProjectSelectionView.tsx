@@ -122,8 +122,9 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                         projects.map((project) => (
                             <div key={project.id} className="project-card" onClick={() => onOpenProject(project)}>
                                 {/*project.cover ? <img src={project.cover} alt={`${project.title} cover`} /> : null*/}
+                                <div className="project-card-cover"></div>
                                 <div>
-                                    <div>{project.title}</div>
+                                    <h3>{project.title}</h3>
                                     <p className="panel-subtitle">
                                         Updated{" "}
                                         {formatTimestamp(project.updatedAt)}

@@ -62,18 +62,6 @@ export const WorkspaceView: React.FC = () => {
                 },
             },
             {
-                id: "exportManuscript",
-                title: "Export Manuscript",
-                category: "Project",
-                description: "Export the project to PDF, DOCX, or EPUB.",
-                run: async () => {
-                    if (!projectId) {
-                        throw new Error("No active project.");
-                    }
-                    setIsExportDialogOpen(true);
-                },
-            },
-            {
                 id: "createChapter",
                 title: "New chapter",
                 category: "Manuscript",

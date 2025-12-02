@@ -69,7 +69,6 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
                 traits: listFromMultiline(values.traits),
                 goals: listFromMultiline(values.goals),
                 secrets: listFromMultiline(values.secrets),
-                quote: values.quote,
                 tags: listFromMultiline(values.tags),
                 currentLocationId: values.currentLocationId || null,
                 backgroundLocationId: values.backgroundLocationId || null,
@@ -85,7 +84,6 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
 
             try {
                 await rendererApi.logistics.saveCharacterInfo({
-                    projectId,
                     characterId: character.id,
                     payload,
                 });
@@ -121,41 +119,6 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
                 fileData: buffer,
                 extension,
             },
-        });
-        await reloadActiveProject();
-    };
-
-    const handleGenerateVoice = async () => {
-        if (!projectId || !character) return;
-        await rendererApi.generation.generateCharacterVoice({
-            projectId,
-            characterId: character.id,
-        });
-        await reloadActiveProject();
-    };
-
-    const handleImportVoice = async (file: File) => {
-        if (!projectId || !character) return;
-        const buffer = await file.arrayBuffer();
-        const extension = file.name.split(".").pop();
-        await rendererApi.asset.importAsset({
-            projectId,
-            payload: {
-                kind: "voice",
-                characterId: character.id,
-                fileData: buffer,
-                extension,
-            },
-        });
-        await reloadActiveProject();
-    };
-
-    const handleGenerateQuote = async (quote: string) => {
-        if (!projectId || !character) return;
-        await rendererApi.generation.generateCharacterQuote({
-            projectId,
-            characterId: character.id,
-            quote,
         });
         await reloadActiveProject();
     };
@@ -236,9 +199,6 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
             onSubmit={handleSubmit}
             onGeneratePortrait={handleGeneratePortrait}
             onImportPortrait={handleImportPortrait}
-            onGenerateVoice={handleGenerateVoice}
-            onImportVoice={handleImportVoice}
-            onGenerateQuote={handleGenerateQuote}
             onGenerateSong={handleGenerateSong}
             onImportSong={handleImportSong}
             onGeneratePlaylist={handleGeneratePlaylist}

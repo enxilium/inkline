@@ -75,11 +75,6 @@ const createWindow = (): void => {
 
     mainWindow.maximize();
     mainWindow.show();
-
-    // Open the DevTools.
-    mainWindow.webContents.openDevTools({
-        mode: "detach",
-    });
 };
 
 const bootstrap = async (): Promise<void> => {

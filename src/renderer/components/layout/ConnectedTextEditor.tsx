@@ -124,7 +124,6 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
             if (kind === "chapter") {
                 await rendererApi.logistics.saveChapterContent({
-                    projectId,
                     chapterId: documentId,
                     content,
                 });
@@ -134,7 +133,6 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 });
             } else {
                 await rendererApi.manuscript.updateScrapNote({
-                    projectId,
                     scrapNoteId: documentId,
                     content,
                 });
@@ -195,7 +193,6 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         try {
             if (kind === "chapter") {
                 await rendererApi.manuscript.renameChapter({
-                    projectId,
                     chapterId: documentId,
                     title: trimmed,
                 });
@@ -205,7 +202,6 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 });
             } else {
                 await rendererApi.manuscript.updateScrapNote({
-                    projectId,
                     scrapNoteId: documentId,
                     title: trimmed,
                 });
