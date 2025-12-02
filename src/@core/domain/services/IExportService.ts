@@ -1,10 +1,6 @@
-import { Chapter } from "../entities/story/Chapter";
-import { Project } from "../entities/story/Project";
-
 export interface IExportService {
     exportProject(
-        project: Project,
-        chapters: Chapter[],
+        projectId: string,
         format: "pdf" | "epub" | "docx",
         path: string
     ): Promise<void>;

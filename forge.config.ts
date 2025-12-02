@@ -14,6 +14,7 @@ import { rendererConfig } from "./webpack.renderer.config";
 const config: ForgeConfig = {
     packagerConfig: {
         asar: true,
+        extraResource: ["./server"],
     },
     rebuildConfig: {},
     makers: [

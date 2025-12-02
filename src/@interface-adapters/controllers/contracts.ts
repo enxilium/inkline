@@ -9,9 +9,7 @@ import type { RegisterUserController } from "./auth/RegisterUserController";
 import type { GetAuthStateController } from "./auth/GetAuthStateController";
 import type { GenerateCharacterImageController } from "./generation/GenerateCharacterImageController";
 import type { GenerateCharacterPlaylistController } from "./generation/GenerateCharacterPlaylistController";
-import type { GenerateCharacterQuoteController } from "./generation/GenerateCharacterQuoteController";
 import type { GenerateCharacterSongController } from "./generation/GenerateCharacterSongController";
-import type { GenerateCharacterVoiceController } from "./generation/GenerateCharacterVoiceController";
 import type { GenerateLocationImageController } from "./generation/GenerateLocationImageController";
 import type { GenerateLocationPlaylistController } from "./generation/GenerateLocationPlaylistController";
 import type { GenerateLocationSongController } from "./generation/GenerateLocationSongController";
@@ -72,9 +70,7 @@ export interface ControllerInstanceMap {
     generation: {
         generateCharacterImage: GenerateCharacterImageController;
         generateCharacterPlaylist: GenerateCharacterPlaylistController;
-        generateCharacterQuote: GenerateCharacterQuoteController;
         generateCharacterSong: GenerateCharacterSongController;
-        generateCharacterVoice: GenerateCharacterVoiceController;
         generateLocationImage: GenerateLocationImageController;
         generateLocationPlaylist: GenerateLocationPlaylistController;
         generateLocationSong: GenerateLocationSongController;
@@ -155,9 +151,7 @@ export const controllerChannels: ControllerChannelMap = {
     generation: {
         generateCharacterImage: "generation:generateCharacterImage",
         generateCharacterPlaylist: "generation:generateCharacterPlaylist",
-        generateCharacterQuote: "generation:generateCharacterQuote",
         generateCharacterSong: "generation:generateCharacterSong",
-        generateCharacterVoice: "generation:generateCharacterVoice",
         generateLocationImage: "generation:generateLocationImage",
         generateLocationPlaylist: "generation:generateLocationPlaylist",
         generateLocationSong: "generation:generateLocationSong",

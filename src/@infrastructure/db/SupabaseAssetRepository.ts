@@ -3,7 +3,6 @@ import {
     Image,
     ImageSubjectType,
 } from "../../@core/domain/entities/story/world/Image";
-import { Voice } from "../../@core/domain/entities/story/world/Voice";
 import {
     BGM,
     BGMSubjectType,
@@ -16,7 +15,7 @@ import {
 import { SupabaseService } from "./SupabaseService";
 import { SupabaseStorageService } from "../storage/SupabaseStorageService";
 
-type AssetType = "image" | "voice" | "bgm" | "playlist";
+type AssetType = "image" | "bgm" | "playlist";
 
 type AssetRow = {
     id: string;
@@ -104,15 +103,6 @@ const mapRowToImage = (row: AssetRow): Image =>
         new Date(row.updated_at)
     );
 
-const mapRowToVoice = (row: AssetRow): Voice =>
-    new Voice(
-        row.id,
-        resolveAssetUrl(row),
-        row.storage_path,
-        new Date(row.created_at),
-        new Date(row.updated_at)
-    );
-
 const mapRowToBGM = (row: AssetRow): BGM => {
     const metadata = row.metadata || {};
     return new BGM(
@@ -164,8 +154,8 @@ export class SupabaseAssetRepository implements IAssetRepository {
         });
     }
 
-    async findImageById(projectId: string, id: string): Promise<Image | null> {
-        const row = await this.findAssetRow(projectId, id, "image");
+    async findImageById(id: string): Promise<Image | null> {
+        const row = await this.findAssetRow(id, "image");
         return row ? mapRowToImage(row) : null;
     }
 
@@ -174,67 +164,20 @@ export class SupabaseAssetRepository implements IAssetRepository {
         return rows.map(mapRowToImage);
     }
 
-    async findImagesByIds(projectId: string, ids: string[]): Promise<Image[]> {
+    async findImagesByIds(ids: string[]): Promise<Image[]> {
         if (!ids.length) {
             return [];
         }
-        const rows = await this.findAssetsByIds(projectId, "image", ids);
+        const rows = await this.findAssetsByIds("image", ids);
         return rows.map(mapRowToImage);
     }
 
-    async deleteImage(projectId: string, id: string): Promise<void> {
-        await this.deleteAsset(projectId, id, "image");
+    async deleteImage(id: string): Promise<void> {
+        await this.deleteAsset(id, "image");
     }
 
     async deleteImagesByProjectId(projectId: string): Promise<void> {
         await this.deleteAssetsByProject(projectId, "image");
-    }
-
-    async saveVoice(
-        projectId: string,
-        characterId: string,
-        voice: Voice
-    ): Promise<void> {
-        await this.upsertAsset({
-            id: voice.id,
-            project_id: projectId,
-            type: "voice",
-            subject_type: "character",
-            subject_id: characterId,
-            url: voice.url,
-            storage_path: voice.storagePath,
-            metadata: {
-                characterId,
-            },
-            created_at: voice.createdAt.toISOString(),
-            updated_at: voice.updatedAt.toISOString(),
-        });
-    }
-
-    async findVoiceById(projectId: string, id: string): Promise<Voice | null> {
-        const row = await this.findAssetRow(projectId, id, "voice");
-        return row ? mapRowToVoice(row) : null;
-    }
-
-    async findVoicesByProjectId(projectId: string): Promise<Voice[]> {
-        const rows = await this.findAssetsByProject(projectId, "voice");
-        return rows.map(mapRowToVoice);
-    }
-
-    async findVoicesByIds(projectId: string, ids: string[]): Promise<Voice[]> {
-        if (!ids.length) {
-            return [];
-        }
-        const rows = await this.findAssetsByIds(projectId, "voice", ids);
-        return rows.map(mapRowToVoice);
-    }
-
-    async deleteVoice(projectId: string, id: string): Promise<void> {
-        await this.deleteAsset(projectId, id, "voice");
-    }
-
-    async deleteVoicesByProjectId(projectId: string): Promise<void> {
-        await this.deleteAssetsByProject(projectId, "voice");
     }
 
     async saveBGM(
@@ -260,8 +203,8 @@ export class SupabaseAssetRepository implements IAssetRepository {
         });
     }
 
-    async findBGMById(projectId: string, id: string): Promise<BGM | null> {
-        const row = await this.findAssetRow(projectId, id, "bgm");
+    async findBGMById(id: string): Promise<BGM | null> {
+        const row = await this.findAssetRow(id, "bgm");
         return row ? mapRowToBGM(row) : null;
     }
 
@@ -270,16 +213,16 @@ export class SupabaseAssetRepository implements IAssetRepository {
         return rows.map(mapRowToBGM);
     }
 
-    async findBGMsByIds(projectId: string, ids: string[]): Promise<BGM[]> {
+    async findBGMsByIds(ids: string[]): Promise<BGM[]> {
         if (!ids.length) {
             return [];
         }
-        const rows = await this.findAssetsByIds(projectId, "bgm", ids);
+        const rows = await this.findAssetsByIds("bgm", ids);
         return rows.map(mapRowToBGM);
     }
 
-    async deleteBGM(projectId: string, id: string): Promise<void> {
-        await this.deleteAsset(projectId, id, "bgm");
+    async deleteBGM(id: string): Promise<void> {
+        await this.deleteAsset(id, "bgm");
     }
 
     async deleteBGMByProjectId(projectId: string): Promise<void> {
@@ -310,11 +253,8 @@ export class SupabaseAssetRepository implements IAssetRepository {
         });
     }
 
-    async findPlaylistById(
-        projectId: string,
-        id: string
-    ): Promise<Playlist | null> {
-        const row = await this.findAssetRow(projectId, id, "playlist");
+    async findPlaylistById(id: string): Promise<Playlist | null> {
+        const row = await this.findAssetRow(id, "playlist");
         return row ? mapRowToPlaylist(row) : null;
     }
 
@@ -323,19 +263,16 @@ export class SupabaseAssetRepository implements IAssetRepository {
         return rows.map(mapRowToPlaylist);
     }
 
-    async findPlaylistsByIds(
-        projectId: string,
-        ids: string[]
-    ): Promise<Playlist[]> {
+    async findPlaylistsByIds(ids: string[]): Promise<Playlist[]> {
         if (!ids.length) {
             return [];
         }
-        const rows = await this.findAssetsByIds(projectId, "playlist", ids);
+        const rows = await this.findAssetsByIds("playlist", ids);
         return rows.map(mapRowToPlaylist);
     }
 
-    async deletePlaylist(projectId: string, id: string): Promise<void> {
-        await this.deleteAsset(projectId, id, "playlist");
+    async deletePlaylist(id: string): Promise<void> {
+        await this.deleteAsset(id, "playlist");
     }
 
     async deletePlaylistsByProjectId(projectId: string): Promise<void> {
@@ -363,7 +300,6 @@ export class SupabaseAssetRepository implements IAssetRepository {
     }
 
     private async findAssetRow(
-        projectId: string,
         id: string,
         type: AssetType
     ): Promise<AssetRow | null> {
@@ -372,7 +308,6 @@ export class SupabaseAssetRepository implements IAssetRepository {
             .from("assets")
             .select("*")
             .eq("id", id)
-            .eq("project_id", projectId)
             .eq("type", type)
             .single();
 
@@ -400,7 +335,6 @@ export class SupabaseAssetRepository implements IAssetRepository {
     }
 
     private async findAssetsByIds(
-        projectId: string,
         type: AssetType,
         ids: string[]
     ): Promise<AssetRow[]> {
@@ -408,7 +342,6 @@ export class SupabaseAssetRepository implements IAssetRepository {
         const { data, error } = await client
             .from("assets")
             .select("*")
-            .eq("project_id", projectId)
             .eq("type", type)
             .in("id", ids)
             .order("updated_at", { ascending: false });
@@ -419,17 +352,12 @@ export class SupabaseAssetRepository implements IAssetRepository {
         return data as AssetRow[];
     }
 
-    private async deleteAsset(
-        projectId: string,
-        id: string,
-        type: AssetType
-    ): Promise<void> {
+    private async deleteAsset(id: string, type: AssetType): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("assets")
             .delete()
             .eq("id", id)
-            .eq("project_id", projectId)
             .eq("type", type);
 
         if (error) throw new Error(error.message);

@@ -34,10 +34,8 @@ export class DeleteOrganization {
             throw new Error("Project not found.");
         }
 
-        const organization = await this.organizationRepository.findById(
-            projectId,
-            organizationId
-        );
+        const organization =
+            await this.organizationRepository.findById(organizationId);
         if (!organization) {
             throw new Error("Organization not found for this project.");
         }
@@ -61,7 +59,7 @@ export class DeleteOrganization {
         await this.deleteOrganizationAssets(projectId, organization);
 
         // 5. Delete Organization (Self)
-        await this.organizationRepository.delete(projectId, organizationId);
+        await this.organizationRepository.delete(organizationId);
     }
 
     private async detachCharactersFromOrganization(
@@ -75,7 +73,7 @@ export class DeleteOrganization {
             .map((character) => {
                 character.organizationId = null;
                 character.updatedAt = new Date();
-                return this.characterRepository.update(projectId, character);
+                return this.characterRepository.update(character);
             });
 
         await Promise.all(updates);
@@ -86,10 +84,7 @@ export class DeleteOrganization {
         organization: Organization
     ): Promise<void> {
         const detachments = organization.locationIds.map(async (locationId) => {
-            const location = await this.locationRepository.findById(
-                projectId,
-                locationId
-            );
+            const location = await this.locationRepository.findById(locationId);
             if (!location) {
                 return;
             }
@@ -101,7 +96,7 @@ export class DeleteOrganization {
 
             if (originalLength !== location.organizationIds.length) {
                 location.updatedAt = new Date();
-                await this.locationRepository.update(projectId, location);
+                await this.locationRepository.update(location);
             }
         });
 
@@ -124,15 +119,12 @@ export class DeleteOrganization {
         projectId: string
     ): Promise<void> {
         const deletions = imageIds.map(async (imageId) => {
-            const image = await this.assetRepository.findImageById(
-                projectId,
-                imageId
-            );
+            const image = await this.assetRepository.findImageById(imageId);
             if (!image) {
                 return;
             }
 
-            await this.assetRepository.deleteImage(projectId, imageId);
+            await this.assetRepository.deleteImage(imageId);
             await this.storageService.deleteFile(
                 image.storagePath || image.url
             );
@@ -149,12 +141,12 @@ export class DeleteOrganization {
             return;
         }
 
-        const track = await this.assetRepository.findBGMById(projectId, bgmId);
+        const track = await this.assetRepository.findBGMById(bgmId);
         if (!track) {
             return;
         }
 
-        await this.assetRepository.deleteBGM(projectId, bgmId);
+        await this.assetRepository.deleteBGM(bgmId);
         await this.storageService.deleteFile(track.storagePath || track.url);
     }
 
@@ -166,15 +158,13 @@ export class DeleteOrganization {
             return;
         }
 
-        const playlist = await this.assetRepository.findPlaylistById(
-            projectId,
-            playlistId
-        );
+        const playlist =
+            await this.assetRepository.findPlaylistById(playlistId);
         if (!playlist) {
             return;
         }
 
-        await this.assetRepository.deletePlaylist(projectId, playlistId);
+        await this.assetRepository.deletePlaylist(playlistId);
         const target = playlist.storagePath || playlist.url;
         if (target) {
             await this.storageService.deleteFile(target);

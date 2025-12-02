@@ -23,7 +23,8 @@ export class GenerateOrganizationImage {
     ) {}
 
     async execute(
-        request: GenerateOrganizationImageRequest
+        request: GenerateOrganizationImageRequest,
+        onProgress: (progress: number) => void
     ): Promise<GenerateOrganizationImageResponse> {
         const projectId = request.projectId.trim();
         const organizationId = request.organizationId.trim();
@@ -32,16 +33,16 @@ export class GenerateOrganizationImage {
             throw new Error("Project ID and Organization ID are required.");
         }
 
-        const organization = await this.organizationRepository.findById(
-            projectId,
-            organizationId
-        );
+        const organization =
+            await this.organizationRepository.findById(organizationId);
         if (!organization) {
             throw new Error("Organization not found.");
         }
 
-        const buffer =
-            await this.imageGenerationService.generatePortrait(organization);
+        const buffer = await this.imageGenerationService.generatePortrait(
+            organization,
+            onProgress
+        );
         const uploadResult = await this.storageService.uploadAsset(buffer, {
             scope: "organization",
             scopeId: organizationId,
@@ -67,7 +68,7 @@ export class GenerateOrganizationImage {
         );
         organization.galleryImageIds.push(imageId);
         organization.updatedAt = now;
-        await this.organizationRepository.update(projectId, organization);
+        await this.organizationRepository.update(organization);
 
         return { image };
     }

@@ -9,5 +9,6 @@ export class UserPreferences {
         public editorFontSize: number,
         public editorFontFamily: string,
         public defaultImageAiModel: string,
+        public geminiApiKey?: string
     ) {}
 }

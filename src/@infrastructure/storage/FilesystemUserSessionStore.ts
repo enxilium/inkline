@@ -22,6 +22,7 @@ type StoredUserPayload = {
         editorFontSize: number;
         editorFontFamily: string;
         defaultImageAiModel: string;
+        geminiApiKey?: string;
     };
 };
 
@@ -103,6 +104,7 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
                 editorFontSize: user.preferences.editorFontSize,
                 editorFontFamily: user.preferences.editorFontFamily,
                 defaultImageAiModel: user.preferences.defaultImageAiModel,
+                geminiApiKey: user.preferences.geminiApiKey,
             },
         };
     }
@@ -112,7 +114,8 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             payload.preferences.theme,
             payload.preferences.editorFontSize,
             payload.preferences.editorFontFamily,
-            payload.preferences.defaultImageAiModel
+            payload.preferences.defaultImageAiModel,
+            payload.preferences.geminiApiKey
         );
 
         return new User(

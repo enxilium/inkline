@@ -14,7 +14,7 @@ export interface AnalyzeTextRequest {
 }
 
 export interface AnalyzeTextResponse {
-    analysis: string;
+    stream: AsyncGenerator<string, void, unknown>;
 }
 
 export class AnalyzeText {
@@ -47,13 +47,13 @@ export class AnalyzeText {
 
         const context = await this.buildContext(normalizedProjectId);
 
-        const analysis = await this.aiTextService.analyze(
+        const stream = this.aiTextService.analyze(
             content,
             instruction,
             context
         );
 
-        return { analysis };
+        return { stream };
     }
 
     private async buildContext(projectId: string): Promise<NarrativeContext> {

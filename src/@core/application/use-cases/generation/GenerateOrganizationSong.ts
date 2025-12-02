@@ -23,7 +23,8 @@ export class GenerateOrganizationSong {
     ) {}
 
     async execute(
-        request: GenerateOrganizationSongRequest
+        request: GenerateOrganizationSongRequest,
+        onProgress: (progress: number) => void
     ): Promise<GenerateOrganizationSongResponse> {
         const projectId = request.projectId.trim();
         const organizationId = request.organizationId.trim();
@@ -32,10 +33,8 @@ export class GenerateOrganizationSong {
             throw new Error("Project ID and Organization ID are required.");
         }
 
-        const organization = await this.organizationRepository.findById(
-            projectId,
-            organizationId
-        );
+        const organization =
+            await this.organizationRepository.findById(organizationId);
         if (!organization) {
             throw new Error("Organization not found.");
         }
@@ -45,8 +44,10 @@ export class GenerateOrganizationSong {
             organization
         );
 
-        const buffer =
-            await this.audioGenerationService.generateBGM(organization);
+        const buffer = await this.audioGenerationService.generateBGM(
+            organization,
+            onProgress
+        );
         const uploadResult = await this.storageService.uploadAsset(buffer, {
             scope: "organization",
             scopeId: organizationId,
@@ -74,7 +75,7 @@ export class GenerateOrganizationSong {
         );
         organization.bgmId = track.id;
         organization.updatedAt = now;
-        await this.organizationRepository.update(projectId, organization);
+        await this.organizationRepository.update(organization);
 
         await this.deleteBgmAsset(projectId, previousTrack);
 
@@ -89,7 +90,7 @@ export class GenerateOrganizationSong {
             return null;
         }
 
-        return this.assetRepository.findBGMById(projectId, organization.bgmId);
+        return this.assetRepository.findBGMById(organization.bgmId);
     }
 
     private async deleteBgmAsset(
@@ -100,7 +101,7 @@ export class GenerateOrganizationSong {
             return;
         }
 
-        await this.assetRepository.deleteBGM(projectId, track.id);
+        await this.assetRepository.deleteBGM(track.id);
         await this.storageService.deleteFile(track.storagePath || track.url);
     }
 }

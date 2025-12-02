@@ -32,10 +32,7 @@ export class GenerateLocationPlaylist {
             throw new Error("Project ID and Location ID are required.");
         }
 
-        const location = await this.locationRepository.findById(
-            projectId,
-            locationId
-        );
+        const location = await this.locationRepository.findById(locationId);
         if (!location) {
             throw new Error("Location not found.");
         }
@@ -69,7 +66,7 @@ export class GenerateLocationPlaylist {
 
         location.playlistId = playlist.id;
         location.updatedAt = now;
-        await this.locationRepository.update(projectId, location);
+        await this.locationRepository.update(location);
 
         await this.deletePlaylistAsset(projectId, previousPlaylist);
 
@@ -85,7 +82,6 @@ export class GenerateLocationPlaylist {
         }
 
         const existing = await this.assetRepository.findPlaylistById(
-            projectId,
             location.playlistId
         );
         return existing;
@@ -99,7 +95,7 @@ export class GenerateLocationPlaylist {
             return;
         }
 
-        await this.assetRepository.deletePlaylist(projectId, playlist.id);
+        await this.assetRepository.deletePlaylist(playlist.id);
         const target = playlist.storagePath || playlist.url;
         if (target) {
             await this.storageService.deleteFile(target);

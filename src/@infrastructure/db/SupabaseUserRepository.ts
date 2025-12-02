@@ -61,21 +61,6 @@ export class SupabaseUserRepository implements IUserRepository {
         return this.mapToUser(row, projectIds);
     }
 
-    async findByEmail(email: string): Promise<User | null> {
-        const client = SupabaseService.getClient();
-        const { data, error } = await client
-            .from("users")
-            .select("*")
-            .eq("email", email)
-            .single();
-
-        if (error || !data) return null;
-
-        const row = data as UserRow;
-        const projectIds = await this.fetchProjectIds(row.id);
-        return this.mapToUser(row, projectIds);
-    }
-
     async update(user: User): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
@@ -121,7 +106,10 @@ export class SupabaseUserRepository implements IUserRepository {
             coerceTheme(prefs.theme),
             coerceNumber(prefs.editorFontSize, 16),
             coerceString(prefs.editorFontFamily, "sans-serif"),
-            coerceString(prefs.defaultImageAiModel, "flux")
+            coerceString(prefs.defaultImageAiModel, "flux"),
+            typeof prefs.geminiApiKey === "string"
+                ? prefs.geminiApiKey
+                : undefined
         );
 
         return new User(
@@ -161,6 +149,7 @@ export class SupabaseUserRepository implements IUserRepository {
             editorFontSize: preferences.editorFontSize,
             editorFontFamily: preferences.editorFontFamily,
             defaultImageAiModel: preferences.defaultImageAiModel,
+            geminiApiKey: preferences.geminiApiKey,
         };
     }
 }

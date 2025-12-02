@@ -9,12 +9,16 @@ import { buildNarrativeContext } from "../../utils/narrativeContext";
 
 export interface EditChaptersRequest {
     projectId: string;
-    startChapter: number;
-    endChapter: number;
+    chapterIds: string[];
 }
 
 export interface EditChaptersResponse {
-    comments: { chapterNumber: number; wordNumber: number; comment: string }[];
+    comments: {
+        chapterId: string;
+        comment: string;
+        wordNumberStart: number;
+        wordNumberEnd: number;
+    }[];
 }
 
 export class EditChapters {
@@ -28,25 +32,22 @@ export class EditChapters {
     ) {}
 
     async execute(request: EditChaptersRequest): Promise<EditChaptersResponse> {
-        const { projectId, startChapter, endChapter } = request;
+        const { projectId, chapterIds } = request;
         const normalizedProjectId = projectId.trim();
 
         if (!normalizedProjectId) {
             throw new Error("Project ID is required.");
         }
 
-        if (startChapter < 0 || endChapter < 0 || startChapter > endChapter) {
-            throw new Error("Invalid chapter range supplied for editing.");
+        if (!chapterIds || chapterIds.length === 0) {
+            throw new Error("No chapters selected for editing.");
         }
 
         await this.ensureProjectExists(normalizedProjectId);
 
         const context = await this.buildContext(normalizedProjectId);
         const comments = await this.aiTextService.editManuscript(
-            {
-                start: startChapter,
-                end: endChapter,
-            },
+            chapterIds,
             context
         );
 

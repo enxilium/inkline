@@ -10,7 +10,6 @@ import {
 } from "../../../domain/entities/story/world/Playlist";
 import { Location } from "../../../domain/entities/story/world/Location";
 import { Organization } from "../../../domain/entities/story/world/Organization";
-import { Voice } from "../../../domain/entities/story/world/Voice";
 import { IAssetRepository } from "../../../domain/repositories/IAssetRepository";
 import { ICharacterRepository } from "../../../domain/repositories/ICharacterRepository";
 import { ILocationRepository } from "../../../domain/repositories/ILocationRepository";
@@ -23,13 +22,6 @@ type ImageAssetPayload = {
     kind: "image";
     subjectType: ImageSubjectType;
     subjectId: string;
-    fileData: ArrayBuffer;
-    extension?: string;
-};
-
-type VoiceAssetPayload = {
-    kind: "voice";
-    characterId: string;
     fileData: ArrayBuffer;
     extension?: string;
 };
@@ -56,7 +48,6 @@ type PlaylistAssetPayload = {
 
 export type ImportAssetPayload =
     | ImageAssetPayload
-    | VoiceAssetPayload
     | BgmAssetPayload
     | PlaylistAssetPayload;
 
@@ -69,7 +60,6 @@ type MusicSubject = PlaylistSubject;
 
 export type ImportAssetResponse =
     | { kind: "image"; image: Image }
-    | { kind: "voice"; voice: Voice }
     | { kind: "bgm"; track: BGM }
     | { kind: "playlist"; playlist: Playlist };
 
@@ -97,8 +87,6 @@ export class ImportAsset {
         switch (request.payload.kind) {
             case "image":
                 return this.importImage(projectId, request.payload);
-            case "voice":
-                return this.importVoice(projectId, request.payload);
             case "bgm":
                 return this.importBgm(projectId, request.payload);
             case "playlist":
@@ -164,82 +152,29 @@ export class ImportAsset {
     ): Promise<void> {
         const timestamp = new Date();
         if (subjectType === "character") {
-            const character = await this.characterRepository.findById(
-                projectId,
-                subjectId
-            );
+            const character =
+                await this.characterRepository.findById(subjectId);
             if (character) {
                 character.galleryImageIds.push(image.id);
                 character.updatedAt = timestamp;
-                await this.characterRepository.update(projectId, character);
+                await this.characterRepository.update(character);
             }
         } else if (subjectType === "location") {
-            const location = await this.locationRepository.findById(
-                projectId,
-                subjectId
-            );
+            const location = await this.locationRepository.findById(subjectId);
             if (location) {
                 location.galleryImageIds.push(image.id);
                 location.updatedAt = timestamp;
-                await this.locationRepository.update(projectId, location);
+                await this.locationRepository.update(location);
             }
         } else if (subjectType === "organization") {
-            const organization = await this.organizationRepository.findById(
-                projectId,
-                subjectId
-            );
+            const organization =
+                await this.organizationRepository.findById(subjectId);
             if (organization) {
                 organization.galleryImageIds.push(image.id);
                 organization.updatedAt = timestamp;
-                await this.organizationRepository.update(
-                    projectId,
-                    organization
-                );
+                await this.organizationRepository.update(organization);
             }
         }
-    }
-
-    private async importVoice(
-        projectId: string,
-        payload: VoiceAssetPayload
-    ): Promise<{ kind: "voice"; voice: Voice }> {
-        const character = await this.getCharacterForProject(
-            projectId,
-            payload.characterId
-        );
-
-        const previousVoice = await this.getExistingVoice(projectId, character);
-
-        const uploadResult = await this.storageService.uploadAsset(
-            payload.fileData,
-            {
-                scope: "character",
-                scopeId: payload.characterId,
-                assetType: "voice",
-                extension: payload.extension,
-            }
-        );
-        const now = new Date();
-        const voice = new Voice(
-            generateId(),
-            uploadResult.url,
-            uploadResult.path,
-            now,
-            now
-        );
-
-        await this.assetRepository.saveVoice(
-            projectId,
-            payload.characterId,
-            voice
-        );
-        character.voiceId = voice.id;
-        character.updatedAt = now;
-        await this.characterRepository.update(projectId, character);
-
-        await this.deleteVoiceAsset(projectId, previousVoice);
-
-        return { kind: "voice", voice };
     }
 
     private async importBgm(
@@ -326,24 +261,15 @@ export class ImportAsset {
         if (subject?.type === "character") {
             subject.entity.playlistId = playlist.id;
             subject.entity.updatedAt = now;
-            await this.characterRepository.update(
-                subject.projectId,
-                subject.entity
-            );
+            await this.characterRepository.update(subject.entity);
         } else if (subject?.type === "location") {
             subject.entity.playlistId = playlist.id;
             subject.entity.updatedAt = now;
-            await this.locationRepository.update(
-                subject.projectId,
-                subject.entity
-            );
+            await this.locationRepository.update(subject.entity);
         } else if (subject?.type === "organization") {
             subject.entity.playlistId = playlist.id;
             subject.entity.updatedAt = now;
-            await this.organizationRepository.update(
-                subject.projectId,
-                subject.entity
-            );
+            await this.organizationRepository.update(subject.entity);
         }
 
         await this.deletePlaylistAsset(
@@ -391,44 +317,12 @@ export class ImportAsset {
         subject.entity.updatedAt = timestamp;
 
         if (subject.type === "character") {
-            await this.characterRepository.update(
-                subject.projectId,
-                subject.entity
-            );
+            await this.characterRepository.update(subject.entity);
         } else if (subject.type === "location") {
-            await this.locationRepository.update(
-                subject.projectId,
-                subject.entity
-            );
+            await this.locationRepository.update(subject.entity);
         } else {
-            await this.organizationRepository.update(
-                subject.projectId,
-                subject.entity
-            );
+            await this.organizationRepository.update(subject.entity);
         }
-    }
-
-    private async getExistingVoice(
-        projectId: string,
-        character: Character
-    ): Promise<Voice | null> {
-        if (!character.voiceId) {
-            return null;
-        }
-
-        return this.assetRepository.findVoiceById(projectId, character.voiceId);
-    }
-
-    private async deleteVoiceAsset(
-        projectId: string,
-        voice: Voice | null
-    ): Promise<void> {
-        if (!voice) {
-            return;
-        }
-
-        await this.assetRepository.deleteVoice(projectId, voice.id);
-        await this.storageService.deleteFile(voice.storagePath || voice.url);
     }
 
     private async getExistingBgm(subject: MusicSubject): Promise<BGM | null> {
@@ -436,10 +330,7 @@ export class ImportAsset {
             return null;
         }
 
-        return this.assetRepository.findBGMById(
-            subject.projectId,
-            subject.entity.bgmId
-        );
+        return this.assetRepository.findBGMById(subject.entity.bgmId);
     }
 
     private async deleteBgmAsset(
@@ -450,7 +341,7 @@ export class ImportAsset {
             return;
         }
 
-        await this.assetRepository.deleteBGM(projectId, track.id);
+        await this.assetRepository.deleteBGM(track.id);
         await this.storageService.deleteFile(track.storagePath || track.url);
     }
 
@@ -461,10 +352,7 @@ export class ImportAsset {
             return null;
         }
 
-        return this.assetRepository.findPlaylistById(
-            subject.projectId,
-            subject.entity.playlistId
-        );
+        return this.assetRepository.findPlaylistById(subject.entity.playlistId);
     }
 
     private async deletePlaylistAsset(
@@ -475,7 +363,7 @@ export class ImportAsset {
             return;
         }
 
-        await this.assetRepository.deletePlaylist(projectId, playlist.id);
+        await this.assetRepository.deletePlaylist(playlist.id);
         const target = playlist.storagePath || playlist.url;
         if (target) {
             await this.storageService.deleteFile(target);
@@ -511,10 +399,8 @@ export class ImportAsset {
             if (!normalizedSubjectId) {
                 throw new Error("Chapter ID is required for chapter images.");
             }
-            const chapter = await this.chapterRepository.findById(
-                projectId,
-                normalizedSubjectId
-            );
+            const chapter =
+                await this.chapterRepository.findById(normalizedSubjectId);
             if (!chapter) {
                 throw new Error("Chapter image references an unknown chapter.");
             }
@@ -621,10 +507,7 @@ export class ImportAsset {
         characterId: string
     ): Promise<Character> {
         const normalized = characterId.trim();
-        const character = await this.characterRepository.findById(
-            projectId,
-            normalized
-        );
+        const character = await this.characterRepository.findById(normalized);
         if (!character) {
             throw new Error("Character not found for this project.");
         }
@@ -637,10 +520,7 @@ export class ImportAsset {
         locationId: string
     ): Promise<Location> {
         const normalized = locationId.trim();
-        const location = await this.locationRepository.findById(
-            projectId,
-            normalized
-        );
+        const location = await this.locationRepository.findById(normalized);
         if (!location) {
             throw new Error("Location not found for this project.");
         }
@@ -653,10 +533,8 @@ export class ImportAsset {
         organizationId: string
     ): Promise<Organization> {
         const normalized = organizationId.trim();
-        const organization = await this.organizationRepository.findById(
-            projectId,
-            normalized
-        );
+        const organization =
+            await this.organizationRepository.findById(normalized);
         if (!organization) {
             throw new Error("Organization not found for this project.");
         }
