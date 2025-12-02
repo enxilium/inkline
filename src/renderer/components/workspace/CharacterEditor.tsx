@@ -17,7 +17,6 @@ export type CharacterEditorValues = {
     traits: string;
     goals: string;
     secrets: string;
-    quote: string;
     tags: string;
     currentLocationId: string;
     backgroundLocationId: string;
@@ -33,9 +32,6 @@ export type CharacterEditorProps = {
     onSubmit: (values: CharacterEditorValues) => Promise<void>;
     onGeneratePortrait: () => Promise<void>;
     onImportPortrait: (file: File) => Promise<void>;
-    onGenerateVoice: () => Promise<void>;
-    onImportVoice: (file: File) => Promise<void>;
-    onGenerateQuote: (quote: string) => Promise<void>;
     onGenerateSong: () => Promise<void>;
     onImportSong: (file: File) => Promise<void>;
     onGeneratePlaylist: () => Promise<void>;
@@ -52,7 +48,6 @@ const defaultValues = (
     traits: (character.traits ?? []).join("\n"),
     goals: (character.goals ?? []).join("\n"),
     secrets: (character.secrets ?? []).join("\n"),
-    quote: character.quote ?? "",
     tags: (character.tags ?? []).join("\n"),
     currentLocationId: character.currentLocationId ?? "",
     backgroundLocationId: character.backgroundLocationId ?? "",
@@ -68,9 +63,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     onSubmit,
     onGeneratePortrait,
     onImportPortrait,
-    onGenerateVoice,
-    onImportVoice,
-    onGenerateQuote,
     onGenerateSong,
     onImportSong,
     onGeneratePlaylist,
@@ -85,7 +77,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
     const firstImageRef = React.useRef<string | undefined>(undefined);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const voiceInputRef = React.useRef<HTMLInputElement>(null);
     const songInputRef = React.useRef<HTMLInputElement>(null);
     const playlistInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -152,10 +143,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         fileInputRef.current?.click();
     };
 
-    const triggerVoicePick = () => {
-        voiceInputRef.current?.click();
-    };
-
     const triggerSongPick = () => {
         songInputRef.current?.click();
     };
@@ -179,26 +166,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         } catch (importError) {
             setError(
                 (importError as Error)?.message ?? "Failed to import portrait."
-            );
-        } finally {
-            setAssetBusy(false);
-            event.target.value = "";
-        }
-    };
-
-    const handleVoiceChange = async (
-        event: React.ChangeEvent<HTMLInputElement>
-    ) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        setAssetBusy(true);
-        setError(null);
-        try {
-            await onImportVoice(file);
-        } catch (importError) {
-            setError(
-                (importError as Error)?.message ?? "Failed to import voice."
             );
         } finally {
             setAssetBusy(false);
@@ -414,20 +381,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                         />
                     </div>
                     <div className="entity-field">
-                        <Label htmlFor="character-quote">Signature quote</Label>
-                        <textarea
-                            id="character-quote"
-                            className="text-area"
-                            value={values.quote}
-                            onChange={(event) =>
-                                handleChange("quote", event.target.value)
-                            }
-                            onBlur={handleBlur}
-                            rows={2}
-                            placeholder="Memorable line"
-                        />
-                    </div>
-                    <div className="entity-field">
                         <Label htmlFor="character-tags">Tags</Label>
                         <textarea
                             id="character-tags"
@@ -550,58 +503,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                     <div className="entity-summary">
                         <span className="summary-label">Audio Assets</span>
                         <div className="portrait-actions">
-                            <div className="button-group">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="secondary"
-                                    disabled={assetBusy}
-                                    onClick={() =>
-                                        handleAssetAction(
-                                            onGenerateVoice,
-                                            "Voice generation failed"
-                                        )
-                                    }
-                                >
-                                    {character.voiceId
-                                        ? "Regenerate Voice"
-                                        : "Generate Voice"}
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={assetBusy}
-                                    onClick={triggerVoicePick}
-                                >
-                                    Import
-                                </Button>
-                                <input
-                                    ref={voiceInputRef}
-                                    type="file"
-                                    accept="audio/*"
-                                    className="sr-only"
-                                    onChange={handleVoiceChange}
-                                />
-                            </div>
-
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="secondary"
-                                disabled={assetBusy}
-                                onClick={() =>
-                                    handleAssetAction(
-                                        () => onGenerateQuote(values.quote),
-                                        "Quote generation failed"
-                                    )
-                                }
-                            >
-                                {character.quoteAudioUrl
-                                    ? "Regenerate Quote"
-                                    : "Generate Quote"}
-                            </Button>
-
                             <div className="button-group">
                                 <Button
                                     type="button"

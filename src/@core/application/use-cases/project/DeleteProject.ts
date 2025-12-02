@@ -85,17 +85,15 @@ export class DeleteProject {
     }
 
     private async deleteAllProjectAssets(projectId: string): Promise<void> {
-        const [images, bgms, playlists, voices] = await Promise.all([
+        const [images, bgms, playlists] = await Promise.all([
             this.assetRepository.findImagesByProjectId(projectId),
             this.assetRepository.findBGMByProjectId(projectId),
             this.assetRepository.findPlaylistsByProjectId(projectId),
-            this.assetRepository.findVoicesByProjectId(projectId),
         ]);
 
         // Delete asset records from DB
         await Promise.all([
             this.assetRepository.deleteImagesByProjectId(projectId),
-            this.assetRepository.deleteVoicesByProjectId(projectId),
             this.assetRepository.deleteBGMByProjectId(projectId),
             this.assetRepository.deletePlaylistsByProjectId(projectId),
         ]);
@@ -107,9 +105,6 @@ export class DeleteProject {
             ),
             ...bgms.map((track) =>
                 this.storageService.deleteFile(track.storagePath || track.url)
-            ),
-            ...voices.map((voice) =>
-                this.storageService.deleteFile(voice.storagePath || voice.url)
             ),
             ...playlists.map((playlist) => {
                 const target = playlist.storagePath || playlist.url;

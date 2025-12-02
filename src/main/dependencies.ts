@@ -12,11 +12,10 @@ import { SupabaseAssetRepository } from "../@infrastructure/db/SupabaseAssetRepo
 import { SupabaseAuthService } from "../@infrastructure/db/SupabaseAuthService";
 import { SupabaseStorageService } from "../@infrastructure/storage/SupabaseStorageService";
 import { FilesystemUserSessionStore } from "../@infrastructure/storage/FilesystemUserSessionStore";
-import { StubAITextService } from "../@infrastructure/services/StubAITextService";
-import { StubAudioGenerationService } from "../@infrastructure/services/StubAudioGenerationService";
-import { StubImageGenerationService } from "../@infrastructure/services/StubImageGenerationService";
-import { StubPlaylistGenerationService } from "../@infrastructure/services/StubPlaylistGenerationService";
-import { StubExportService } from "../@infrastructure/services/StubExportService";
+import { GeminiAITextService } from "../@infrastructure/ai/GeminiAITextService";
+import { ComfyAssetGenerationService } from "../@infrastructure/ai/ComfyAssetGenerationService";
+import { PlaylistGenerationService } from "../@infrastructure/ai/PlaylistGenerationService";
+import { ExportService } from "../@infrastructure/ai/ExportService";
 
 export function resolveDependencies(): AppBuilderDependencies {
     const projectRepository = new SupabaseProjectRepository();
@@ -31,11 +30,32 @@ export function resolveDependencies(): AppBuilderDependencies {
     const authService = new SupabaseAuthService();
     const storageService = new SupabaseStorageService();
     const sessionStore = new FilesystemUserSessionStore();
-    const aiTextService = new StubAITextService();
-    const audioGenerationService = new StubAudioGenerationService();
-    const imageGenerationService = new StubImageGenerationService();
-    const playlistGenerationService = new StubPlaylistGenerationService();
-    const exportService = new StubExportService();
+    const aiTextService = new GeminiAITextService(
+        sessionStore,
+        chapterRepository,
+        characterRepository,
+        locationRepository,
+        organizationRepository,
+        scrapNoteRepository
+    );
+    const comfyAssetGenerationService = new ComfyAssetGenerationService(
+        sessionStore,
+        chapterRepository,
+        characterRepository,
+        locationRepository,
+        organizationRepository,
+        scrapNoteRepository
+    );
+    const audioGenerationService = comfyAssetGenerationService;
+    const imageGenerationService = comfyAssetGenerationService;
+    const playlistGenerationService = new PlaylistGenerationService(
+        sessionStore,
+        locationRepository
+    );
+    const exportService = new ExportService(
+        projectRepository,
+        chapterRepository
+    );
 
     return {
         repositories: {

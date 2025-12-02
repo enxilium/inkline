@@ -70,13 +70,12 @@ export class SupabaseChapterRepository implements IChapterRepository {
         if (error) throw new Error(error.message);
     }
 
-    async findById(projectId: string, id: string): Promise<Chapter | null> {
+    async findById(id: string): Promise<Chapter | null> {
         const client = SupabaseService.getClient();
         const { data, error } = await client
             .from("chapters")
             .select("*")
             .eq("id", id)
-            .eq("project_id", projectId)
             .single();
 
         if (error || !data) return null;
@@ -98,7 +97,7 @@ export class SupabaseChapterRepository implements IChapterRepository {
         return (data as ChapterRow[]).map(mapRowToChapter);
     }
 
-    async update(projectId: string, chapter: Chapter): Promise<void> {
+    async update(chapter: Chapter): Promise<void> {
         const client = SupabaseService.getClient();
 
         const { error } = await client
@@ -109,17 +108,12 @@ export class SupabaseChapterRepository implements IChapterRepository {
                 order_index: chapter.order,
                 updated_at: chapter.updatedAt.toISOString(),
             })
-            .eq("id", chapter.id)
-            .eq("project_id", projectId);
+            .eq("id", chapter.id);
 
         if (error) throw new Error(error.message);
     }
 
-    async updateContent(
-        projectId: string,
-        chapterId: string,
-        content: string
-    ): Promise<void> {
+    async updateContent(chapterId: string, content: string): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("chapters")
@@ -127,19 +121,14 @@ export class SupabaseChapterRepository implements IChapterRepository {
                 content: parseChapterContent(content),
                 updated_at: new Date().toISOString(),
             })
-            .eq("id", chapterId)
-            .eq("project_id", projectId);
+            .eq("id", chapterId);
 
         if (error) throw new Error(error.message);
     }
 
-    async delete(projectId: string, id: string): Promise<void> {
+    async delete(id: string): Promise<void> {
         const client = SupabaseService.getClient();
-        const { error } = await client
-            .from("chapters")
-            .delete()
-            .eq("id", id)
-            .eq("project_id", projectId);
+        const { error } = await client.from("chapters").delete().eq("id", id);
         if (error) throw new Error(error.message);
     }
 

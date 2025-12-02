@@ -18,6 +18,7 @@ import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
 import { LinkDialog } from "../components/dialogs/LinkDialog";
+import { ExportDialog } from "../components/dialogs/ExportDialog";
 import { DocumentBinder } from "../components/workspace/DocumentBinder";
 import {
     CharacterEditor,
@@ -92,22 +93,22 @@ export const WorkspaceView: React.FC = () => {
         createCharacterEntry,
         createLocationEntry,
         createOrganizationEntry,
-        deleteChapter,
-        deleteScrapNote,
-        deleteCharacter,
-        deleteLocation,
-        deleteOrganization,
         autosaveStatus,
-        autosaveError,
-        lastSavedAt,
         setAutosaveStatus,
+        autosaveError,
         setAutosaveError,
+        lastSavedAt,
         setLastSavedAt,
         updateChapterLocally,
         updateScrapNoteLocally,
         updateCharacterLocally,
         updateLocationLocally,
         updateOrganizationLocally,
+        deleteChapter,
+        deleteScrapNote,
+        deleteCharacter,
+        deleteLocation,
+        deleteOrganization,
         reorderChapters,
         shortcutStates,
         setShortcutState,
@@ -115,6 +116,25 @@ export const WorkspaceView: React.FC = () => {
         reloadActiveProject,
         returnToProjects,
     } = useAppStore();
+
+    const [generationProgress, setGenerationProgress] = React.useState<{
+        type: string;
+        progress: number;
+    } | null>(null);
+
+    const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false);
+
+    React.useEffect(() => {
+        const events = (window as any).generationEvents;
+        if (events) {
+            events.onProgress((data: { type: string; progress: number }) => {
+                setGenerationProgress(data);
+                if (data.progress >= 100) {
+                    setTimeout(() => setGenerationProgress(null), 3000);
+                }
+            });
+        }
+    }, []);
 
     const editor = useEditor({
         extensions: [
@@ -284,7 +304,6 @@ export const WorkspaceView: React.FC = () => {
 
             if (activeTextDocument.kind === "chapter") {
                 await rendererApi.logistics.saveChapterContent({
-                    projectId,
                     chapterId: activeTextDocument.data.id,
                     content,
                 });
@@ -294,7 +313,6 @@ export const WorkspaceView: React.FC = () => {
                 });
             } else {
                 await rendererApi.manuscript.updateScrapNote({
-                    projectId,
                     scrapNoteId: activeTextDocument.data.id,
                     content,
                 });
@@ -515,6 +533,18 @@ export const WorkspaceView: React.FC = () => {
                 },
             },
             {
+                id: "exportManuscript",
+                title: "Export Manuscript",
+                category: "Project",
+                description: "Export the project to PDF, DOCX, or EPUB.",
+                run: async () => {
+                    if (!projectId) {
+                        throw new Error("No active project.");
+                    }
+                    setIsExportDialogOpen(true);
+                },
+            },
+            {
                 id: "createChapter",
                 title: "New chapter",
                 category: "Manuscript",
@@ -578,24 +608,6 @@ export const WorkspaceView: React.FC = () => {
                         prompt: question,
                     });
                     alert(response.reply);
-                },
-            },
-            {
-                id: "exportManuscript",
-                title: "Export Manuscript",
-                category: "Project",
-                description: "Export the project to a file.",
-                run: async () => {
-                    const path = window.prompt(
-                        "Enter destination path (e.g. C:\\Users\\Name\\Desktop\\story.pdf):"
-                    );
-                    if (!path) return;
-                    await rendererApi.project.exportManuscript({
-                        projectId,
-                        format: "pdf",
-                        destinationPath: path,
-                    });
-                    alert("Export complete!");
                 },
             },
             {
@@ -755,12 +767,9 @@ export const WorkspaceView: React.FC = () => {
                     const assetId = window.prompt("Enter Asset ID:");
                     if (!assetId) return;
                     const kind = window.prompt(
-                        "Enter Asset Kind (image/voice/bgm/playlist):"
+                        "Enter Asset Kind (image/bgm/playlist):"
                     );
-                    if (
-                        !kind ||
-                        !["image", "voice", "bgm", "playlist"].includes(kind)
-                    ) {
+                    if (!kind || !["image", "bgm", "playlist"].includes(kind)) {
                         alert("Invalid asset kind.");
                         return;
                     }
@@ -768,7 +777,7 @@ export const WorkspaceView: React.FC = () => {
                     await rendererApi.asset.deleteAsset({
                         projectId,
                         assetId,
-                        kind: kind as "image" | "voice" | "bgm" | "playlist",
+                        kind: kind as "image" | "bgm" | "playlist",
                     });
                     alert("Asset deleted.");
                     await reloadActiveProject();
@@ -797,17 +806,37 @@ export const WorkspaceView: React.FC = () => {
                         return;
                     }
 
+                    const sortedChapters = chapters
+                        .slice()
+                        .sort((a, b) => a.order - b.order);
+                    const selectedChapters = sortedChapters.slice(
+                        Math.max(0, startChapter),
+                        endChapter + 1
+                    );
+
+                    if (!selectedChapters.length) {
+                        alert("No chapters found for that range.");
+                        return;
+                    }
+
                     const response = await rendererApi.analysis.editChapters({
                         projectId,
-                        startChapter,
-                        endChapter,
+                        chapterIds: selectedChapters.map(
+                            (chapter) => chapter.id
+                        ),
                     });
 
                     const summary = response.comments
-                        .map(
-                            (c) =>
-                                `Ch ${c.chapterNumber + 1}, Word ${c.wordNumber}: ${c.comment}`
-                        )
+                        .map((comment) => {
+                            const chapterIndex = selectedChapters.findIndex(
+                                (chapter) => chapter.id === comment.chapterId
+                            );
+                            const chapterLabel =
+                                chapterIndex >= 0
+                                    ? `Ch ${selectedChapters[chapterIndex].order + 1}`
+                                    : "Chapter";
+                            return `${chapterLabel}, Words ${comment.wordNumberStart}-${comment.wordNumberEnd}: ${comment.comment}`;
+                        })
                         .join("\n\n");
 
                     alert(`Editor Comments:\n\n${summary}`);
@@ -842,7 +871,6 @@ export const WorkspaceView: React.FC = () => {
         try {
             if (activeTextDocument.kind === "chapter") {
                 await rendererApi.manuscript.renameChapter({
-                    projectId,
                     chapterId: activeTextDocument.data.id,
                     title: trimmed,
                 });
@@ -852,7 +880,6 @@ export const WorkspaceView: React.FC = () => {
                 });
             } else {
                 await rendererApi.manuscript.updateScrapNote({
-                    projectId,
                     scrapNoteId: activeTextDocument.data.id,
                     title: trimmed,
                 });
@@ -880,7 +907,6 @@ export const WorkspaceView: React.FC = () => {
                 traits: listFromMultiline(values.traits),
                 goals: listFromMultiline(values.goals),
                 secrets: listFromMultiline(values.secrets),
-                quote: values.quote,
                 tags: listFromMultiline(values.tags),
                 currentLocationId: values.currentLocationId || null,
                 backgroundLocationId: values.backgroundLocationId || null,
@@ -896,7 +922,6 @@ export const WorkspaceView: React.FC = () => {
 
             try {
                 await rendererApi.logistics.saveCharacterInfo({
-                    projectId,
                     characterId: activeCharacter.id,
                     payload,
                 });
@@ -939,7 +964,6 @@ export const WorkspaceView: React.FC = () => {
 
             try {
                 await rendererApi.logistics.saveLocationInfo({
-                    projectId,
                     locationId: activeLocation.id,
                     payload,
                 });
@@ -976,7 +1000,6 @@ export const WorkspaceView: React.FC = () => {
 
             try {
                 await rendererApi.logistics.saveOrganizationInfo({
-                    projectId,
                     organizationId: activeOrganization.id,
                     payload,
                 });
@@ -1058,12 +1081,6 @@ export const WorkspaceView: React.FC = () => {
     ) => {
         if (!subject || !projectId) {
             return {
-                generateVoice: async () => {
-                    throw new Error("Select a document first.");
-                },
-                generateQuote: async () => {
-                    throw new Error("Select a document first.");
-                },
                 generateSong: async () => {
                     throw new Error("Select a document first.");
                 },
@@ -1072,28 +1089,6 @@ export const WorkspaceView: React.FC = () => {
                 },
             };
         }
-
-        const generateVoice = async () => {
-            if (subjectType !== "character") return;
-            await rendererApi.generation.generateCharacterVoice({
-                projectId,
-                characterId: subject.id,
-            });
-            await reloadActiveProject();
-        };
-
-        const generateQuote = async (quote?: string) => {
-            if (subjectType !== "character") return;
-            if (!quote) {
-                throw new Error("Please enter a quote first.");
-            }
-            await rendererApi.generation.generateCharacterQuote({
-                projectId,
-                characterId: subject.id,
-                quote,
-            });
-            await reloadActiveProject();
-        };
 
         const generateSong = async () => {
             if (subjectType === "character") {
@@ -1135,7 +1130,7 @@ export const WorkspaceView: React.FC = () => {
             await reloadActiveProject();
         };
 
-        return { generateVoice, generateQuote, generateSong, generatePlaylist };
+        return { generateSong, generatePlaylist };
     };
 
     const makeAudioImportHandlers = (
@@ -1144,9 +1139,6 @@ export const WorkspaceView: React.FC = () => {
     ) => {
         if (!subject || !projectId) {
             return {
-                importVoice: async () => {
-                    throw new Error("Select a document first.");
-                },
                 importSong: async () => {
                     throw new Error("Select a document first.");
                 },
@@ -1155,22 +1147,6 @@ export const WorkspaceView: React.FC = () => {
                 },
             };
         }
-
-        const importVoice = async (file: File) => {
-            if (subjectType !== "character") return;
-            const buffer = await file.arrayBuffer();
-            const extension = file.name.split(".").pop();
-            await rendererApi.asset.importAsset({
-                projectId,
-                payload: {
-                    kind: "voice",
-                    characterId: subject.id,
-                    fileData: buffer,
-                    extension,
-                },
-            });
-            await reloadActiveProject();
-        };
 
         const importSong = async (file: File) => {
             const buffer = await file.arrayBuffer();
@@ -1214,7 +1190,7 @@ export const WorkspaceView: React.FC = () => {
             await reloadActiveProject();
         };
 
-        return { importVoice, importSong, importPlaylist };
+        return { importSong, importPlaylist };
     };
 
     const characterGallerySources = React.useMemo(
@@ -1543,9 +1519,6 @@ export const WorkspaceView: React.FC = () => {
                     onSubmit={handleCharacterSubmit}
                     onGeneratePortrait={characterImageHandlers.generate}
                     onImportPortrait={characterImageHandlers.import}
-                    onGenerateVoice={characterGenerationHandlers.generateVoice}
-                    onImportVoice={characterAudioImportHandlers.importVoice}
-                    onGenerateQuote={characterGenerationHandlers.generateQuote}
                     onGenerateSong={characterGenerationHandlers.generateSong}
                     onImportSong={characterAudioImportHandlers.importSong}
                     onGeneratePlaylist={
@@ -1722,6 +1695,41 @@ export const WorkspaceView: React.FC = () => {
                 onOpenChange={setLinkDialogOpen}
                 onSubmit={handleLinkSubmit}
             />
+            <ExportDialog
+                open={isExportDialogOpen}
+                onOpenChange={setIsExportDialogOpen}
+                onExport={async (format, path) => {
+                    if (!projectId) return;
+                    await rendererApi.project.exportManuscript({
+                        projectId,
+                        format,
+                        destinationPath: path,
+                    });
+                    alert("Export complete!");
+                }}
+            />
+            {generationProgress && (
+                <div className="generation-progress-toast">
+                    <div style={{ fontWeight: 600, fontSize: "0.9rem" }}>
+                        Generating {generationProgress.type}...
+                    </div>
+                    <div className="generation-progress-bar">
+                        <div
+                            className="generation-progress-fill"
+                            style={{ width: `${generationProgress.progress}%` }}
+                        />
+                    </div>
+                    <div
+                        style={{
+                            fontSize: "0.8rem",
+                            opacity: 0.7,
+                            textAlign: "right",
+                        }}
+                    >
+                        {generationProgress.progress}%
+                    </div>
+                </div>
+            )}
         </>
     );
 };

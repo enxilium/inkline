@@ -58,16 +58,12 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
         if (error) throw new Error(error.message);
     }
 
-    async findById(
-        projectId: string,
-        id: string
-    ): Promise<Organization | null> {
+    async findById(id: string): Promise<Organization | null> {
         const client = SupabaseService.getClient();
         const { data, error } = await client
             .from("organizations")
             .select("*")
             .eq("id", id)
-            .eq("project_id", projectId)
             .single();
 
         if (error || !data) return null;
@@ -89,16 +85,12 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
         return (data as OrganizationRow[]).map(mapRowToOrganization);
     }
 
-    async findByLocationId(
-        projectId: string,
-        locationId: string
-    ): Promise<Organization[]> {
+    async findByLocationId(locationId: string): Promise<Organization[]> {
         const client = SupabaseService.getClient();
         const { data, error } = await client
             .from("organizations")
             .select("*")
-            .eq("project_id", projectId)
-            .contains("location_ids", [locationId])
+            .contains("location_ids", JSON.stringify([locationId]))
             .order("updated_at", { ascending: false });
 
         if (error) throw new Error(error.message);
@@ -107,7 +99,7 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
         return (data as OrganizationRow[]).map(mapRowToOrganization);
     }
 
-    async update(projectId: string, organization: Organization): Promise<void> {
+    async update(organization: Organization): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("organizations")
@@ -122,19 +114,17 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
                 bgm_id: organization.bgmId,
                 updated_at: organization.updatedAt.toISOString(),
             })
-            .eq("id", organization.id)
-            .eq("project_id", projectId);
+            .eq("id", organization.id);
 
         if (error) throw new Error(error.message);
     }
 
-    async delete(projectId: string, id: string): Promise<void> {
+    async delete(id: string): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("organizations")
             .delete()
-            .eq("id", id)
-            .eq("project_id", projectId);
+            .eq("id", id);
         if (error) throw new Error(error.message);
     }
 

@@ -1,10 +1,14 @@
-import { Controller } from "../Controller";
+import { Controller, IpcController } from "../Controller";
 import { GenerateCharacterImage } from "../../../@core/application/use-cases/generation/GenerateCharacterImage";
+import { IpcMainInvokeEvent } from "electron";
+
+type ExecuteParams = Parameters<GenerateCharacterImage["execute"]>;
+type ControllerArgs = [ExecuteParams[0], ExecuteParams[1]?];
 
 export class GenerateCharacterImageController
     implements
-        Controller<
-            Parameters<GenerateCharacterImage["execute"]>,
+        IpcController<
+            ControllerArgs,
             Awaited<ReturnType<GenerateCharacterImage["execute"]>>
         >
 {
@@ -13,8 +17,25 @@ export class GenerateCharacterImageController
     ) {}
 
     async handle(
-        ...args: Parameters<GenerateCharacterImage["execute"]>
+        ...args: ControllerArgs
     ): Promise<Awaited<ReturnType<GenerateCharacterImage["execute"]>>> {
-        return this.generateCharacterImage.execute(...args);
+        const [request, onProgress] = args;
+        return this.generateCharacterImage.execute(
+            request,
+            onProgress || (() => {})
+        );
+    }
+
+    async handleWithEvent(
+        event: IpcMainInvokeEvent,
+        ...args: ControllerArgs
+    ): Promise<Awaited<ReturnType<GenerateCharacterImage["execute"]>>> {
+        const [request] = args;
+        return this.generateCharacterImage.execute(request, (progress) => {
+            event.sender.send("generation-progress", {
+                type: "image",
+                progress,
+            });
+        });
     }
 }

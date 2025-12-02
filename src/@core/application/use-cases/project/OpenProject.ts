@@ -5,7 +5,6 @@ import { Character } from "../../../domain/entities/story/world/Character";
 import { Location } from "../../../domain/entities/story/world/Location";
 import { Organization } from "../../../domain/entities/story/world/Organization";
 import { Image } from "../../../domain/entities/story/world/Image";
-import { Voice } from "../../../domain/entities/story/world/Voice";
 import { BGM } from "../../../domain/entities/story/world/BGM";
 import { Playlist } from "../../../domain/entities/story/world/Playlist";
 import { IChapterRepository } from "../../../domain/repositories/IChapterRepository";
@@ -32,7 +31,6 @@ export interface OpenProjectResponse {
 
 export interface ProjectAssetBundle {
     images: Image[];
-    voices: Voice[];
     bgms: BGM[];
     playlists: Playlist[];
 }
@@ -59,16 +57,46 @@ export class OpenProject {
             throw new Error("Project not found.");
         }
 
-        const [chapters, characters, locations, scrapNotes, organizations] =
-            await Promise.all([
-                this.chapterRepository.findByProjectId(projectId),
-                this.characterRepository.findByProjectId(projectId),
-                this.locationRepository.findByProjectId(projectId),
-                this.scrapNoteRepository.findByProjectId(projectId),
-                this.organizationRepository.findByProjectId(projectId),
-            ]);
+        const [
+            chapters,
+            rawCharacters,
+            rawLocations,
+            rawScrapNotes,
+            rawOrganizations,
+        ] = await Promise.all([
+            this.chapterRepository.findByProjectId(projectId),
+            this.characterRepository.findByProjectId(projectId),
+            this.locationRepository.findByProjectId(projectId),
+            this.scrapNoteRepository.findByProjectId(projectId),
+            this.organizationRepository.findByProjectId(projectId),
+        ]);
 
         chapters.sort((a, b) => a.order - b.order);
+
+        const sortByIds = <T extends { id: string }>(
+            items: T[],
+            ids: string[]
+        ): T[] => {
+            const map = new Map(items.map((i) => [i.id, i]));
+            const sorted: T[] = [];
+            ids.forEach((id) => {
+                const item = map.get(id);
+                if (item) {
+                    sorted.push(item);
+                    map.delete(id);
+                }
+            });
+            map.forEach((item) => sorted.push(item));
+            return sorted;
+        };
+
+        const characters = sortByIds(rawCharacters, project.characterIds);
+        const locations = sortByIds(rawLocations, project.locationIds);
+        const scrapNotes = sortByIds(rawScrapNotes, project.scrapNoteIds);
+        const organizations = sortByIds(
+            rawOrganizations,
+            project.organizationIds
+        );
 
         const charactersByLocation = new Map<string, string[]>();
         const trackCharacter = (
@@ -131,7 +159,6 @@ export class OpenProject {
         const imageIds = new Set<string>();
         const bgmIds = new Set<string>();
         const playlistIds = new Set<string>();
-        const voiceIds = new Set<string>();
 
         const collectImageIds = (ids: string[]) => {
             ids.forEach((id) => {
@@ -156,9 +183,6 @@ export class OpenProject {
         characters.forEach((character) => {
             collectImageIds(character.galleryImageIds ?? []);
             collectAudioIds(character.bgmId, character.playlistId);
-            if (character.voiceId) {
-                voiceIds.add(character.voiceId);
-            }
         });
 
         locations.forEach((location) => {
@@ -171,28 +195,15 @@ export class OpenProject {
             collectAudioIds(organization.bgmId, organization.playlistId);
         });
 
-        const [images, voices, bgms, playlists] = await Promise.all([
+        const [images, bgms, playlists] = await Promise.all([
             imageIds.size
-                ? this.assetRepository.findImagesByIds(
-                      projectId,
-                      Array.from(imageIds)
-                  )
+                ? this.assetRepository.findImagesByIds(Array.from(imageIds))
                 : Promise.resolve([] as Image[]),
-            voiceIds.size
-                ? this.assetRepository.findVoicesByIds(
-                      projectId,
-                      Array.from(voiceIds)
-                  )
-                : Promise.resolve([] as Voice[]),
             bgmIds.size
-                ? this.assetRepository.findBGMsByIds(
-                      projectId,
-                      Array.from(bgmIds)
-                  )
+                ? this.assetRepository.findBGMsByIds(Array.from(bgmIds))
                 : Promise.resolve([] as BGM[]),
             playlistIds.size
                 ? this.assetRepository.findPlaylistsByIds(
-                      projectId,
                       Array.from(playlistIds)
                   )
                 : Promise.resolve([] as Playlist[]),
@@ -200,7 +211,6 @@ export class OpenProject {
 
         return {
             images,
-            voices,
             bgms,
             playlists,
         };

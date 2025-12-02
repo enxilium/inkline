@@ -1,7 +1,6 @@
 import { IChapterRepository } from "../../../domain/repositories/IChapterRepository";
 
 export interface SaveChapterContentRequest {
-    projectId: string;
     chapterId: string;
     content: string;
 }
@@ -10,16 +9,12 @@ export class SaveChapterContent {
     constructor(private readonly chapterRepository: IChapterRepository) {}
 
     async execute(request: SaveChapterContentRequest): Promise<void> {
-        const { projectId, chapterId, content } = request;
+        const { chapterId, content } = request;
 
-        if (!projectId.trim() || !chapterId.trim()) {
-            throw new Error("Project ID and Chapter ID are required.");
+        if (!chapterId.trim()) {
+            throw new Error("Chapter ID is required.");
         }
 
-        await this.chapterRepository.updateContent(
-            projectId,
-            chapterId,
-            content
-        );
+        await this.chapterRepository.updateContent(chapterId, content);
     }
 }

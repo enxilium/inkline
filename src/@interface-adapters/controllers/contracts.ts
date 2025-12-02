@@ -9,9 +9,7 @@ import type { RegisterUserController } from "./auth/RegisterUserController";
 import type { GetAuthStateController } from "./auth/GetAuthStateController";
 import type { GenerateCharacterImageController } from "./generation/GenerateCharacterImageController";
 import type { GenerateCharacterPlaylistController } from "./generation/GenerateCharacterPlaylistController";
-import type { GenerateCharacterQuoteController } from "./generation/GenerateCharacterQuoteController";
 import type { GenerateCharacterSongController } from "./generation/GenerateCharacterSongController";
-import type { GenerateCharacterVoiceController } from "./generation/GenerateCharacterVoiceController";
 import type { GenerateLocationImageController } from "./generation/GenerateLocationImageController";
 import type { GenerateLocationPlaylistController } from "./generation/GenerateLocationPlaylistController";
 import type { GenerateLocationSongController } from "./generation/GenerateLocationSongController";
@@ -39,6 +37,7 @@ import type { DeleteProjectController } from "./project/DeleteProjectController"
 import type { ExportManuscriptController } from "./project/ExportManuscriptController";
 import type { LoadProjectListController } from "./project/LoadProjectListController";
 import type { OpenProjectController } from "./project/OpenProjectController";
+import type { ReorderProjectItemsController } from "./project/ReorderProjectItemsController";
 import type { CreateCharacterController } from "./world/CreateCharacterController";
 import type { CreateLocationController } from "./world/CreateLocationController";
 import type { CreateOrganizationController } from "./world/CreateOrganizationController";
@@ -71,9 +70,7 @@ export interface ControllerInstanceMap {
     generation: {
         generateCharacterImage: GenerateCharacterImageController;
         generateCharacterPlaylist: GenerateCharacterPlaylistController;
-        generateCharacterQuote: GenerateCharacterQuoteController;
         generateCharacterSong: GenerateCharacterSongController;
-        generateCharacterVoice: GenerateCharacterVoiceController;
         generateLocationImage: GenerateLocationImageController;
         generateLocationPlaylist: GenerateLocationPlaylistController;
         generateLocationSong: GenerateLocationSongController;
@@ -107,6 +104,7 @@ export interface ControllerInstanceMap {
         exportManuscript: ExportManuscriptController;
         loadProjectList: LoadProjectListController;
         openProject: OpenProjectController;
+        reorderProjectItems: ReorderProjectItemsController;
     };
     world: {
         createCharacter: CreateCharacterController;
@@ -153,9 +151,7 @@ export const controllerChannels: ControllerChannelMap = {
     generation: {
         generateCharacterImage: "generation:generateCharacterImage",
         generateCharacterPlaylist: "generation:generateCharacterPlaylist",
-        generateCharacterQuote: "generation:generateCharacterQuote",
         generateCharacterSong: "generation:generateCharacterSong",
-        generateCharacterVoice: "generation:generateCharacterVoice",
         generateLocationImage: "generation:generateLocationImage",
         generateLocationPlaylist: "generation:generateLocationPlaylist",
         generateLocationSong: "generation:generateLocationSong",
@@ -189,6 +185,7 @@ export const controllerChannels: ControllerChannelMap = {
         exportManuscript: "project:exportManuscript",
         loadProjectList: "project:loadProjectList",
         openProject: "project:openProject",
+        reorderProjectItems: "project:reorderProjectItems",
     },
     world: {
         createCharacter: "world:createCharacter",

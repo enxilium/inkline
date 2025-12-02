@@ -3,16 +3,18 @@ import { AnalyzeText } from "../../../@core/application/use-cases/analysis/Analy
 
 export class AnalyzeTextController
     implements
-        Controller<
-            Parameters<AnalyzeText["execute"]>,
-            Awaited<ReturnType<AnalyzeText["execute"]>>
-        >
+        Controller<Parameters<AnalyzeText["execute"]>, { analysis: string }>
 {
     constructor(private readonly analyzeText: AnalyzeText) {}
 
     async handle(
         ...args: Parameters<AnalyzeText["execute"]>
-    ): Promise<Awaited<ReturnType<AnalyzeText["execute"]>>> {
-        return this.analyzeText.execute(...args);
+    ): Promise<{ analysis: string }> {
+        const result = await this.analyzeText.execute(...args);
+        let analysis = "";
+        for await (const chunk of result.stream) {
+            analysis += chunk;
+        }
+        return { analysis };
     }
 }

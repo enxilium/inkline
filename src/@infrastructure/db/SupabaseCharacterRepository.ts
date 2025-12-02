@@ -15,11 +15,7 @@ type CharacterRow = {
     traits: string[] | null;
     goals: string[] | null;
     secrets: string[] | null;
-    quote: string | null;
-    quote_audio_url: string | null;
-    quote_audio_storage_path: string | null;
     tags: string[] | null;
-    voice_id: string | null;
     bgm_id: string | null;
     playlist_id: string | null;
     gallery_image_ids: string[] | null;
@@ -45,11 +41,7 @@ const mapRowToCharacter = (row: CharacterRow): Character =>
         parseStringArray(row.traits),
         parseStringArray(row.goals),
         parseStringArray(row.secrets),
-        row.quote ?? "",
-        row.quote_audio_url,
-        row.quote_audio_storage_path,
         parseStringArray(row.tags),
-        row.voice_id,
         row.bgm_id,
         row.playlist_id,
         parseStringArray(row.gallery_image_ids),
@@ -73,11 +65,7 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
             traits: character.traits,
             goals: character.goals,
             secrets: character.secrets,
-            quote: character.quote,
-            quote_audio_url: character.quoteAudioUrl,
-            quote_audio_storage_path: character.quoteAudioStoragePath,
             tags: character.tags,
-            voice_id: character.voiceId,
             bgm_id: character.bgmId,
             playlist_id: character.playlistId,
             gallery_image_ids: character.galleryImageIds,
@@ -88,13 +76,12 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
         if (error) throw new Error(error.message);
     }
 
-    async findById(projectId: string, id: string): Promise<Character | null> {
+    async findById(id: string): Promise<Character | null> {
         const client = SupabaseService.getClient();
         const { data, error } = await client
             .from("characters")
             .select("*")
             .eq("id", id)
-            .eq("project_id", projectId)
             .single();
 
         if (error || !data) return null;
@@ -116,7 +103,7 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
         return (data as CharacterRow[]).map(mapRowToCharacter);
     }
 
-    async update(projectId: string, character: Character): Promise<void> {
+    async update(character: Character): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("characters")
@@ -131,29 +118,20 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                 traits: character.traits,
                 goals: character.goals,
                 secrets: character.secrets,
-                quote: character.quote,
-                quote_audio_url: character.quoteAudioUrl,
-                quote_audio_storage_path: character.quoteAudioStoragePath,
                 tags: character.tags,
-                voice_id: character.voiceId,
                 bgm_id: character.bgmId,
                 playlist_id: character.playlistId,
                 gallery_image_ids: character.galleryImageIds,
                 updated_at: character.updatedAt.toISOString(),
             })
-            .eq("id", character.id)
-            .eq("project_id", projectId);
+            .eq("id", character.id);
 
         if (error) throw new Error(error.message);
     }
 
-    async delete(projectId: string, id: string): Promise<void> {
+    async delete(id: string): Promise<void> {
         const client = SupabaseService.getClient();
-        const { error } = await client
-            .from("characters")
-            .delete()
-            .eq("id", id)
-            .eq("project_id", projectId);
+        const { error } = await client.from("characters").delete().eq("id", id);
         if (error) throw new Error(error.message);
     }
 

@@ -23,7 +23,8 @@ export class GenerateCharacterSong {
     ) {}
 
     async execute(
-        request: GenerateCharacterSongRequest
+        request: GenerateCharacterSongRequest,
+        onProgress: (progress: number) => void
     ): Promise<GenerateCharacterSongResponse> {
         const projectId = request.projectId.trim();
         const characterId = request.characterId.trim();
@@ -32,18 +33,17 @@ export class GenerateCharacterSong {
             throw new Error("Project ID and Character ID are required.");
         }
 
-        const character = await this.characterRepository.findById(
-            projectId,
-            characterId
-        );
+        const character = await this.characterRepository.findById(characterId);
         if (!character) {
             throw new Error("Character not found.");
         }
 
         const previousTrack = await this.getExistingBgm(projectId, character);
 
-        const bgmData =
-            await this.audioGenerationService.generateBGM(character);
+        const bgmData = await this.audioGenerationService.generateBGM(
+            character,
+            onProgress
+        );
         const uploadResult = await this.storageService.uploadAsset(bgmData, {
             scope: "character",
             scopeId: characterId,
@@ -71,7 +71,7 @@ export class GenerateCharacterSong {
         );
         character.bgmId = bgmId;
         character.updatedAt = now;
-        await this.characterRepository.update(projectId, character);
+        await this.characterRepository.update(character);
 
         await this.deleteBgmAsset(projectId, previousTrack);
 
@@ -86,7 +86,7 @@ export class GenerateCharacterSong {
             return null;
         }
 
-        return this.assetRepository.findBGMById(projectId, character.bgmId);
+        return this.assetRepository.findBGMById(character.bgmId);
     }
 
     private async deleteBgmAsset(
@@ -97,7 +97,7 @@ export class GenerateCharacterSong {
             return;
         }
 
-        await this.assetRepository.deleteBGM(projectId, track.id);
+        await this.assetRepository.deleteBGM(track.id);
         await this.storageService.deleteFile(track.storagePath || track.url);
     }
 }

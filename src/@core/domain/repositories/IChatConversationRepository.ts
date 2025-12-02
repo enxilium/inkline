@@ -9,15 +9,9 @@ export interface IChatConversationRepository {
     createConversation(
         input: CreateConversationInput
     ): Promise<ChatConversation>;
-    findById(
-        projectId: string,
-        conversationId: string
-    ): Promise<ChatConversation | null>;
+    findById(conversationId: string): Promise<ChatConversation | null>;
     getConversationsByProjectId(projectId: string): Promise<ChatConversation[]>;
-    getMessages(
-        projectId: string,
-        conversationId: string
-    ): Promise<ChatMessage[]>;
-    appendMessage(projectId: string, message: ChatMessage): Promise<void>;
+    getMessages(conversationId: string): Promise<ChatMessage[]>;
+    appendMessage(message: ChatMessage): Promise<void>;
     deleteByProjectId(projectId: string): Promise<void>;
 }

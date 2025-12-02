@@ -1,7 +1,6 @@
 import { IScrapNoteRepository } from "../../../domain/repositories/IScrapNoteRepository";
 
 export interface UpdateScrapNoteRequest {
-    projectId: string;
     scrapNoteId: string;
     title?: string;
     content?: string;
@@ -12,10 +11,10 @@ export class UpdateScrapNote {
     constructor(private readonly scrapNoteRepository: IScrapNoteRepository) {}
 
     async execute(request: UpdateScrapNoteRequest): Promise<void> {
-        const { projectId, scrapNoteId, title, content, isPinned } = request;
+        const { scrapNoteId, title, content, isPinned } = request;
 
-        if (!projectId.trim() || !scrapNoteId.trim()) {
-            throw new Error("Project ID and scrap note ID are required.");
+        if (!scrapNoteId.trim()) {
+            throw new Error("Scrap note ID is required.");
         }
 
         // Optimization: If only content is being updated (autosave), use the direct update method.
@@ -24,18 +23,11 @@ export class UpdateScrapNote {
             title === undefined &&
             isPinned === undefined
         ) {
-            await this.scrapNoteRepository.updateContent(
-                projectId,
-                scrapNoteId,
-                content
-            );
+            await this.scrapNoteRepository.updateContent(scrapNoteId, content);
             return;
         }
 
-        const scrapNote = await this.scrapNoteRepository.findById(
-            projectId,
-            scrapNoteId
-        );
+        const scrapNote = await this.scrapNoteRepository.findById(scrapNoteId);
         if (!scrapNote) {
             throw new Error("Scrap note not found for this project.");
         }
@@ -56,6 +48,6 @@ export class UpdateScrapNote {
         }
 
         scrapNote.updatedAt = new Date();
-        await this.scrapNoteRepository.update(projectId, scrapNote);
+        await this.scrapNoteRepository.update(scrapNote);
     }
 }

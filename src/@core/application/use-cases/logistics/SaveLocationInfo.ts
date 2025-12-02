@@ -1,7 +1,6 @@
 import { ILocationRepository } from "../../../domain/repositories/ILocationRepository";
 
 export interface SaveLocationInfoRequest {
-    projectId: string;
     locationId: string;
     payload: {
         name?: string;
@@ -17,16 +16,13 @@ export class SaveLocationInfo {
     constructor(private readonly locationRepository: ILocationRepository) {}
 
     async execute(request: SaveLocationInfoRequest): Promise<void> {
-        const { projectId, locationId, payload } = request;
+        const { locationId, payload } = request;
 
-        if (!projectId.trim() || !locationId.trim()) {
-            throw new Error("Project ID and Location ID are required.");
+        if (!locationId.trim()) {
+            throw new Error("Location ID is required.");
         }
 
-        const location = await this.locationRepository.findById(
-            projectId,
-            locationId
-        );
+        const location = await this.locationRepository.findById(locationId);
         if (!location) {
             throw new Error("Location not found for this project.");
         }
@@ -41,6 +37,6 @@ export class SaveLocationInfo {
         if (payload.tags !== undefined) location.tags = payload.tags;
 
         location.updatedAt = new Date();
-        await this.locationRepository.update(projectId, location);
+        await this.locationRepository.update(location);
     }
 }

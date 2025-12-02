@@ -34,10 +34,7 @@ export class DeleteLocation {
             throw new Error("Project not found.");
         }
 
-        const location = await this.locationRepository.findById(
-            projectId,
-            locationId
-        );
+        const location = await this.locationRepository.findById(locationId);
         if (!location) {
             throw new Error("Location not found for this project.");
         }
@@ -69,22 +66,19 @@ export class DeleteLocation {
                     character.backgroundLocationId = null;
                 }
                 character.updatedAt = new Date();
-                return this.characterRepository.update(projectId, character);
+                return this.characterRepository.update(character);
             });
         await Promise.all(characterUpdates);
 
         // 3. Detach from Organizations (Dependents)
         const organizations =
-            await this.organizationRepository.findByLocationId(
-                projectId,
-                locationId
-            );
+            await this.organizationRepository.findByLocationId(locationId);
         const organizationUpdates = organizations.map((organization) => {
             organization.locationIds = organization.locationIds.filter(
                 (id) => id !== locationId
             );
             organization.updatedAt = new Date();
-            return this.organizationRepository.update(projectId, organization);
+            return this.organizationRepository.update(organization);
         });
         await Promise.all(organizationUpdates);
 
@@ -92,7 +86,7 @@ export class DeleteLocation {
         await this.deleteLocationAssets(projectId, location);
 
         // 5. Delete Location (Self)
-        await this.locationRepository.delete(projectId, locationId);
+        await this.locationRepository.delete(locationId);
     }
 
     private async deleteLocationAssets(
@@ -111,15 +105,12 @@ export class DeleteLocation {
         projectId: string
     ): Promise<void> {
         const deletions = imageIds.map(async (imageId) => {
-            const image = await this.assetRepository.findImageById(
-                projectId,
-                imageId
-            );
+            const image = await this.assetRepository.findImageById(imageId);
             if (!image) {
                 return;
             }
 
-            await this.assetRepository.deleteImage(projectId, imageId);
+            await this.assetRepository.deleteImage(imageId);
             await this.storageService.deleteFile(
                 image.storagePath || image.url
             );
@@ -136,12 +127,12 @@ export class DeleteLocation {
             return;
         }
 
-        const track = await this.assetRepository.findBGMById(projectId, bgmId);
+        const track = await this.assetRepository.findBGMById(bgmId);
         if (!track) {
             return;
         }
 
-        await this.assetRepository.deleteBGM(projectId, bgmId);
+        await this.assetRepository.deleteBGM(bgmId);
         await this.storageService.deleteFile(track.storagePath || track.url);
     }
 
@@ -153,15 +144,13 @@ export class DeleteLocation {
             return;
         }
 
-        const playlist = await this.assetRepository.findPlaylistById(
-            projectId,
-            playlistId
-        );
+        const playlist =
+            await this.assetRepository.findPlaylistById(playlistId);
         if (!playlist) {
             return;
         }
 
-        await this.assetRepository.deletePlaylist(projectId, playlistId);
+        await this.assetRepository.deletePlaylist(playlistId);
         const target = playlist.storagePath || playlist.url;
         if (target) {
             await this.storageService.deleteFile(target);

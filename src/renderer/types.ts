@@ -44,13 +44,11 @@ export type WorkspaceOrganization = OpenProjectPayload["organizations"][number];
 export type WorkspaceScrapNote = OpenProjectPayload["scrapNotes"][number];
 export type WorkspaceAssetBundle = OpenProjectPayload["assets"];
 export type WorkspaceImageAsset = WorkspaceAssetBundle["images"][number];
-export type WorkspaceVoiceAsset = WorkspaceAssetBundle["voices"][number];
 export type WorkspaceBGMAsset = WorkspaceAssetBundle["bgms"][number];
 export type WorkspacePlaylistAsset = WorkspaceAssetBundle["playlists"][number];
 
 export type WorkspaceAssets = {
     images: Record<string, WorkspaceImageAsset>;
-    voices: Record<string, WorkspaceVoiceAsset>;
     bgms: Record<string, WorkspaceBGMAsset>;
     playlists: Record<string, WorkspacePlaylistAsset>;
 };
@@ -65,4 +63,12 @@ export type WorkspaceDocumentKind =
 export type WorkspaceDocumentRef = {
     kind: WorkspaceDocumentKind;
     id: string;
+};
+
+export type UseCaseShortcut = {
+    id: string;
+    title: string;
+    description: string;
+    category: string;
+    run: () => Promise<void>;
 };

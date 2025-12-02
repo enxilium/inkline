@@ -9,6 +9,15 @@ export interface ChatHistoryItem {
 export interface ChatHistoryOptions {
     conversationId?: string;
     history?: ChatHistoryItem[];
+    contextDocuments?: {
+        type:
+            | "chapter"
+            | "character"
+            | "location"
+            | "organization"
+            | "scrapNote";
+        id: string;
+    }[];
 }
 
 export interface IAITextService {
@@ -22,21 +31,24 @@ export interface IAITextService {
         content: string,
         instruction: string,
         context: NarrativeContext
-    ): Promise<string>;
+    ): AsyncGenerator<string, void, unknown>;
 
     /**
-     * Holistic AI editing for a set chapter range.
-     * @param chapterRange The inclusive range of chapters to edit.
+     * Holistic AI editing for a set of chapters.
+     * @param projectId The ID of the project.
+     * @param chapterIds The IDs of the chapters to edit.
      * @param context Narrative context describing the manuscript state.
      */
     editManuscript(
-        chapterRange: {
-            start: number;
-            end: number;
-        },
+        chapterIds: string[],
         context: NarrativeContext
     ): Promise<
-        { chapterNumber: number; wordNumber: number; comment: string }[]
+        {
+            chapterId: string;
+            comment: string;
+            wordNumberStart: number;
+            wordNumberEnd: number;
+        }[]
     >;
 
     /**
@@ -49,5 +61,5 @@ export interface IAITextService {
         prompt: string,
         context: NarrativeContext,
         options?: ChatHistoryOptions
-    ): Promise<string>;
+    ): AsyncGenerator<string, void, unknown>;
 }

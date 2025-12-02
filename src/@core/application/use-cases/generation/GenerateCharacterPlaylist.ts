@@ -32,10 +32,7 @@ export class GenerateCharacterPlaylist {
             throw new Error("Project ID and Character ID are required.");
         }
 
-        const character = await this.characterRepository.findById(
-            projectId,
-            characterId
-        );
+        const character = await this.characterRepository.findById(characterId);
         if (!character) {
             throw new Error("Character not found.");
         }
@@ -69,7 +66,7 @@ export class GenerateCharacterPlaylist {
 
         character.playlistId = playlist.id;
         character.updatedAt = now;
-        await this.characterRepository.update(projectId, character);
+        await this.characterRepository.update(character);
 
         await this.deletePlaylistAsset(projectId, previousPlaylist);
 
@@ -85,7 +82,6 @@ export class GenerateCharacterPlaylist {
         }
 
         const existing = await this.assetRepository.findPlaylistById(
-            projectId,
             character.playlistId
         );
         return existing;
@@ -99,7 +95,7 @@ export class GenerateCharacterPlaylist {
             return;
         }
 
-        await this.assetRepository.deletePlaylist(projectId, playlist.id);
+        await this.assetRepository.deletePlaylist(playlist.id);
         const target = playlist.storagePath || playlist.url;
         if (target) {
             await this.storageService.deleteFile(target);

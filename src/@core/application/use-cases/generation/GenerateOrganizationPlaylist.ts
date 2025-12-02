@@ -32,10 +32,8 @@ export class GenerateOrganizationPlaylist {
             throw new Error("Project ID and Organization ID are required.");
         }
 
-        const organization = await this.organizationRepository.findById(
-            projectId,
-            organizationId
-        );
+        const organization =
+            await this.organizationRepository.findById(organizationId);
         if (!organization) {
             throw new Error("Organization not found.");
         }
@@ -67,7 +65,7 @@ export class GenerateOrganizationPlaylist {
         );
         organization.playlistId = playlist.id;
         organization.updatedAt = now;
-        await this.organizationRepository.update(projectId, organization);
+        await this.organizationRepository.update(organization);
 
         await this.deletePlaylistAsset(projectId, previousPlaylist);
 
@@ -83,7 +81,6 @@ export class GenerateOrganizationPlaylist {
         }
 
         const existing = await this.assetRepository.findPlaylistById(
-            projectId,
             organization.playlistId
         );
         return existing;
@@ -97,7 +94,7 @@ export class GenerateOrganizationPlaylist {
             return;
         }
 
-        await this.assetRepository.deletePlaylist(projectId, playlist.id);
+        await this.assetRepository.deletePlaylist(playlist.id);
         const target = playlist.storagePath || playlist.url;
         if (target) {
             await this.storageService.deleteFile(target);

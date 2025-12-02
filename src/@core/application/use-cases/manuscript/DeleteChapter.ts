@@ -24,10 +24,7 @@ export class DeleteChapter {
             throw new Error("Project not found.");
         }
 
-        const chapter = await this.chapterRepository.findById(
-            projectId,
-            chapterId
-        );
+        const chapter = await this.chapterRepository.findById(chapterId);
         if (!chapter || !project.chapterIds.includes(chapterId)) {
             throw new Error("Chapter not found for this project.");
         }
@@ -54,12 +51,12 @@ export class DeleteChapter {
                 affected.map((remaining) => {
                     remaining.order -= 1;
                     remaining.updatedAt = now;
-                    return this.chapterRepository.update(projectId, remaining);
+                    return this.chapterRepository.update(remaining);
                 })
             );
         }
 
         // 3. Delete Chapter (Self)
-        await this.chapterRepository.delete(projectId, chapterId);
+        await this.chapterRepository.delete(chapterId);
     }
 }

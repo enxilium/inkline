@@ -2,7 +2,6 @@ import { IChapterRepository } from "../../../domain/repositories/IChapterReposit
 
 export interface RenameChapterRequest {
     chapterId: string;
-    projectId: string;
     title: string;
 }
 
@@ -10,26 +9,23 @@ export class RenameChapter {
     constructor(private readonly chapterRepository: IChapterRepository) {}
 
     async execute(request: RenameChapterRequest): Promise<void> {
-        const { chapterId, projectId, title } = request;
+        const { chapterId, title } = request;
 
-        if (!chapterId.trim() || !projectId.trim()) {
-            throw new Error("Project ID and Chapter ID are required.");
+        if (!chapterId.trim()) {
+            throw new Error("Chapter ID is required.");
         }
 
         if (!title.trim()) {
             throw new Error("Chapter title cannot be empty.");
         }
 
-        const chapter = await this.chapterRepository.findById(
-            projectId,
-            chapterId
-        );
+        const chapter = await this.chapterRepository.findById(chapterId);
         if (!chapter) {
             throw new Error("Chapter not found for this project.");
         }
 
         chapter.title = title;
         chapter.updatedAt = new Date();
-        await this.chapterRepository.update(projectId, chapter);
+        await this.chapterRepository.update(chapter);
     }
 }

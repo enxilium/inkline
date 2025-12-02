@@ -75,9 +75,32 @@ const authEvents = createAuthEvents();
 
 contextBridge.exposeInMainWorld("authEvents", authEvents);
 
+type GenerationProgressListener = (payload: {
+    type: "audio" | "image";
+    progress: number;
+}) => void;
+
+const createGenerationEvents = () => {
+    const onProgress = (listener: GenerationProgressListener) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            payload: { type: "audio" | "image"; progress: number }
+        ) => {
+            listener(payload);
+        };
+        ipcRenderer.on("generation-progress", handler);
+        return () => ipcRenderer.removeListener("generation-progress", handler);
+    };
+    return { onProgress };
+};
+
+const generationEvents = createGenerationEvents();
+contextBridge.exposeInMainWorld("generationEvents", generationEvents);
+
 declare global {
     interface Window {
         api: typeof api;
         authEvents: typeof authEvents;
+        generationEvents: typeof generationEvents;
     }
 }

@@ -4,7 +4,7 @@ import { ILocationRepository } from "../../../domain/repositories/ILocationRepos
 import { IOrganizationRepository } from "../../../domain/repositories/IOrganizationRepository";
 import { IStorageService } from "../../../domain/services/IStorageService";
 
-export type AssetKind = "image" | "voice" | "bgm" | "playlist";
+export type AssetKind = "image" | "bgm" | "playlist";
 
 export interface DeleteAssetRequest {
     projectId: string;
@@ -32,9 +32,6 @@ export class DeleteAsset {
             case "image":
                 await this.deleteImage(projectId, assetId);
                 break;
-            case "voice":
-                await this.deleteVoice(projectId, assetId);
-                break;
             case "bgm":
                 await this.deleteBgm(projectId, assetId);
                 break;
@@ -50,10 +47,7 @@ export class DeleteAsset {
         projectId: string,
         assetId: string
     ): Promise<void> {
-        const image = await this.assetRepository.findImageById(
-            projectId,
-            assetId
-        );
+        const image = await this.assetRepository.findImageById(assetId);
         if (!image) {
             throw new Error("Image asset not found for this project.");
         }
@@ -77,10 +71,7 @@ export class DeleteAsset {
                             (existingId) => existingId !== assetId
                         );
                     character.updatedAt = timestamp;
-                    return this.characterRepository.update(
-                        projectId,
-                        character
-                    );
+                    return this.characterRepository.update(character);
                 }),
             ...locations
                 .filter((location) =>
@@ -91,7 +82,7 @@ export class DeleteAsset {
                         (existingId) => existingId !== assetId
                     );
                     location.updatedAt = timestamp;
-                    return this.locationRepository.update(projectId, location);
+                    return this.locationRepository.update(location);
                 }),
             ...organizations
                 .filter((organization) =>
@@ -103,61 +94,19 @@ export class DeleteAsset {
                             (existingId) => existingId !== assetId
                         );
                     organization.updatedAt = timestamp;
-                    return this.organizationRepository.update(
-                        projectId,
-                        organization
-                    );
+                    return this.organizationRepository.update(organization);
                 }),
         ]);
 
         // 2. Delete Asset (Self)
-        await this.assetRepository.deleteImage(projectId, assetId);
+        await this.assetRepository.deleteImage(assetId);
 
         // 3. Delete File (Storage)
         await this.storageService.deleteFile(image.storagePath || image.url);
     }
 
-    private async deleteVoice(
-        projectId: string,
-        assetId: string
-    ): Promise<void> {
-        const voice = await this.assetRepository.findVoiceById(
-            projectId,
-            assetId
-        );
-        if (!voice) {
-            throw new Error("Voice asset not found for this project.");
-        }
-
-        // 1. Detach from Dependents
-        const characters =
-            await this.characterRepository.findByProjectId(projectId);
-        const timestamp = new Date();
-        await Promise.all(
-            characters
-                .filter((character) => character.voiceId === assetId)
-                .map((character) => {
-                    character.voiceId = null;
-                    character.updatedAt = timestamp;
-                    return this.characterRepository.update(
-                        projectId,
-                        character
-                    );
-                })
-        );
-
-        // 2. Delete Asset (Self)
-        await this.assetRepository.deleteVoice(projectId, assetId);
-
-        // 3. Delete File (Storage)
-        await this.storageService.deleteFile(voice.storagePath || voice.url);
-    }
-
     private async deleteBgm(projectId: string, assetId: string): Promise<void> {
-        const track = await this.assetRepository.findBGMById(
-            projectId,
-            assetId
-        );
+        const track = await this.assetRepository.findBGMById(assetId);
         if (!track) {
             throw new Error("BGM asset not found for this project.");
         }
@@ -176,32 +125,26 @@ export class DeleteAsset {
                 .map((character) => {
                     character.bgmId = null;
                     character.updatedAt = timestamp;
-                    return this.characterRepository.update(
-                        projectId,
-                        character
-                    );
+                    return this.characterRepository.update(character);
                 }),
             ...locations
                 .filter((location) => location.bgmId === assetId)
                 .map((location) => {
                     location.bgmId = null;
                     location.updatedAt = timestamp;
-                    return this.locationRepository.update(projectId, location);
+                    return this.locationRepository.update(location);
                 }),
             ...organizations
                 .filter((organization) => organization.bgmId === assetId)
                 .map((organization) => {
                     organization.bgmId = null;
                     organization.updatedAt = timestamp;
-                    return this.organizationRepository.update(
-                        projectId,
-                        organization
-                    );
+                    return this.organizationRepository.update(organization);
                 }),
         ]);
 
         // 2. Delete Asset (Self)
-        await this.assetRepository.deleteBGM(projectId, assetId);
+        await this.assetRepository.deleteBGM(assetId);
 
         // 3. Delete File (Storage)
         await this.storageService.deleteFile(track.storagePath || track.url);
@@ -211,10 +154,7 @@ export class DeleteAsset {
         projectId: string,
         assetId: string
     ): Promise<void> {
-        const playlist = await this.assetRepository.findPlaylistById(
-            projectId,
-            assetId
-        );
+        const playlist = await this.assetRepository.findPlaylistById(assetId);
         if (!playlist) {
             throw new Error("Playlist asset not found for this project.");
         }
@@ -232,10 +172,7 @@ export class DeleteAsset {
                 .map((character) => {
                     character.playlistId = null;
                     character.updatedAt = new Date();
-                    return this.characterRepository.update(
-                        projectId,
-                        character
-                    );
+                    return this.characterRepository.update(character);
                 })
         );
 
@@ -245,7 +182,7 @@ export class DeleteAsset {
                 .map((location) => {
                     location.playlistId = null;
                     location.updatedAt = new Date();
-                    return this.locationRepository.update(projectId, location);
+                    return this.locationRepository.update(location);
                 })
         );
 
@@ -255,15 +192,12 @@ export class DeleteAsset {
                 .map((organization) => {
                     organization.playlistId = null;
                     organization.updatedAt = new Date();
-                    return this.organizationRepository.update(
-                        projectId,
-                        organization
-                    );
+                    return this.organizationRepository.update(organization);
                 })
         );
 
         // 2. Delete Asset (Self)
-        await this.assetRepository.deletePlaylist(projectId, assetId);
+        await this.assetRepository.deletePlaylist(assetId);
 
         // 3. Delete File (Storage)
         if (playlist.storagePath) {

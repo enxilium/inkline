@@ -66,11 +66,8 @@ export class SupabaseChatConversationRepository
         return mapConversationRow(data as ChatConversationRow);
     }
 
-    async findById(
-        projectId: string,
-        id: string
-    ): Promise<ChatConversation | null> {
-        const row = await this.fetchConversationRow(projectId, id);
+    async findById(id: string): Promise<ChatConversation | null> {
+        const row = await this.fetchConversationRow(id);
         return row ? mapConversationRow(row) : null;
     }
 
@@ -90,14 +87,8 @@ export class SupabaseChatConversationRepository
         return (data as ChatConversationRow[]).map(mapConversationRow);
     }
 
-    async getMessages(
-        projectId: string,
-        conversationId: string
-    ): Promise<ChatMessage[]> {
-        const conversation = await this.fetchConversationRow(
-            projectId,
-            conversationId
-        );
+    async getMessages(conversationId: string): Promise<ChatMessage[]> {
+        const conversation = await this.fetchConversationRow(conversationId);
 
         if (!conversation) {
             return [];
@@ -116,12 +107,8 @@ export class SupabaseChatConversationRepository
         return (data as ChatMessageRow[]).map(mapMessageRow);
     }
 
-    async appendMessage(
-        projectId: string,
-        message: ChatMessage
-    ): Promise<void> {
+    async appendMessage(message: ChatMessage): Promise<void> {
         const conversation = await this.fetchConversationRow(
-            projectId,
             message.conversationId
         );
 
@@ -143,14 +130,12 @@ export class SupabaseChatConversationRepository
         const { error: updateError } = await client
             .from("chat_conversations")
             .update({ updated_at: timestamp })
-            .eq("id", message.conversationId)
-            .eq("project_id", projectId);
+            .eq("id", message.conversationId);
 
         if (updateError) throw new Error(updateError.message);
     }
 
     private async fetchConversationRow(
-        projectId: string,
         id: string
     ): Promise<ChatConversationRow | null> {
         const client = SupabaseService.getClient();
@@ -158,7 +143,6 @@ export class SupabaseChatConversationRepository
             .from("chat_conversations")
             .select("*")
             .eq("id", id)
-            .eq("project_id", projectId)
             .single();
 
         if (error || !data) {

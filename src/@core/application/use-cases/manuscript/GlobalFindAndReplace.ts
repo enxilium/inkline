@@ -64,10 +64,7 @@ export class GlobalFindAndReplace {
                 if (hasChanges) {
                     chapter.content = newContent;
                     chapter.updatedAt = new Date();
-                    await this.chapterRepository.update(
-                        request.projectId,
-                        chapter
-                    );
+                    await this.chapterRepository.update(chapter);
                 }
                 return matchCount;
             })

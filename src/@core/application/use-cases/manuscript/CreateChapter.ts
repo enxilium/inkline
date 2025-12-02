@@ -62,10 +62,7 @@ export class CreateChapter {
             .map(({ existingChapter, index }) => {
                 existingChapter.order = index;
                 existingChapter.updatedAt = now;
-                return this.chapterRepository.update(
-                    projectId,
-                    existingChapter
-                );
+                return this.chapterRepository.update(existingChapter);
             });
 
         await Promise.all(reindexPromises);

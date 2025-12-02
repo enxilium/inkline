@@ -2,7 +2,6 @@ import { ILocationRepository } from "../../../domain/repositories/ILocationRepos
 import { IOrganizationRepository } from "../../../domain/repositories/IOrganizationRepository";
 
 export interface SaveOrganizationInfoRequest {
-    projectId: string;
     organizationId: string;
     payload: {
         name?: string;
@@ -20,16 +19,14 @@ export class SaveOrganizationInfo {
     ) {}
 
     async execute(request: SaveOrganizationInfoRequest): Promise<void> {
-        const { projectId, organizationId, payload } = request;
+        const { organizationId, payload } = request;
 
-        if (!projectId.trim() || !organizationId.trim()) {
-            throw new Error("Project ID and Organization ID are required.");
+        if (!organizationId.trim()) {
+            throw new Error("Organization ID is required.");
         }
 
-        const organization = await this.organizationRepository.findById(
-            projectId,
-            organizationId
-        );
+        const organization =
+            await this.organizationRepository.findById(organizationId);
         if (!organization) {
             throw new Error("Organization not found for this project.");
         }
@@ -45,18 +42,16 @@ export class SaveOrganizationInfo {
         let nextLocationIds: string[] | null = null;
         if (payload.locationIds !== undefined) {
             nextLocationIds = await this.validateLocationIds(
-                projectId,
                 payload.locationIds
             );
             organization.locationIds = nextLocationIds;
         }
 
         organization.updatedAt = new Date();
-        await this.organizationRepository.update(projectId, organization);
+        await this.organizationRepository.update(organization);
 
         if (nextLocationIds !== null) {
             await this.syncLocationCaches(
-                projectId,
                 organization.id,
                 previousLocationIds,
                 nextLocationIds
@@ -65,7 +60,6 @@ export class SaveOrganizationInfo {
     }
 
     private async validateLocationIds(
-        projectId: string,
         locationIds: string[]
     ): Promise<string[]> {
         const uniqueIds = Array.from(
@@ -75,10 +69,8 @@ export class SaveOrganizationInfo {
 
         await Promise.all(
             filtered.map(async (locationId) => {
-                const location = await this.locationRepository.findById(
-                    projectId,
-                    locationId
-                );
+                const location =
+                    await this.locationRepository.findById(locationId);
                 if (!location) {
                     throw new Error(
                         `Location ${locationId} not found for this project.`
@@ -91,7 +83,6 @@ export class SaveOrganizationInfo {
     }
 
     private async syncLocationCaches(
-        projectId: string,
         organizationId: string,
         previousLocationIds: string[],
         nextLocationIds: string[]
@@ -104,31 +95,19 @@ export class SaveOrganizationInfo {
 
         await Promise.all([
             ...toAdd.map((locationId) =>
-                this.addOrganizationToLocation(
-                    projectId,
-                    organizationId,
-                    locationId
-                )
+                this.addOrganizationToLocation(organizationId, locationId)
             ),
             ...toRemove.map((locationId) =>
-                this.removeOrganizationFromLocation(
-                    projectId,
-                    organizationId,
-                    locationId
-                )
+                this.removeOrganizationFromLocation(organizationId, locationId)
             ),
         ]);
     }
 
     private async addOrganizationToLocation(
-        projectId: string,
         organizationId: string,
         locationId: string
     ): Promise<void> {
-        const location = await this.locationRepository.findById(
-            projectId,
-            locationId
-        );
+        const location = await this.locationRepository.findById(locationId);
         if (!location) {
             return;
         }
@@ -136,19 +115,15 @@ export class SaveOrganizationInfo {
         if (!location.organizationIds.includes(organizationId)) {
             location.organizationIds.push(organizationId);
             location.updatedAt = new Date();
-            await this.locationRepository.update(projectId, location);
+            await this.locationRepository.update(location);
         }
     }
 
     private async removeOrganizationFromLocation(
-        projectId: string,
         organizationId: string,
         locationId: string
     ): Promise<void> {
-        const location = await this.locationRepository.findById(
-            projectId,
-            locationId
-        );
+        const location = await this.locationRepository.findById(locationId);
         if (!location) {
             return;
         }
@@ -158,7 +133,7 @@ export class SaveOrganizationInfo {
                 (id) => id !== organizationId
             );
             location.updatedAt = new Date();
-            await this.locationRepository.update(projectId, location);
+            await this.locationRepository.update(location);
         }
     }
 }

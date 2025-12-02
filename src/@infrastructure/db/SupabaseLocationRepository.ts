@@ -67,13 +67,12 @@ export class SupabaseLocationRepository implements ILocationRepository {
         if (error) throw new Error(error.message);
     }
 
-    async findById(projectId: string, id: string): Promise<Location | null> {
+    async findById(id: string): Promise<Location | null> {
         const client = SupabaseService.getClient();
         const { data, error } = await client
             .from("locations")
             .select("*")
             .eq("id", id)
-            .eq("project_id", projectId)
             .single();
 
         if (error || !data) return null;
@@ -95,7 +94,7 @@ export class SupabaseLocationRepository implements ILocationRepository {
         return (data as LocationRow[]).map(mapRowToLocation);
     }
 
-    async update(projectId: string, location: Location): Promise<void> {
+    async update(location: Location): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("locations")
@@ -113,19 +112,14 @@ export class SupabaseLocationRepository implements ILocationRepository {
                 organization_ids: location.organizationIds,
                 updated_at: location.updatedAt.toISOString(),
             })
-            .eq("id", location.id)
-            .eq("project_id", projectId);
+            .eq("id", location.id);
 
         if (error) throw new Error(error.message);
     }
 
-    async delete(projectId: string, id: string): Promise<void> {
+    async delete(id: string): Promise<void> {
         const client = SupabaseService.getClient();
-        const { error } = await client
-            .from("locations")
-            .delete()
-            .eq("id", id)
-            .eq("project_id", projectId);
+        const { error } = await client.from("locations").delete().eq("id", id);
         if (error) throw new Error(error.message);
     }
 

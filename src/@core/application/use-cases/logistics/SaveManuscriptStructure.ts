@@ -33,8 +33,7 @@ export class SaveManuscriptStructure {
 
         const normalizedOrder = this.validateChapterOrdering(
             orderedChapterIds,
-            chapterMap,
-            projectId
+            chapterMap
         );
 
         const now = new Date();
@@ -43,7 +42,7 @@ export class SaveManuscriptStructure {
                 const chapter = chapterMap.get(chapterId)!;
                 chapter.order = index;
                 chapter.updatedAt = now;
-                await this.chapterRepository.update(projectId, chapter);
+                await this.chapterRepository.update(chapter);
             })
         );
 
@@ -54,8 +53,7 @@ export class SaveManuscriptStructure {
 
     private validateChapterOrdering(
         orderedChapterIds: string[],
-        chapterMap: Map<string, Chapter>,
-        projectId: string
+        chapterMap: Map<string, Chapter>
     ): string[] {
         if (orderedChapterIds.length !== chapterMap.size) {
             throw new Error(
