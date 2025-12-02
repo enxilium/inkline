@@ -111,6 +111,7 @@ create table if not exists public.projects (
   user_id uuid references auth.users(id) on delete cascade not null,
   title text not null,
   description text,
+  cover_image_id uuid,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
