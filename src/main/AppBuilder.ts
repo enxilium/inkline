@@ -287,7 +287,8 @@ export class AppBuilder {
                     repo.character,
                     repo.location,
                     repo.organization,
-                    repo.chapter
+                    repo.chapter,
+                    repo.project
                 ),
             },
             auth: {

@@ -36,6 +36,7 @@ export class CreateProject {
         const project = new Project(
             generateId(),
             title,
+            null,
             [],
             [],
             [],

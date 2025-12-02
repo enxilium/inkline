@@ -5,6 +5,7 @@ import { SupabaseService } from "./SupabaseService";
 type ProjectRow = {
     id: string;
     title: string;
+    cover_image_id: string | null;
     user_id: string;
     created_at: string;
     updated_at: string;
@@ -25,6 +26,7 @@ const mapProjectRowToEntity = (
     new Project(
         row.id,
         row.title,
+        row.cover_image_id,
         [...(relations?.chapterIds ?? [])],
         [...(relations?.characterIds ?? [])],
         [...(relations?.locationIds ?? [])],
@@ -41,6 +43,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
             id: project.id,
             user_id: ownerId,
             title: project.title,
+            cover_image_id: project.coverImageId,
             created_at: project.createdAt.toISOString(),
             updated_at: project.updatedAt.toISOString(),
         });
@@ -84,6 +87,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
             .from("projects")
             .update({
                 title: project.title,
+                cover_image_id: project.coverImageId,
                 updated_at: project.updatedAt.toISOString(),
             })
             .eq("id", project.id);

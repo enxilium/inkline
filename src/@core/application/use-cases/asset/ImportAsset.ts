@@ -15,6 +15,7 @@ import { ICharacterRepository } from "../../../domain/repositories/ICharacterRep
 import { ILocationRepository } from "../../../domain/repositories/ILocationRepository";
 import { IOrganizationRepository } from "../../../domain/repositories/IOrganizationRepository";
 import { IChapterRepository } from "../../../domain/repositories/IChapterRepository";
+import { IProjectRepository } from "../../../domain/repositories/IProjectRepository";
 import { IStorageService } from "../../../domain/services/IStorageService";
 import { generateId } from "../../utils/id";
 
@@ -75,7 +76,8 @@ export class ImportAsset {
         private readonly characterRepository: ICharacterRepository,
         private readonly locationRepository: ILocationRepository,
         private readonly organizationRepository: IOrganizationRepository,
-        private readonly chapterRepository: IChapterRepository
+        private readonly chapterRepository: IChapterRepository,
+        private readonly projectRepository: IProjectRepository
     ) {}
 
     async execute(request: ImportAssetRequest): Promise<ImportAssetResponse> {
@@ -173,6 +175,13 @@ export class ImportAsset {
                 organization.galleryImageIds.push(image.id);
                 organization.updatedAt = timestamp;
                 await this.organizationRepository.update(organization);
+            }
+        } else if (subjectType === "cover") {
+            const project = await this.projectRepository.findById(subjectId);
+            if (project) {
+                project.coverImageId = image.id;
+                project.updatedAt = timestamp;
+                await this.projectRepository.update(project);
             }
         }
     }
