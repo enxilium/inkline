@@ -5,6 +5,7 @@ export class Project {
     constructor(
         public id: string,
         public title: string,
+        public coverImageId: string | null,
         public chapterIds: string[],
         public characterIds: string[],
         public locationIds: string[],
