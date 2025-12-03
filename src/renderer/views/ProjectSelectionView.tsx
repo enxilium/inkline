@@ -4,10 +4,15 @@ import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
 import { ScrollArea } from "../components/ui/ScrollArea";
-import type { ProjectSummary, ProjectsStatus } from "../types";
+import type {
+    ProjectSummary,
+    ProjectsStatus,
+    WorkspaceImageAsset,
+} from "../types";
 
 type ProjectSelectionViewProps = {
     projects: ProjectSummary[];
+    projectCovers: Record<string, WorkspaceImageAsset>;
     status: ProjectsStatus;
     error: string | null;
     selectionError: string | null;
@@ -32,6 +37,7 @@ const formatTimestamp = (value: Date | string | number): string => {
 
 export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     projects,
+    projectCovers,
     status,
     error,
     selectionError,
@@ -119,43 +125,62 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                             </p>
                         </div>
                     ) : projects.length ? (
-                        projects.map((project) => (
-                            <div key={project.id} className="project-card">
-                                <div>
-                                    <h3>{project.title}</h3>
-                                    <p className="panel-subtitle">
-                                        Updated{" "}
-                                        {formatTimestamp(project.updatedAt)}
-                                    </p>
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="primary"
-                                    onClick={() => onOpenProject(project)}
-                                    disabled={openingProjectId === project.id}
-                                >
-                                    {openingProjectId === project.id
-                                        ? "Opening…"
-                                        : "Open"}
-                                </Button>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => {
-                                        if (
-                                            window.confirm(
-                                                `Are you sure you want to delete "${project.title}"? This cannot be undone.`
-                                            )
-                                        ) {
-                                            onDeleteProject(project.id);
+                        projects.map((project) => {
+                            const cover = project.coverImageId
+                                ? projectCovers[project.coverImageId]
+                                : null;
+
+                            return (
+                                <div key={project.id} className="project-card">
+                                    {cover ? (
+                                        <div className="project-cover-wrapper">
+                                            <img
+                                                src={cover.url}
+                                                alt={`Cover for ${project.title}`}
+                                                className="project-cover-image"
+                                            />
+                                        </div>
+                                    ) : null}
+                                    <div>
+                                        <h3>{project.title}</h3>
+                                        <p className="panel-subtitle">
+                                            Updated{" "}
+                                            {formatTimestamp(project.updatedAt)}
+                                        </p>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="primary"
+                                        onClick={() => onOpenProject(project)}
+                                        disabled={
+                                            openingProjectId === project.id
                                         }
-                                    }}
-                                    disabled={openingProjectId === project.id}
-                                >
-                                    Delete
-                                </Button>
-                            </div>
-                        ))
+                                    >
+                                        {openingProjectId === project.id
+                                            ? "Opening…"
+                                            : "Open"}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        onClick={() => {
+                                            if (
+                                                window.confirm(
+                                                    `Are you sure you want to delete "${project.title}"? This cannot be undone.`
+                                                )
+                                            ) {
+                                                onDeleteProject(project.id);
+                                            }
+                                        }}
+                                        disabled={
+                                            openingProjectId === project.id
+                                        }
+                                    >
+                                        Delete
+                                    </Button>
+                                </div>
+                            );
+                        })
                     ) : (
                         <p className="empty-hint">
                             No projects yet. Create one to begin writing.
