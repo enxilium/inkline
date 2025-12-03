@@ -1,10 +1,14 @@
 import React from "react";
 
 import { Button } from "../components/ui/Button";
+import { MoreVerticalIcon, RefreshCwIcon } from "../components/ui/Icons";
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
 import { ScrollArea } from "../components/ui/ScrollArea";
 import type { ProjectSummary, ProjectsStatus } from "../types";
+import { ensureRendererApi } from "../utils/api";
+
+const rendererApi = ensureRendererApi();
 
 type ProjectSelectionViewProps = {
     projects: ProjectSummary[];
@@ -30,6 +34,7 @@ const formatTimestamp = (value: Date | string | number): string => {
     });
 };
 
+
 export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     projects,
     status,
@@ -44,6 +49,21 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     const [draftTitle, setDraftTitle] = React.useState("");
     const [localError, setLocalError] = React.useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
+    const [openMenuProjectId, setOpenMenuProjectId] = React.useState<string | null>(
+        null
+    );
+
+    React.useEffect(() => {
+        const handleClickOutside = () => setOpenMenuProjectId(null);
+
+        if (openMenuProjectId) {
+            window.addEventListener("click", handleClickOutside);
+        }
+
+        return () => {
+            window.removeEventListener("click", handleClickOutside);
+        };
+    }, [openMenuProjectId]);
 
     const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -83,8 +103,9 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                         variant="ghost"
                         onClick={onRefresh}
                         disabled={status === "loading"}
+                        title="Refresh Projects"
                     >
-                        {status === "loading" ? "Refreshing…" : "Refresh"}
+                        <RefreshCwIcon />
                     </Button>
                     <form className="create-project-form" onSubmit={handleSubmit}>
                         <Label htmlFor="new-project-title" className="sr-only">
@@ -120,8 +141,48 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                         </div>
                     ) : projects.length ? (
                         projects.map((project) => (
-                            <div key={project.id} className="project-card" onClick={() => onOpenProject(project)}>
-                                {/*project.cover ? <img src={project.cover} alt={`${project.title} cover`} /> : null*/}
+                            <div
+                                key={project.id}
+                                className="project-card"
+                                onClick={() => onOpenProject(project)}
+                            >
+                                <button
+                                    className="project-card-menu-trigger"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setOpenMenuProjectId(
+                                            openMenuProjectId === project.id
+                                                ? null
+                                                : project.id
+                                        );
+                                    }}
+                                    title="Project Options"
+                                >
+                                    <MoreVerticalIcon />
+                                </button>
+                                {openMenuProjectId === project.id && (
+                                    <div
+                                        className="project-card-menu"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <button
+                                            className="project-card-menu-item is-danger"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOpenMenuProjectId(null);
+                                                if (
+                                                    window.confirm(
+                                                        `Are you sure you want to delete "${project.title}"? This cannot be undone.`
+                                                    )
+                                                ) {
+                                                    onDeleteProject(project.id);
+                                                }
+                                            }}
+                                        >
+                                            Delete Project
+                                        </button>
+                                    </div>
+                                )}
                                 <div className="project-card-cover"></div>
                                 <div>
                                     <h3>{project.title}</h3>
@@ -130,22 +191,6 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                         {formatTimestamp(project.updatedAt)}
                                     </p>
                                 </div>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => {
-                                        if (
-                                            window.confirm(
-                                                `Are you sure you want to delete "${project.title}"? This cannot be undone.`
-                                            )
-                                        ) {
-                                            onDeleteProject(project.id);
-                                        }
-                                    }}
-                                    disabled={openingProjectId === project.id}
-                                >
-                                    Delete
-                                </Button>
                             </div>
                         ))
                     ) : (

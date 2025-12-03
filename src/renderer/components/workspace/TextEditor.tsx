@@ -118,6 +118,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
                 <div className="text-editor-panel">
+                    {/*
                     <div className="text-editor-header">
                         <div className="text-title-field">
                             <Label htmlFor="text-doc-title">Title</Label>
@@ -133,6 +134,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                             {autosaveLabel}
                         </div>
                     </div>
+                    */}
                     {editor ? (
                         <>
                             <div className="toolbar-card">
