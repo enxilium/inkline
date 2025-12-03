@@ -19,6 +19,7 @@ import type {
     WorkspaceScrapNote,
     WorkspaceAssets,
     WorkspaceAssetBundle,
+    WorkspaceImageAsset,
 } from "../types";
 
 const initialAuthForm = {
@@ -133,6 +134,7 @@ type AppStore = {
     user: RendererUser | null;
     currentUserId: string;
     projects: ProjectSummary[];
+    projectCovers: Record<string, WorkspaceImageAsset>;
     projectsStatus: ProjectsStatus;
     projectsError: string | null;
     projectSelectionError: string | null;
@@ -328,6 +330,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         user: null,
         currentUserId: "",
         projects: [],
+        projectCovers: {},
         projectsStatus: "idle",
         projectsError: null,
         projectSelectionError: null,
@@ -405,7 +408,11 @@ export const useAppStore = create<AppStore>((set, get) => {
         loadProjects: async (userId) => {
             const resolvedUserId = userId ?? get().user?.id ?? "";
             if (!resolvedUserId) {
-                set({ projects: [], projectsStatus: "idle" });
+                set({
+                    projects: [],
+                    projectCovers: {},
+                    projectsStatus: "idle",
+                });
                 return;
             }
 
@@ -414,7 +421,11 @@ export const useAppStore = create<AppStore>((set, get) => {
                 const response = await rendererApi.project.loadProjectList({
                     userId: resolvedUserId,
                 });
-                set({ projects: response.projects, projectsStatus: "idle" });
+                set({
+                    projects: response.projects,
+                    projectCovers: response.covers,
+                    projectsStatus: "idle",
+                });
             } catch (error) {
                 set({
                     projectsStatus: "error",

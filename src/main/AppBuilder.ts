@@ -411,7 +411,7 @@ export class AppBuilder {
                     repo.user
                 ),
                 exportManuscript: new ExportManuscript(svc.export),
-                loadProjectList: new LoadProjectList(repo.project),
+                loadProjectList: new LoadProjectList(repo.project, repo.asset),
                 openProject: new OpenProject(
                     repo.project,
                     repo.chapter,

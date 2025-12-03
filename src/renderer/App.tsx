@@ -36,6 +36,7 @@ export const App: React.FC = () => {
         isAuthSubmitting,
         user,
         projects,
+        projectCovers,
         projectsStatus,
         projectsError,
         projectSelectionError,
@@ -137,6 +138,7 @@ export const App: React.FC = () => {
                 return (
                     <ProjectSelectionView
                         projects={projects}
+                        projectCovers={projectCovers}
                         status={projectsStatus}
                         error={projectsError}
                         selectionError={projectSelectionError}
