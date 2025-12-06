@@ -1,11 +1,13 @@
 import React from "react";
 import { Button } from "../components/ui/Button";
-import { ChevronLeftIcon, PanelLeftIcon } from "../components/ui/Icons";
+import { ChevronLeftIcon, PanelLeftIcon, MessageSquareIcon, DownloadIcon } from "../components/ui/Icons";
 
 import type { UseCaseShortcut } from "../types";
 import { ensureRendererApi } from "../utils/api";
 import { useAppStore } from "../state/appStore";
 import { WorkspaceLayout } from "../components/layout/WorkspaceLayout";
+import { ConnectedDocumentBinder } from "../components/layout/ConnectedDocumentBinder";
+import { ChatPanel } from "../components/workspace/ChatPanel";
 
 const rendererApi = ensureRendererApi();
 
@@ -23,7 +25,26 @@ export const WorkspaceView: React.FC = () => {
         returnToProjects,
         setShortcutState,
         resetShortcutState,
+        isBinderOpen,
+        toggleBinder,
+        isChatOpen,
+        toggleChat,
     } = useAppStore();
+
+    const [isPeeking, setIsPeeking] = React.useState(false);
+    const peekTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    const handleMouseEnter = () => {
+        if (!isBinderOpen) {
+            if (peekTimeoutRef.current) clearTimeout(peekTimeoutRef.current);
+            peekTimeoutRef.current = setTimeout(() => setIsPeeking(true), 150);
+        }
+    };
+
+    const handleMouseLeave = () => {
+        if (peekTimeoutRef.current) clearTimeout(peekTimeoutRef.current);
+        setIsPeeking(false);
+    };
 
     const shortcutTimersRef = React.useRef<Record<string, NodeJS.Timeout>>({});
 
@@ -160,10 +181,32 @@ export const WorkspaceView: React.FC = () => {
         ]
     );
 
-    // TODO: Add keyboard listener for shortcuts if needed
+    const handleExport = async () => {
+        const path = window.prompt("Enter destination path (e.g. /Users/sophie/Desktop/story.pdf):");
+        if (!path) return;
+        
+        try {
+            await rendererApi.project.exportManuscript({
+                projectId,
+                format: "pdf", // You could also make this a dropdown selection
+                destinationPath: path,
+            });
+            alert("Export complete!");
+        } catch (error) {
+            alert("Export failed: " + (error as Error).message);
+        }
+        };
+
+    const containerClass = isBinderOpen
+        ? "workspace-binder-container is-open"
+        : "workspace-binder-container is-closed";
+
+    const chatContainerClass = isChatOpen
+        ? "workspace-chat-container is-open"
+        : "workspace-chat-container is-closed";
 
     return (
-        <div style={{ height: '92vh', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ height: '94vh', display: 'flex', flexDirection: 'column' }}>
             <div className="nav-workspace">
                 <div>
                     <div className="flex-row">
@@ -173,11 +216,45 @@ export const WorkspaceView: React.FC = () => {
                         <div className="section-title">{activeProjectName}</div>
                     </div>
                 </div>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <Button variant="icon" onClick={handleExport}>
+                        <DownloadIcon />
+                    </Button>
+                    <Button variant="icon" onClick={toggleBinder}>
+                        <PanelLeftIcon />
+                    </Button>
+                    <Button variant="icon" onClick={toggleChat} className={isChatOpen ? "is-active" : ""}>
+                        <MessageSquareIcon />
+                    </Button>
+                </div>
             </div>
             
-            <section style={{ flex: 1, position: 'relative', width: '100%' }}>
-                <WorkspaceLayout />
-            </section>
+            <div className="workspace-container">
+                <div 
+                    className={containerClass}
+                    onMouseEnter={handleMouseEnter}
+                    onMouseLeave={handleMouseLeave}
+                >
+                    {isBinderOpen ? (
+                        <ConnectedDocumentBinder />
+                    ) : (
+                        <>
+                            <div className="binder-peek-strip" />
+                            <div className={`binder-peek-overlay ${isPeeking ? "is-visible" : ""}`}>
+                                <div className="binder-content">
+                                    <ConnectedDocumentBinder />
+                                </div>
+                            </div>
+                        </>
+                    )}
+                </div>
+                <div className="workspace-main-content">
+                    <WorkspaceLayout />
+                </div>
+                <div className={chatContainerClass}>
+                    {isChatOpen && <ChatPanel />}
+                </div>
+            </div>
         </div>
     );
 };

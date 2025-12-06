@@ -2,7 +2,6 @@ import React from "react";
 import { Layout, Model, TabNode, IJsonModel, Actions, DockLocation, TabSetNode } from "flexlayout-react";
 
 import { useAppStore } from "../../state/appStore";
-import { ConnectedDocumentBinder } from "./ConnectedDocumentBinder";
 import { ConnectedTextEditor } from "./ConnectedTextEditor";
 import { ConnectedCharacterEditor } from "./ConnectedCharacterEditor";
 import { ConnectedLocationEditor } from "./ConnectedLocationEditor";
@@ -19,27 +18,6 @@ const defaultLayout: IJsonModel = {
         type: "row",
         weight: 100,
         children: [
-            {
-                type: "tabset",
-                weight: 25,
-                minWidth: 240,
-                maxWidth: 300,
-                id: "binder-tabset",
-                enableTabStrip: false,
-                enableDrop: false,
-                enableDrag: false,
-                enableDivide: false,
-                children: [
-                    {
-                        type: "tab",
-                        name: "Binder",
-                        component: "binder",
-                        enableClose: false,
-                        id: "binder-tab",
-                        className: "binder-tab",
-                    },
-                ],
-            },
             {
                 type: "tabset",
                 weight: 100,
@@ -62,10 +40,6 @@ export const WorkspaceLayout: React.FC = () => {
         const component = node.getComponent();
         const config = node.getConfig();
 
-        if (component === "binder") {
-            return <ConnectedDocumentBinder />;
-        }
-
         if (component === "editor" && config) {
             const { id, kind } = config;
             if (kind === "chapter" || kind === "scrapNote") {
@@ -84,6 +58,36 @@ export const WorkspaceLayout: React.FC = () => {
 
         return <div className="empty-editor">Please add a document to begin editing.</div>;
     };
+
+    // Sync: Store Data -> Layout Tab Names
+    React.useEffect(() => {
+        model.visitNodes((node) => {
+            if (node.getType() === "tab") {
+                const tabNode = node as TabNode;
+                if (tabNode.getComponent() === "editor") {
+                    const config = tabNode.getConfig();
+                    if (config && config.id && config.kind) {
+                        let newName = "";
+                        if (config.kind === "chapter") {
+                            newName = chapters.find(c => c.id === config.id)?.title || "Chapter";
+                        } else if (config.kind === "scrapNote") {
+                            newName = scrapNotes.find(n => n.id === config.id)?.title || "Note";
+                        } else if (config.kind === "character") {
+                            newName = characters.find(c => c.id === config.id)?.name || "Character";
+                        } else if (config.kind === "location") {
+                            newName = locations.find(l => l.id === config.id)?.name || "Location";
+                        } else if (config.kind === "organization") {
+                            newName = organizations.find(o => o.id === config.id)?.name || "Organization";
+                        }
+
+                        if (newName && tabNode.getName() !== newName) {
+                            model.doAction(Actions.renameTab(tabNode.getId(), newName));
+                        }
+                    }
+                }
+            }
+        });
+    }, [model, chapters, scrapNotes, characters, locations, organizations]);
 
     // Sync: Store -> Layout
     React.useEffect(() => {
@@ -117,8 +121,8 @@ export const WorkspaceLayout: React.FC = () => {
             const activeTabset = model.getActiveTabset();
             const mainTabset = model.getNodeById("main-tabset");
 
-            // 1. Try Active Tabset (if not binder)
-            if (activeTabset && activeTabset.getId() !== "binder-tabset") {
+            // 1. Try Active Tabset
+            if (activeTabset) {
                 targetNodeId = activeTabset.getId();
                 bestTargetFound = true;
             } 
@@ -132,7 +136,7 @@ export const WorkspaceLayout: React.FC = () => {
                 const root = model.getRoot();
                 const children = root.getChildren();
                 for (const child of children) {
-                    if (child.getType() === "tabset" && child.getId() !== "binder-tabset") {
+                    if (child.getType() === "tabset") {
                         targetNodeId = child.getId();
                         bestTargetFound = true;
                         break;
@@ -140,10 +144,11 @@ export const WorkspaceLayout: React.FC = () => {
                 }
             }
 
-            // 4. Fallback: Create new split to the right of Binder
+            // 4. Fallback: Create new split
             if (!bestTargetFound) {
-                targetNodeId = "binder-tabset";
-                location = DockLocation.RIGHT;
+                // If no tabsets exist, we might need to recreate one or add to root
+                // But FlexLayout usually keeps at least one if we configure it right
+                // For now, assume main-tabset or active one works.
             }
 
             model.doAction(
@@ -203,7 +208,7 @@ export const WorkspaceLayout: React.FC = () => {
     };
 
     return (
-        <div className="workspace-shell" style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+        <div className="workspace-shell">
             <Layout
                 model={model}
                 factory={factory}

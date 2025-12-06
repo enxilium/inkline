@@ -29,6 +29,7 @@ export const ConnectedDocumentBinder: React.FC = () => {
             onReorderCharacters={store.reorderCharacters}
             onReorderLocations={store.reorderLocations}
             onReorderOrganizations={store.reorderOrganizations}
+            onToggleCollapse={store.toggleBinder}
         />
     );
 };

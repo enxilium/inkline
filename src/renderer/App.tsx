@@ -7,7 +7,6 @@ import { AuthView } from "./views/AuthView";
 import { LoadingView } from "./views/LoadingView";
 import { ProjectSelectionView } from "./views/ProjectSelectionView";
 import { WorkspaceView } from "./views/WorkspaceView";
-import { ChevronLeftIcon } from "./components/ui/Icons";
 
 import "@fontsource-variable/inter/index.css";
 import "@fontsource/roboto/index.css";
@@ -169,8 +168,7 @@ export const App: React.FC = () => {
     };
 
     return (
-        <>  
-            
+        <div>
             {stage === "workspace" && activeProjectName ? (
                 null
             ) : (
@@ -199,6 +197,6 @@ export const App: React.FC = () => {
 
 
             </div>
-        </>
+        </div>
     );
 };

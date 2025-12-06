@@ -153,6 +153,8 @@ type AppStore = {
     lastSavedAt: number | null;
     shortcutStates: ShortcutStates;
     draggedDocument: { id: string; kind: string; title: string } | null;
+    isBinderOpen: boolean;
+    isChatOpen: boolean;
     bootstrapSession: () => Promise<void>;
     setAuthField: (field: keyof typeof initialAuthForm, value: string) => void;
     toggleAuthMode: () => void;
@@ -204,12 +206,19 @@ type AppStore = {
     reorderCharacters: (newOrder: string[]) => Promise<void>;
     reorderLocations: (newOrder: string[]) => Promise<void>;
     reorderOrganizations: (newOrder: string[]) => Promise<void>;
+    renameDocument: (
+        kind: string,
+        id: string,
+        newTitle: string
+    ) => Promise<void>;
     setAutosaveStatus: (status: AutosaveStatus) => void;
     setAutosaveError: (message: string | null) => void;
     setLastSavedAt: (timestamp: number | null) => void;
     setShortcutState: (id: string, state: ShortcutStates[string]) => void;
     resetShortcutState: (id: string) => void;
     setDraggedDocument: (doc: { id: string; kind: string; title: string } | null) => void;
+    toggleBinder: () => void;
+    toggleChat: () => void;
 };
 
 export const useAppStore = create<AppStore>((set, get) => {
@@ -1013,6 +1022,79 @@ export const useAppStore = create<AppStore>((set, get) => {
                 });
             }
         },
+        renameDocument: async (kind, id, newTitle) => {
+            const { projectId } = get();
+            if (!projectId) return;
+
+            // Optimistic update
+            set((state) => {
+                if (kind === 'chapter') {
+                    return {
+                        chapters: state.chapters.map((c) =>
+                            c.id === id ? { ...c, title: newTitle } : c
+                        ),
+                    };
+                } else if (kind === 'character') {
+                    return {
+                        characters: state.characters.map((c) =>
+                            c.id === id ? { ...c, name: newTitle } : c
+                        ),
+                    };
+                } else if (kind === 'location') {
+                    return {
+                        locations: state.locations.map((l) =>
+                            l.id === id ? { ...l, name: newTitle } : l
+                        ),
+                    };
+                } else if (kind === 'organization') {
+                    return {
+                        organizations: state.organizations.map((o) =>
+                            o.id === id ? { ...o, name: newTitle } : o
+                        ),
+                    };
+                } else if (kind === 'scrapNote') {
+                    return {
+                        scrapNotes: state.scrapNotes.map((s) =>
+                            s.id === id ? { ...s, title: newTitle } : s
+                        ),
+                    };
+                }
+                return {};
+            });
+
+            // API Call
+            try {
+                if (kind === 'chapter') {
+                    await rendererApi.manuscript.renameChapter({
+                        chapterId: id,
+                        title: newTitle,
+                    });
+                } else if (kind === 'character') {
+                    await rendererApi.logistics.saveCharacterInfo({
+                        characterId: id,
+                        payload: { name: newTitle },
+                    });
+                } else if (kind === 'location') {
+                    await rendererApi.logistics.saveLocationInfo({
+                        locationId: id,
+                        payload: { name: newTitle },
+                    });
+                } else if (kind === 'organization') {
+                    await rendererApi.logistics.saveOrganizationInfo({
+                        organizationId: id,
+                        payload: { name: newTitle },
+                    });
+                } else if (kind === 'scrapNote') {
+                    await rendererApi.manuscript.updateScrapNote({
+                        scrapNoteId: id,
+                        title: newTitle,
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to rename document:', error);
+                // Revert optimistic update if needed (omitted for brevity)
+            }
+        },
         setAutosaveStatus: (status) => {
             set({ autosaveStatus: status });
         },
@@ -1040,6 +1122,14 @@ export const useAppStore = create<AppStore>((set, get) => {
         },
         setDraggedDocument: (doc) => {
             set({ draggedDocument: doc });
+        },
+        isBinderOpen: true,
+        toggleBinder: () => {
+            set((state) => ({ isBinderOpen: !state.isBinderOpen }));
+        },
+        isChatOpen: false,
+        toggleChat: () => {
+            set((state) => ({ isChatOpen: !state.isChatOpen }));
         },
     };
 });

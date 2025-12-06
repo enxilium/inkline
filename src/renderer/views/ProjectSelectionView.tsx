@@ -52,6 +52,8 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     const [openMenuProjectId, setOpenMenuProjectId] = React.useState<string | null>(
         null
     );
+    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const targetProjectIdRef = React.useRef<string | null>(null);
 
     React.useEffect(() => {
         const handleClickOutside = () => setOpenMenuProjectId(null);
@@ -86,6 +88,43 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
             setIsSubmitting(false);
         }
     };
+
+    const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        const projectId = targetProjectIdRef.current;
+        
+        if (!file || !projectId) return;
+
+        // Reset input so the same file can be selected again if needed
+        event.target.value = "";
+        
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const extension = file.name.split('.').pop() || "";
+
+            await window.api.asset.importAsset({
+                projectId,
+                payload: {
+                    kind: "image",
+                    subjectType: "cover",
+                    subjectId: projectId,
+                    fileData: arrayBuffer,
+                    extension
+                }
+            });
+            
+            // Refresh to update the project list (e.g. updated timestamp)
+            onRefresh();
+        } catch (err) {
+            console.error("Failed to upload cover", err);
+            setLocalError("Failed to upload cover image.");
+        }
+    };
+
+    const onAddCover = React.useCallback((projectId: string) => {
+        targetProjectIdRef.current = projectId;
+        fileInputRef.current?.click();
+    }, []);
 
     return (
         <div>
@@ -166,6 +205,16 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                         onClick={(e) => e.stopPropagation()}
                                     >
                                         <button
+                                            className="project-card-menu-item"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOpenMenuProjectId(null);
+                                                onAddCover(project.id);
+                                            }}
+                                        >
+                                            Change Cover
+                                        </button>
+                                        <button
                                             className="project-card-menu-item is-danger"
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -183,7 +232,25 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                         </button>
                                     </div>
                                 )}
-                                <div className="project-card-cover"></div>
+                                <div
+                                    className={
+                                        "project-card-cover" +
+                                        (project.coverImageUrl ? " has-image" : "")
+                                    }
+                                    style={
+                                        project.coverImageUrl
+                                            ? {
+                                                backgroundImage: `url("${project.coverImageUrl}")`,
+                                            }
+                                            : undefined
+                                    }
+                                >
+                                    {!project.coverImageUrl ? (
+                                        <span className="project-card-cover-placeholder">
+                                             
+                                        </span>
+                                    ) : null}
+                                </div>
                                 <div>
                                     <h3>{project.title}</h3>
                                     <p className="panel-subtitle">
@@ -203,6 +270,13 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
             {selectionError ? (
                 <span className="card-hint is-error">{selectionError}</span>
             ) : null}
+            <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="sr-only"
+                onChange={handleFileChange}
+            />
         </div>
     );
 };

@@ -41,8 +41,6 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     }, [chapters, scrapNotes, documentId, kind]);
 
     // 2. Local State
-    const [textTitle, setTextTitle] = React.useState("");
-    const [isTitleSaving, setTitleSaving] = React.useState(false);
     const [autosaveStatus, setAutosaveStatus] = React.useState<AutosaveStatus>("idle");
     const [autosaveError, setAutosaveError] = React.useState<string | null>(null);
     
@@ -106,8 +104,6 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             }
         }
         
-        setTextTitle(documentData.title || (kind === "chapter" ? "Untitled Chapter" : "Untitled Note"));
-
     }, [editor, documentId]); // Only run on mount/id change, not on data change to avoid loops
 
     // 5. Autosave Logic
@@ -178,43 +174,6 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         };
     }, []);
 
-    // 6. Title Renaming
-    const handleTitleBlur = async () => {
-        if (!documentData || !projectId) return;
-        const trimmed = textTitle.trim();
-        if (!trimmed) {
-            setTextTitle(kind === "chapter" ? "Untitled Chapter" : "Untitled Note");
-            return;
-        }
-
-        if (trimmed === documentData.title) return;
-
-        setTitleSaving(true);
-        try {
-            if (kind === "chapter") {
-                await rendererApi.manuscript.renameChapter({
-                    chapterId: documentId,
-                    title: trimmed,
-                });
-                updateChapterLocally(documentId, {
-                    title: trimmed,
-                    updatedAt: new Date(),
-                });
-            } else {
-                await rendererApi.manuscript.updateScrapNote({
-                    scrapNoteId: documentId,
-                    title: trimmed,
-                });
-                updateScrapNoteLocally(documentId, {
-                    title: trimmed,
-                    updatedAt: new Date(),
-                });
-            }
-        } finally {
-            setTitleSaving(false);
-        }
-    };
-
     // 7. Render
     if (!documentData) {
         return <div className="empty-editor">Document not found.</div>;
@@ -243,13 +202,8 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     return (
         <TextEditor
             editor={editor}
-            title={textTitle}
-            isTitleSaving={isTitleSaving}
-            autosaveStatus={autosaveStatus}
             autosaveLabel={autosaveLabel}
             autosaveClass={autosaveClass}
-            onTitleChange={setTextTitle}
-            onTitleBlur={handleTitleBlur}
         />
     );
 };

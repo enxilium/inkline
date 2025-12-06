@@ -26,6 +26,73 @@ export const ChevronLeftIcon: React.FC<IconProps> = ({
     </svg>
 );
 
+export const ChevronRightIcon: React.FC<IconProps> = ({
+    size = 12,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <path d="M9 18l6-6-6-6" />
+    </svg>
+);
+
+export const ChevronDownIcon: React.FC<IconProps> = ({
+    size = 12,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <path d="M6 9l6 6 6-6" />
+    </svg>
+);
+
+export const PlusIcon: React.FC<IconProps> = ({
+    size = 12,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <line x1="12" y1="5" x2="12" y2="19"></line>
+        <line x1="5" y1="12" x2="19" y2="12"></line>
+    </svg>
+);
+
 export const PanelLeftIcon: React.FC<IconProps> = ({
     size = 20,
     style,
@@ -252,6 +319,26 @@ export const AlignJustifyIcon: React.FC<IconProps> = ({
     </svg>
 );
 
+export const DownloadIcon: React.FC<IconProps> = ({ size = 16, style, ...props }) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <polyline points="7 10 12 15 17 10" />
+        <line x1="12" y1="15" x2="12" y2="3" />
+    </svg>
+);
+
 export const RefreshCwIcon: React.FC<IconProps> = ({
     size = 16,
     style,
@@ -344,3 +431,77 @@ export const MoreVerticalIcon: React.FC<IconProps> = ({
         <circle cx="12" cy="19" r="1"></circle>
     </svg>
 );
+
+export const MessageSquareIcon: React.FC<IconProps> = ({
+    size = 16,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+    </svg>
+);
+
+export const PanelRightIcon: React.FC<IconProps> = ({
+    size = 20,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+        <path d="M15 3v18" />
+        <path
+            d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4V3z"
+            fill="currentColor"
+            stroke="none"
+        />
+    </svg>
+);
+
+export const SendIcon: React.FC<IconProps> = ({
+    size = 16,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <line x1="22" y1="2" x2="11" y2="13"></line>
+        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+    </svg>
+);
+
