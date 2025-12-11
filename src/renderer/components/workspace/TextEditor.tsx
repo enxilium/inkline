@@ -106,7 +106,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
 
     return (
         <div className="text-editor-panel">
-            
             {editor ? (
                 <>
                     <div className="text-editor-container">

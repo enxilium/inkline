@@ -28,7 +28,7 @@ import type {
     WorkspaceScrapNote,
 } from "../../types";
 import { Button } from "../ui/Button";
-import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, GripVerticalIcon, PlusIcon } from "../ui/Icons";
+import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, GripVerticalIcon, PlusIcon, MapIcon, PersonIcon } from "../ui/Icons";
 import { useAppStore } from "../../state/appStore";
 
 export type DocumentBinderProps = {
@@ -234,6 +234,7 @@ const SortableBinderItem = ({
                 }}
                 aria-label="Delete"
                 onPointerDown={(e) => e.stopPropagation()}
+                style={{ width: "20px", height: "20px" }}
             >
                 ×
             </button>
@@ -347,30 +348,24 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         .map((note) => ({
             id: note.id,
             label: normalizeLabel(note.title, "Untitled Note"),
-            meta: note.isPinned ? "Pinned" : undefined,
             kind: "scrapNote",
         }));
 
     const characterItems: BinderItem[] = characters.map((character) => ({
             id: character.id,
             label: normalizeLabel(character.name, "Untitled Character"),
-            meta: character.race ? character.race : undefined,
             kind: "character",
         }));
 
     const locationItems: BinderItem[] = locations.map((location) => ({
             id: location.id,
             label: normalizeLabel(location.name, "Untitled Location"),
-            meta: location.tags[0],
             kind: "location",
         }));
 
     const organizationItems: BinderItem[] = organizations.map((organization) => ({
             id: organization.id,
             label: normalizeLabel(organization.name, "Untitled Organization"),
-            meta: organization.locationIds.length
-                ? `${organization.locationIds.length} locations`
-                : undefined,
             kind: "organization",
         }));
 
@@ -425,7 +420,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                     </div>
                 </div>
             </div>
-            <div className="binder-sections">
+            <div className="binder-sections" style={{ flex: 1, overflowY: 'auto', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {sections.map((section) => {
                     const isCollapsed = collapsedSections.has(section.title);
                     return (
@@ -508,6 +503,14 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                         </div>
                     );
                 })}
+            </div>
+            <div className="binder-section-footer">
+                <Button variant="icon">
+                    <PersonIcon />
+                </Button>
+                <Button variant="icon">
+                    <MapIcon />
+                </Button>
             </div>
         </aside>
     );

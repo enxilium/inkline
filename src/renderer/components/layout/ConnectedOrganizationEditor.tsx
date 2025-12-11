@@ -64,7 +64,7 @@ export const ConnectedOrganizationEditor: React.FC<ConnectedOrganizationEditorPr
                 name: values.name,
                 description: values.description,
                 mission: values.mission,
-                tags: listFromMultiline(values.tags),
+                tags: values.tags,
                 locationIds: values.locationIds,
             };
 

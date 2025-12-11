@@ -11,7 +11,8 @@ export type AppStage =
     | "checkingSession"
     | "auth"
     | "projectSelect"
-    | "workspace";
+    | "workspace"
+    | "settings";
 
 export type AuthMode = "login" | "register";
 

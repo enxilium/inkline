@@ -155,6 +155,7 @@ type AppStore = {
     draggedDocument: { id: string; kind: string; title: string } | null;
     isBinderOpen: boolean;
     isChatOpen: boolean;
+    openSettings: () => void;
     bootstrapSession: () => Promise<void>;
     setAuthField: (field: keyof typeof initialAuthForm, value: string) => void;
     toggleAuthMode: () => void;
@@ -1130,6 +1131,9 @@ export const useAppStore = create<AppStore>((set, get) => {
         isChatOpen: false,
         toggleChat: () => {
             set((state) => ({ isChatOpen: !state.isChatOpen }));
+        },
+        openSettings: () => {
+            set({ stage: "settings" });
         },
     };
 });

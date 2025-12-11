@@ -206,7 +206,7 @@ export const WorkspaceView: React.FC = () => {
         : "workspace-chat-container is-closed";
 
     return (
-        <div style={{ height: '94vh', display: 'flex', flexDirection: 'column' }}>
+        <div className="i-hate-ts">
             <div className="nav-workspace">
                 <div>
                     <div className="flex-row">

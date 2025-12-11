@@ -4,12 +4,13 @@ import type { WorkspaceLocation, WorkspaceOrganization } from "../../types";
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
+import { TagsInput } from "../ui/Tags";
 
 export type OrganizationEditorValues = {
     name: string;
     description: string;
     mission: string;
-    tags: string;
+    tags: string[];
     locationIds: string[];
 };
 
@@ -33,7 +34,7 @@ const defaultValues = (
     name: organization.name ?? "",
     description: organization.description ?? "",
     mission: organization.mission ?? "",
-    tags: (organization.tags ?? []).join("\n"),
+    tags: organization.tags ?? [],
     locationIds: organization.locationIds ?? [],
 });
 
@@ -243,282 +244,279 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     };
 
     return (
-        <form className="entity-editor" onSubmit={handleSubmit}>
-            <div className="entity-header">
-                <div>
-                    <p className="panel-label">Organization</p>
-                    <h2>{values.name || "Untitled Organization"}</h2>
-                </div>
-                <div className="entity-actions">
-                    <Button type="submit" variant="primary" disabled={isSaving}>
-                        {isSaving ? "Saving…" : "Save organization"}
-                    </Button>
-                </div>
-            </div>
-            <div className="entity-editor-grid">
-                <div className="entity-column">
-                    <div className="entity-field">
-                        <Label htmlFor="organization-name">Name</Label>
-                        <Input
-                            id="organization-name"
-                            value={values.name}
-                            onChange={(event) =>
-                                handleChange("name", event.target.value)
-                            }
-                            onBlur={handleBlur}
-                            placeholder="House Astra"
-                        />
+        <div className="entity-editor-panel">
+            <form className="entity-editor" onSubmit={handleSubmit}>
+                <div className="entity-header">
+                    <div>
+                        <p className="panel-label">Organization</p>
+                        <h2>{values.name || "Untitled Organization"}</h2>
                     </div>
-                    <div className="entity-field">
-                        <Label htmlFor="organization-description">
-                            Description
-                        </Label>
-                        <textarea
-                            id="organization-description"
-                            className="text-area"
-                            rows={4}
-                            value={values.description}
-                            onChange={(event) =>
-                                handleChange("description", event.target.value)
-                            }
-                            onBlur={handleBlur}
-                            placeholder="Purpose, history, notable feats"
-                        />
-                    </div>
-                    <div className="entity-field">
-                        <Label htmlFor="organization-mission">Mission</Label>
-                        <textarea
-                            id="organization-mission"
-                            className="text-area"
-                            rows={3}
-                            value={values.mission}
-                            onChange={(event) =>
-                                handleChange("mission", event.target.value)
-                            }
-                            onBlur={handleBlur}
-                            placeholder="Core goals"
-                        />
-                    </div>
-                    <div className="entity-field">
-                        <Label htmlFor="organization-tags">Tags</Label>
-                        <textarea
-                            id="organization-tags"
-                            className="text-area"
-                            rows={2}
-                            value={values.tags}
-                            onChange={(event) =>
-                                handleChange("tags", event.target.value)
-                            }
-                            onBlur={handleBlur}
-                            placeholder="Enter one tag per line"
-                        />
-                    </div>
-                    <div className="entity-field">
-                        <Label htmlFor="organization-locations">
-                            Locations
-                        </Label>
-                        <select
-                            id="organization-locations"
-                            className="input"
-                            multiple
-                            value={values.locationIds}
-                            onChange={(event) => {
-                                const selected = Array.from(
-                                    event.target.selectedOptions
-                                ).map((option) => option.value);
-                                handleChange("locationIds", selected);
-                            }}
-                            onBlur={handleBlur}
-                        >
-                            {locations.map((location) => (
-                                <option key={location.id} value={location.id}>
-                                    {location.name || "Untitled location"}
-                                </option>
-                            ))}
-                        </select>
-                        <span className="helper-text">
-                            Hold Ctrl / Cmd to select multiple.
-                        </span>
+                    <div className="entity-actions">
+                        <Button type="submit" variant="primary" disabled={isSaving}>
+                            {isSaving ? "Saving…" : "Save organization"}
+                        </Button>
                     </div>
                 </div>
-                <div className="entity-column">
-                    <div className="portrait-card">
-                        <div
-                            className={
-                                "portrait-frame" +
-                                (portraitUrl ? " has-image" : "")
-                            }
-                            style={
-                                portraitUrl
-                                    ? {
-                                          backgroundImage: `url("${portraitUrl}")`,
-                                      }
-                                    : undefined
-                            }
-                        >
-                            {!portraitUrl ? (
-                                <span className="portrait-placeholder">
-                                    No crest yet
-                                </span>
-                            ) : null}
-                        </div>
-                        <div className="portrait-actions">
-                            <Button
-                                type="button"
-                                size="sm"
-                                onClick={handleGenerate}
-                                disabled={assetBusy}
-                            >
-                                {assetBusy ? "Working…" : "Generate crest"}
-                            </Button>
-                            <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                onClick={triggerFilePick}
-                                disabled={assetBusy}
-                            >
-                                Import image
-                            </Button>
-                            <input
-                                ref={fileInputRef}
-                                type="file"
-                                accept="image/*"
-                                className="sr-only"
-                                onChange={handleFileChange}
+                <div className="entity-editor-grid">
+                    <div className="entity-column">
+                        <div className="entity-field">
+                            <Label htmlFor="organization-name">Name</Label>
+                            <Input
+                                id="organization-name"
+                                value={values.name}
+                                onChange={(event) =>
+                                    handleChange("name", event.target.value)
+                                }
+                                onBlur={handleBlur}
+                                placeholder="House Astra"
                             />
                         </div>
-                        {gallerySources.length ? (
+                        <div className="entity-field">
+                            <Label htmlFor="organization-description">
+                                Description
+                            </Label>
+                            <textarea
+                                id="organization-description"
+                                className="text-area"
+                                rows={4}
+                                value={values.description}
+                                onChange={(event) =>
+                                    handleChange("description", event.target.value)
+                                }
+                                onBlur={handleBlur}
+                                placeholder="Purpose, history, notable feats"
+                            />
+                        </div>
+                        <div className="entity-field">
+                            <Label htmlFor="organization-mission">Mission</Label>
+                            <textarea
+                                id="organization-mission"
+                                className="text-area"
+                                rows={3}
+                                value={values.mission}
+                                onChange={(event) =>
+                                    handleChange("mission", event.target.value)
+                                }
+                                onBlur={handleBlur}
+                                placeholder="Core goals"
+                            />
+                        </div>
+                        <div className="entity-field">
+                            <Label htmlFor="organization-tags">Tags</Label>
+                            <TagsInput
+                                value={values.tags}
+                                onChange={(tags) => handleChange("tags", tags)}
+                                onBlur={handleBlur}
+                                placeholder="Enter one tag per line"
+                            />
+                        </div>
+                        <div className="entity-field">
+                            <Label htmlFor="organization-locations">
+                                Locations
+                            </Label>
+                            <select
+                                id="organization-locations"
+                                className="input"
+                                multiple
+                                value={values.locationIds}
+                                onChange={(event) => {
+                                    const selected = Array.from(
+                                        event.target.selectedOptions
+                                    ).map((option) => option.value);
+                                    handleChange("locationIds", selected);
+                                }}
+                                onBlur={handleBlur}
+                            >
+                                {locations.map((location) => (
+                                    <option key={location.id} value={location.id}>
+                                        {location.name || "Untitled location"}
+                                    </option>
+                                ))}
+                            </select>
+                            <span className="helper-text">
+                                Hold Ctrl / Cmd to select multiple.
+                            </span>
+                        </div>
+                    </div>
+                    <div className="entity-column">
+                        <div className="portrait-card">
+                            <div
+                                className={
+                                    "portrait-frame" +
+                                    (portraitUrl ? " has-image" : "")
+                                }
+                                style={
+                                    portraitUrl
+                                        ? {
+                                            backgroundImage: `url("${portraitUrl}")`,
+                                        }
+                                        : undefined
+                                }
+                            >
+                                {!portraitUrl ? (
+                                    <span className="portrait-placeholder">
+                                        No crest yet
+                                    </span>
+                                ) : null}
+                            </div>
                             <div className="portrait-actions">
                                 <Button
                                     type="button"
                                     size="sm"
-                                    variant="ghost"
-                                    onClick={showPreviousImage}
-                                    disabled={!canCycleGallery}
-                                >
-                                    Previous
-                                </Button>
-                                <span className="summary-label">
-                                    Image {currentImageIndex + 1} of{" "}
-                                    {gallerySources.length}
-                                </span>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={showNextImage}
-                                    disabled={!canCycleGallery}
-                                >
-                                    Next
-                                </Button>
-                            </div>
-                        ) : null}
-                    </div>
-                    <div className="entity-summary">
-                        <span className="summary-label">Audio Assets</span>
-                        <div className="portrait-actions">
-                            <div className="button-group">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="secondary"
+                                    onClick={handleGenerate}
                                     disabled={assetBusy}
-                                    onClick={() =>
-                                        handleAssetAction(
-                                            onGenerateSong,
-                                            "Song generation failed"
-                                        )
-                                    }
                                 >
-                                    {organization.bgmId
-                                        ? "Regenerate Song"
-                                        : "Generate Song"}
+                                    {assetBusy ? "Working…" : "Generate crest"}
                                 </Button>
                                 <Button
                                     type="button"
                                     size="sm"
                                     variant="ghost"
+                                    onClick={triggerFilePick}
                                     disabled={assetBusy}
-                                    onClick={triggerSongPick}
                                 >
-                                    Import
+                                    Import image
                                 </Button>
                                 <input
-                                    ref={songInputRef}
+                                    ref={fileInputRef}
                                     type="file"
-                                    accept="audio/*"
+                                    accept="image/*"
                                     className="sr-only"
-                                    onChange={handleSongChange}
+                                    onChange={handleFileChange}
                                 />
                             </div>
-                            {songUrl && (
-                                <audio
-                                    controls
-                                    src={songUrl}
-                                    style={{
-                                        width: "100%",
-                                        marginTop: "0.5rem",
-                                        height: "32px",
-                                    }}
-                                />
-                            )}
+                            {gallerySources.length ? (
+                                <div className="portrait-actions">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={showPreviousImage}
+                                        disabled={!canCycleGallery}
+                                    >
+                                        Previous
+                                    </Button>
+                                    <span className="summary-label">
+                                        Image {currentImageIndex + 1} of{" "}
+                                        {gallerySources.length}
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        onClick={showNextImage}
+                                        disabled={!canCycleGallery}
+                                    >
+                                        Next
+                                    </Button>
+                                </div>
+                            ) : null}
+                        </div>
+                        <div className="entity-summary">
+                            <span className="summary-label">Audio Assets</span>
+                            <div className="portrait-actions">
+                                <div className="button-group">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="secondary"
+                                        disabled={assetBusy}
+                                        onClick={() =>
+                                            handleAssetAction(
+                                                onGenerateSong,
+                                                "Song generation failed"
+                                            )
+                                        }
+                                    >
+                                        {organization.bgmId
+                                            ? "Regenerate Song"
+                                            : "Generate Song"}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={assetBusy}
+                                        onClick={triggerSongPick}
+                                    >
+                                        Import
+                                    </Button>
+                                    <input
+                                        ref={songInputRef}
+                                        type="file"
+                                        accept="audio/*"
+                                        className="sr-only"
+                                        onChange={handleSongChange}
+                                    />
+                                </div>
+                                {songUrl && (
+                                    <audio
+                                        controls
+                                        src={songUrl}
+                                        style={{
+                                            width: "100%",
+                                            marginTop: "0.5rem",
+                                            height: "32px",
+                                        }}
+                                    />
+                                )}
 
-                            <div className="button-group">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="secondary"
-                                    disabled={assetBusy}
-                                    onClick={() =>
-                                        handleAssetAction(
-                                            onGeneratePlaylist,
-                                            "Playlist generation failed"
-                                        )
-                                    }
-                                >
-                                    {organization.playlistId
-                                        ? "Regenerate Playlist"
-                                        : "Generate Playlist"}
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={assetBusy}
-                                    onClick={triggerPlaylistPick}
-                                >
-                                    Import
-                                </Button>
-                                <input
-                                    ref={playlistInputRef}
-                                    type="file"
-                                    accept=".json"
-                                    className="sr-only"
-                                    onChange={handlePlaylistChange}
-                                />
+                                <div className="button-group">
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="secondary"
+                                        disabled={assetBusy}
+                                        onClick={() =>
+                                            handleAssetAction(
+                                                onGeneratePlaylist,
+                                                "Playlist generation failed"
+                                            )
+                                        }
+                                    >
+                                        {organization.playlistId
+                                            ? "Regenerate Playlist"
+                                            : "Generate Playlist"}
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="ghost"
+                                        disabled={assetBusy}
+                                        onClick={triggerPlaylistPick}
+                                    >
+                                        Import
+                                    </Button>
+                                    <input
+                                        ref={playlistInputRef}
+                                        type="file"
+                                        accept=".json"
+                                        className="sr-only"
+                                        onChange={handlePlaylistChange}
+                                    />
+                                </div>
                             </div>
                         </div>
-                    </div>
-                    <div className="entity-summary">
-                        <div>
-                            <span className="summary-label">Reach</span>
-                            <span className="summary-value">
-                                {values.locationIds.length} locations
-                            </span>
-                        </div>
-                        <div>
-                            <span className="summary-label">
-                                Gallery images
-                            </span>
-                            <span className="summary-value">
-                                {organization.galleryImageIds.length}
-                            </span>
+                        <div className="entity-summary">
+                            <div>
+                                <span className="summary-label">Reach</span>
+                                <span className="summary-value">
+                                    {values.locationIds.length} locations
+                                </span>
+                            </div>
+                            <div>
+                                <span className="summary-label">
+                                    Gallery images
+                                </span>
+                                <span className="summary-value">
+                                    {organization.galleryImageIds.length}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </div>
-            </div>
-            {error ? <span className="card-hint is-error">{error}</span> : null}
-        </form>
+                {error ? <span className="card-hint is-error">{error}</span> : null}
+            </form>
+        </div>
     );
 };

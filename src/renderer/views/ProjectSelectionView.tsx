@@ -46,7 +46,7 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     onOpenProject,
     onDeleteProject,
 }) => {
-    const [draftTitle, setDraftTitle] = React.useState("");
+    const [draftTitle, setDraftTitle,] = React.useState("");
     const [localError, setLocalError] = React.useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [openMenuProjectId, setOpenMenuProjectId] = React.useState<string | null>(
@@ -204,6 +204,16 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                         className="project-card-menu"
                                         onClick={(e) => e.stopPropagation()}
                                     >
+                                        <button
+                                            className="project-card-menu-item"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOpenMenuProjectId(null);
+                                                onAddCover(project.id);
+                                            }}
+                                        >
+                                            Rename Project
+                                        </button>
                                         <button
                                             className="project-card-menu-item"
                                             onClick={(e) => {

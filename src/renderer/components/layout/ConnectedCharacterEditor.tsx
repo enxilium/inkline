@@ -69,7 +69,7 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
                 traits: listFromMultiline(values.traits),
                 goals: listFromMultiline(values.goals),
                 secrets: listFromMultiline(values.secrets),
-                tags: listFromMultiline(values.tags),
+                tags: values.tags,
                 currentLocationId: values.currentLocationId || null,
                 backgroundLocationId: values.backgroundLocationId || null,
                 organizationId: values.organizationId || null,

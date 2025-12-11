@@ -69,7 +69,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 </div>
             </div>
             {error ? <span className="card-hint is-error">{error}</span> : null}
-            <Button type="submit" variant="primary" disabled={isSubmitting}>
+            <Button type="submit" variant="primary" style={{marginBottom: "0.5rem"}} disabled={isSubmitting}>
                 {isSubmitting
                     ? mode === "login"
                         ? "Signing in…"
@@ -79,7 +79,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                       : "Create account"}
             </Button>
         </form>
-        <Button type="button" variant="ghost" onClick={onToggleMode}>
+        <Button type="button" variant="ghost" style={{width: "100%"}} onClick={onToggleMode}>
             {mode === "login"
                 ? "Need an account? Register"
                 : "Already have an account? Log in"}

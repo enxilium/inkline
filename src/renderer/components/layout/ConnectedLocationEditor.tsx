@@ -65,7 +65,7 @@ export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = (
                 culture: values.culture,
                 history: values.history,
                 conflicts: listFromMultiline(values.conflicts),
-                tags: listFromMultiline(values.tags),
+                tags: values.tags,
             };
 
             const originalLocation = { ...location };
