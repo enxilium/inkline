@@ -9,6 +9,8 @@ import { ComfyAssetGenerationService } from "../@infrastructure/ai/ComfyAssetGen
 // whether you're running in development or production).
 declare const MAIN_WINDOW_WEBPACK_ENTRY: string;
 declare const MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
+declare const LOADING_WINDOW_WEBPACK_ENTRY: string;
+declare const LOADING_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require("electron-squirrel-startup")) {
@@ -22,36 +24,21 @@ let loadingWindow: BrowserWindow | null = null;
 
 const createLoadingWindow = (): void => {
     loadingWindow = new BrowserWindow({
-        width: 400,
+        width: 300,
         height: 200,
         frame: false,
         transparent: false,
         alwaysOnTop: true,
         resizable: false,
+        backgroundColor: "#1e1e1e",
         webPreferences: {
             nodeIntegration: false,
             contextIsolation: true,
+            preload: LOADING_WINDOW_PRELOAD_WEBPACK_ENTRY,
         },
     });
 
-    loadingWindow.loadURL(
-        `data:text/html;charset=utf-8,
-        <html>
-            <body style="font-family: sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; background-color: #1e1e1e; color: #e0e0e0; flex-direction: column; margin: 0;">
-                <h2 style="margin-bottom: 10px;">Inkline</h2>
-                <div style="font-size: 14px; color: #aaaaaa;">Starting AI Services...</div>
-                <div style="margin-top: 20px; width: 200px; height: 4px; background: #333; border-radius: 2px; overflow: hidden;">
-                    <div style="width: 100%; height: 100%; background: #4a90e2; animation: loading 2s infinite ease-in-out;"></div>
-                </div>
-                <style>
-                    @keyframes loading {
-                        0% { transform: translateX(-100%); }
-                        100% { transform: translateX(100%); }
-                    }
-                </style>
-            </body>
-        </html>`
-    );
+    loadingWindow.loadURL(LOADING_WINDOW_WEBPACK_ENTRY);
 };
 
 const createWindow = (): void => {
@@ -60,6 +47,11 @@ const createWindow = (): void => {
         height: 600,
         width: 800,
         show: false,
+        transparent: true,
+        vibrancy: "under-window",
+        visualEffectState: "active",
+        titleBarStyle: "hidden",
+        ...(process.platform !== "darwin" ? { titleBarOverlay: true } : {}),
         webPreferences: {
             preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
         },
@@ -70,11 +62,6 @@ const createWindow = (): void => {
 
     mainWindow.maximize();
     mainWindow.show();
-
-    // Open the DevTools.
-    mainWindow.webContents.openDevTools({
-        mode: "detach",
-    });
 };
 
 const bootstrap = async (): Promise<void> => {
@@ -91,6 +78,8 @@ const bootstrap = async (): Promise<void> => {
             console.error("Failed to start ComfyUI service:", error);
         }
     }
+
+    // Temporary delay to visualize loading screen
 
     if (loadingWindow) {
         loadingWindow.close();

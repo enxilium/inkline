@@ -7,6 +7,8 @@ export interface LoadProjectListRequest {
     userId: string;
 }
 
+export type ProjectListItem = Project & { coverImageUrl: string | null };
+
 export interface LoadProjectListResponse {
     projects: Project[];
     covers: Record<string, Image>;

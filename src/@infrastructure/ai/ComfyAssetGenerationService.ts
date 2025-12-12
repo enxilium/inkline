@@ -77,6 +77,13 @@ export class ComfyAssetGenerationService
     }
 
     private async initializeServer() {
+        if (process.platform !== "win32") {
+            console.warn(
+                "[ComfyAssetGenerationService] ComfyUI server is only supported on Windows. Skipping initialization."
+            );
+            return;
+        }
+
         try {
             const port = await portfinder.getPortPromise({ port: 8188 });
             console.log(
@@ -213,6 +220,11 @@ export class ComfyAssetGenerationService
         subject: Character | Location | Organization,
         onProgress: (progress: number) => void
     ): Promise<ArrayBuffer> {
+        if (process.platform !== "win32") {
+            throw new Error(
+                "Audio generation is currently only available on Windows."
+            );
+        }
         await this.serverReady;
         if (!this.api) throw new Error("ComfyUI server not initialized");
 
@@ -292,6 +304,11 @@ export class ComfyAssetGenerationService
         subject: Character | Location | Organization,
         onProgress: (progress: number) => void
     ): Promise<ArrayBuffer> {
+        if (process.platform !== "win32") {
+            throw new Error(
+                "Image generation is currently only available on Windows."
+            );
+        }
         await this.serverReady;
         if (!this.api) throw new Error("ComfyUI server not initialized");
 

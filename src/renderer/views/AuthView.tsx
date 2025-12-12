@@ -42,32 +42,34 @@ export const AuthView: React.FC<AuthViewProps> = ({
             Securely sync your projects and pick up where you left off.
         </p>
         <form className="auth-form" onSubmit={onSubmit}>
-            <div className="input-field">
-                <Label htmlFor="auth-email">Email</Label>
-                <Input
-                    id="auth-email"
-                    type="email"
-                    value={form.email}
-                    onChange={onFieldChange("email")}
-                    autoComplete="email"
-                    required
-                />
-            </div>
-            <div className="input-field">
-                <Label htmlFor="auth-password">Password</Label>
-                <Input
-                    id="auth-password"
-                    type="password"
-                    value={form.password}
-                    onChange={onFieldChange("password")}
-                    autoComplete={
-                        mode === "login" ? "current-password" : "new-password"
-                    }
-                    required
-                />
+            <div className="auth-form-inputs">
+                <div className="input-field">
+                    <Label htmlFor="auth-email">Email</Label>
+                    <Input
+                        id="auth-email"
+                        type="email"
+                        value={form.email}
+                        onChange={onFieldChange("email")}
+                        autoComplete="email"
+                        required
+                    />
+                </div>
+                <div className="input-field">
+                    <Label htmlFor="auth-password">Password</Label>
+                    <Input
+                        id="auth-password"
+                        type="password"
+                        value={form.password}
+                        onChange={onFieldChange("password")}
+                        autoComplete={
+                            mode === "login" ? "current-password" : "new-password"
+                        }
+                        required
+                    />
+                </div>
             </div>
             {error ? <span className="card-hint is-error">{error}</span> : null}
-            <Button type="submit" variant="primary" disabled={isSubmitting}>
+            <Button type="submit" variant="primary" style={{marginBottom: "0.5rem"}} disabled={isSubmitting}>
                 {isSubmitting
                     ? mode === "login"
                         ? "Signing in…"
@@ -77,7 +79,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                       : "Create account"}
             </Button>
         </form>
-        <Button type="button" variant="ghost" onClick={onToggleMode}>
+        <Button type="button" variant="ghost" style={{width: "100%"}} onClick={onToggleMode}>
             {mode === "login"
                 ? "Need an account? Register"
                 : "Already have an account? Log in"}

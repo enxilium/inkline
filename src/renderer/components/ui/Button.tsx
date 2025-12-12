@@ -7,7 +7,8 @@ export type ButtonVariant =
     | "secondary"
     | "ghost"
     | "danger"
-    | "toolbar";
+    | "toolbar"
+    | "icon";
 export type ButtonSize = "sm" | "md" | "lg";
 
 export interface ButtonProps
@@ -23,6 +24,7 @@ const variantClasses: Record<ButtonVariant, string> = {
     ghost: "btn-ghost",
     danger: "btn-danger",
     toolbar: "btn-toolbar",
+    icon: "btn-icon",
 };
 
 const sizeClasses: Record<ButtonSize, string> = {

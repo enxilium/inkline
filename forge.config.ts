@@ -40,6 +40,14 @@ const config: ForgeConfig = {
                             js: "./src/@interface-adapters/preload/preload.ts",
                         },
                     },
+                    {
+                        html: "./src/renderer/views/initialization/loading.html",
+                        js: "./src/renderer/views/initialization/loading.tsx",
+                        name: "loading_window",
+                        preload: {
+                            js: "./src/@interface-adapters/preload/preload.ts",
+                        },
+                    },
                 ],
             },
         }),

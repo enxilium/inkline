@@ -46,6 +46,7 @@
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/modifiers": "^9.0.0",
     "@dnd-kit/sortable": "^10.0.0",
     "@dnd-kit/utilities": "^3.2.2",
     "@fontsource-variable/inter": "^5.2.8",
@@ -88,8 +89,10 @@
     "epub-gen": "^0.1.0",
     "pdfkit": "^0.17.2",
     "portfinder": "^1.0.38",
+    "flexlayout-react": "^0.8.17",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-tabs": "^6.1.0",
     "typescript": "^5.9.3",
     "zustand": "^5.0.8"
   }
