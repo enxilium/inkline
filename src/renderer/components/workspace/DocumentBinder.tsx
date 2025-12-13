@@ -16,7 +16,10 @@ import {
     useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { restrictToVerticalAxis, restrictToParentElement } from "@dnd-kit/modifiers";
+import {
+    restrictToVerticalAxis,
+    restrictToParentElement,
+} from "@dnd-kit/modifiers";
 
 import type {
     WorkspaceChapter,
@@ -28,7 +31,16 @@ import type {
     WorkspaceScrapNote,
 } from "../../types";
 import { Button } from "../ui/Button";
-import { ChevronLeftIcon, ChevronRightIcon, ChevronDownIcon, GripVerticalIcon, PlusIcon, MapIcon, PersonIcon } from "../ui/Icons";
+import {
+    BinderChapterIcon,
+    BinderOrganizationIcon,
+    BinderScrapNoteIcon,
+    ChevronLeftIcon,
+    GripVerticalIcon,
+    MapIcon,
+    PersonIcon,
+    PlusIcon,
+} from "../ui/Icons";
 import { useAppStore } from "../../state/appStore";
 
 export type DocumentBinderProps = {
@@ -60,7 +72,7 @@ export type DocumentBinderProps = {
 type BinderItem = {
     id: string;
     label: string;
-    meta?: string;
+    prefix?: string;
     kind: WorkspaceDocumentKind;
 };
 
@@ -70,15 +82,13 @@ type BinderSection = {
     items: BinderItem[];
     onCreate: () => void;
     onDelete: (id: string) => void;
+    onReorder: (newOrder: string[]) => void;
 };
 
 const normalizeLabel = (value: string, fallback: string): string => {
     const trimmed = value?.trim();
     return trimmed ? trimmed : fallback;
 };
-
-const sortAlphabetically = <T extends { label: string }>(items: T[]): T[] =>
-    [...items].sort((a, b) => a.label.localeCompare(b.label));
 
 const SortableBinderItem = ({
     item,
@@ -145,7 +155,7 @@ const SortableBinderItem = ({
         // Set data for FlexLayout to recognize
         e.dataTransfer.setData("text/plain", item.label);
         e.dataTransfer.effectAllowed = "copy";
-        
+
         // Set global state for WorkspaceLayout to read
         setDraggedDocument({
             id: item.id,
@@ -163,15 +173,6 @@ const SortableBinderItem = ({
             <button
                 type="button"
                 className="binder-item-drag-handle"
-                style={{
-                    cursor: "grab",
-                    background: "transparent",
-                    border: "none",
-                    padding: "0 4px",
-                    color: "var(--text-muted)",
-                    display: "flex",
-                    alignItems: "center",
-                }}
                 {...attributes}
                 {...listeners}
                 aria-label="Reorder"
@@ -179,7 +180,10 @@ const SortableBinderItem = ({
                 <GripVerticalIcon size={14} />
             </button>
             {isRenaming ? (
-                <div className="binder-item" style={{ cursor: "text", paddingRight: "8px" }}>
+                <div
+                    className="binder-item binder-item-renaming"
+                    style={{ cursor: "text" }}
+                >
                     <input
                         ref={inputRef}
                         type="text"
@@ -197,7 +201,7 @@ const SortableBinderItem = ({
                             border: "1px solid var(--accent)",
                             borderRadius: "2px",
                             padding: "0 4px",
-                            margin: "-1px -5px", // Negative margin to expand slightly beyond text area
+                            margin: "-1px 0",
                             fontSize: "inherit",
                             fontFamily: "inherit",
                             outline: "none",
@@ -217,12 +221,15 @@ const SortableBinderItem = ({
                     draggable={true}
                     onDragStart={handleDragStart}
                     onDragEnd={handleDragEnd}
+                    data-kind={item.kind}
                     style={{ flex: 1, textAlign: "left" }}
                 >
-                    <span className="binder-item-label">{item.label}</span>
-                    {item.meta ? (
-                        <span className="binder-item-meta">{item.meta}</span>
+                    {item.prefix ? (
+                        <span className="binder-item-prefix">
+                            {item.prefix}
+                        </span>
                     ) : null}
+                    <span className="binder-item-label">{item.label}</span>
                 </button>
             )}
             <button
@@ -234,7 +241,6 @@ const SortableBinderItem = ({
                 }}
                 aria-label="Delete"
                 onPointerDown={(e) => e.stopPropagation()}
-                style={{ width: "20px", height: "20px" }}
             >
                 ×
             </button>
@@ -278,59 +284,46 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         })
     );
 
-    const [collapsedSections, setCollapsedSections] = React.useState<Set<string>>(new Set());
+    const [activeKind, setActiveKind] = React.useState<WorkspaceDocumentKind>(
+        activeDocument?.kind ?? "chapter"
+    );
 
-    const toggleSection = (title: string) => {
-        const newCollapsed = new Set(collapsedSections);
-        if (newCollapsed.has(title)) {
-            newCollapsed.delete(title);
-        } else {
-            newCollapsed.add(title);
-        }
-        setCollapsedSections(newCollapsed);
-    };
-
-    const handleDragEnd = (event: DragEndEvent, sectionKind: WorkspaceDocumentKind) => {
+    const handleDragEnd = (event: DragEndEvent, section: BinderSection) => {
         const { active, over } = event;
 
-        if (active.id !== over?.id) {
-            let items: { id: string }[] = [];
-            let reorderFunc: ((newOrder: string[]) => void) | null = null;
+        if (!over || active.id === over.id) {
+            return;
+        }
 
-            switch (sectionKind) {
-                case "chapter":
-                    items = chapters;
-                    reorderFunc = onReorderChapters;
-                    break;
-                case "scrapNote":
-                    items = scrapNotes;
-                    reorderFunc = onReorderScrapNotes;
-                    break;
-                case "character":
-                    items = characters;
-                    reorderFunc = onReorderCharacters;
-                    break;
-                case "location":
-                    items = locations;
-                    reorderFunc = onReorderLocations;
-                    break;
-                case "organization":
-                    items = organizations;
-                    reorderFunc = onReorderOrganizations;
-                    break;
-            }
+        const oldIndex = section.items.findIndex((c) => c.id === active.id);
+        const newIndex = section.items.findIndex((c) => c.id === over.id);
 
-            if (reorderFunc) {
-                const oldIndex = items.findIndex((c) => c.id === active.id);
-                const newIndex = items.findIndex((c) => c.id === over?.id);
+        if (oldIndex === -1 || newIndex === -1) {
+            return;
+        }
 
-                if (oldIndex !== -1 && newIndex !== -1) {
-                    const newOrder = arrayMove(items, oldIndex, newIndex).map(
-                        (c) => c.id
-                    );
-                    reorderFunc(newOrder);
-                }
-            }
+        const newOrder = arrayMove(section.items, oldIndex, newIndex).map(
+            (c) => c.id
+        );
+        section.onReorder(newOrder);
+    };
+
+    const handleSelectKind = (kind: WorkspaceDocumentKind) => {
+        setActiveKind(kind);
+    };
+
+    const getIconForKind = (kind: WorkspaceDocumentKind) => {
+        switch (kind) {
+            case "chapter":
+                return <BinderChapterIcon size={16} />;
+            case "scrapNote":
+                return <BinderScrapNoteIcon size={16} />;
+            case "character":
+                return <PersonIcon size={16} />;
+            case "location":
+                return <MapIcon size={16} />;
+            case "organization":
+                return <BinderOrganizationIcon size={16} />;
         }
     };
 
@@ -339,36 +332,36 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         .sort((a, b) => a.order - b.order)
         .map((chapter, index) => ({
             id: chapter.id,
-            label: normalizeLabel(chapter.title, `Chapter ${index + 1}`),
-            meta: `Chapter ${chapter.order + 1}`,
+            label: normalizeLabel(chapter.title, "Untitled Chapter"),
+            prefix: String(chapter.order + 1),
             kind: "chapter",
         }));
 
-    const scrapNoteItems: BinderItem[] = scrapNotes
-        .map((note) => ({
-            id: note.id,
-            label: normalizeLabel(note.title, "Untitled Note"),
-            kind: "scrapNote",
-        }));
+    const scrapNoteItems: BinderItem[] = scrapNotes.map((note) => ({
+        id: note.id,
+        label: normalizeLabel(note.title, "Untitled Note"),
+        kind: "scrapNote",
+    }));
 
     const characterItems: BinderItem[] = characters.map((character) => ({
-            id: character.id,
-            label: normalizeLabel(character.name, "Untitled Character"),
-            kind: "character",
-        }));
+        id: character.id,
+        label: normalizeLabel(character.name, "Untitled Character"),
+        kind: "character",
+    }));
 
     const locationItems: BinderItem[] = locations.map((location) => ({
-            id: location.id,
-            label: normalizeLabel(location.name, "Untitled Location"),
-            kind: "location",
-        }));
+        id: location.id,
+        label: normalizeLabel(location.name, "Untitled Location"),
+        kind: "location",
+    }));
 
-    const organizationItems: BinderItem[] = organizations.map((organization) => ({
+    const organizationItems: BinderItem[] = organizations.map(
+        (organization) => ({
             id: organization.id,
             label: normalizeLabel(organization.name, "Untitled Organization"),
             kind: "organization",
-        }));
-
+        })
+    );
 
     const sections: BinderSection[] = [
         {
@@ -377,6 +370,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             items: chapterItems,
             onCreate: onCreateChapter,
             onDelete: onDeleteChapter,
+            onReorder: onReorderChapters,
         },
         {
             title: "Scrap Notes",
@@ -384,6 +378,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             items: scrapNoteItems,
             onCreate: onCreateScrapNote,
             onDelete: onDeleteScrapNote,
+            onReorder: onReorderScrapNotes,
         },
         {
             title: "Characters",
@@ -391,6 +386,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             items: characterItems,
             onCreate: onCreateCharacter,
             onDelete: onDeleteCharacter,
+            onReorder: onReorderCharacters,
         },
         {
             title: "Locations",
@@ -398,6 +394,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             items: locationItems,
             onCreate: onCreateLocation,
             onDelete: onDeleteLocation,
+            onReorder: onReorderLocations,
         },
         {
             title: "Organizations",
@@ -405,8 +402,12 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             items: organizationItems,
             onCreate: onCreateOrganization,
             onDelete: onDeleteOrganization,
+            onReorder: onReorderOrganizations,
         },
     ];
+
+    const activeSection =
+        sections.find((section) => section.kind === activeKind) ?? sections[0];
 
     return (
         <aside className="binder-panel">
@@ -420,97 +421,93 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                     </div>
                 </div>
             </div>
-            <div className="binder-sections" style={{ flex: 1, overflowY: 'auto', padding: '0.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                {sections.map((section) => {
-                    const isCollapsed = collapsedSections.has(section.title);
-                    return (
-                        <div className="binder-section" key={section.title}>
-                            <div className="binder-section-header" onClick={() => toggleSection(section.title)}>
-                                <div className="binder-section-title-row">
-                                    <span className="binder-section-icon">
-                                        {isCollapsed ? <ChevronRightIcon size={10} /> : <ChevronDownIcon size={10} />}
-                                    </span>
-                                    <span className="section-title">{section.title.toUpperCase()}</span>
-                                </div>
-                                <div className="binder-section-actions">
-                                     <button 
-                                        className="binder-icon-button"
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            section.onCreate();
-                                        }}
-                                        title={`New ${section.kind}`}
-                                     >
-                                        <PlusIcon size={14} />
-                                     </button>
-                                </div>
-                            </div>
-                            {!isCollapsed && (
-                                <div className="binder-section-content">
-                                    {section.items.length ? (
-                                        <DndContext
-                                            sensors={sensors}
-                                            collisionDetection={closestCenter}
-                                            onDragEnd={(e) => handleDragEnd(e, section.kind)}
-                                            modifiers={[restrictToVerticalAxis, restrictToParentElement]}
-                                        >
-                                            <SortableContext
-                                                items={section.items.map((i) => i.id)}
-                                                strategy={verticalListSortingStrategy}
-                                            >
-                                                <ul className="binder-list">
-                                                    {section.items.map((item) => {
-                                                        const isActive =
-                                                            activeDocument?.kind ===
-                                                                item.kind &&
-                                                            activeDocument.id ===
-                                                                item.id;
-                                                        return (
-                                                            <SortableBinderItem
-                                                                key={item.id}
-                                                                item={item}
-                                                                isActive={isActive}
-                                                                onSelect={() =>
-                                                                    onSelect({
-                                                                        kind: item.kind,
-                                                                        id: item.id,
-                                                                    })
-                                                                }
-                                                                onDelete={() => {
-                                                                    if (
-                                                                        window.confirm(
-                                                                            `Delete "${item.label}"?`
-                                                                        )
-                                                                    ) {
-                                                                        section.onDelete(
-                                                                            item.id
-                                                                        );
-                                                                    }
-                                                                }}
-                                                            />
-                                                        );
-                                                    })}
-                                                </ul>
-                                            </SortableContext>
-                                        </DndContext>
-                                    ) : (
-                                        <p className="binder-empty">
-                                            Empty
-                                        </p>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-                    );
-                })}
+            <div className="binder-active-header">
+                <div className="binder-active-title">
+                    <span className="binder-active-icon">
+                        {getIconForKind(activeSection.kind)}
+                    </span>
+                    <span className="section-title">
+                        {activeSection.title.toUpperCase()}
+                    </span>
+                </div>
+                <Button
+                    variant="icon"
+                    className="binder-create"
+                    onClick={activeSection.onCreate}
+                    title={`New ${activeSection.title}`}
+                >
+                    <PlusIcon size={14} />
+                </Button>
             </div>
-            <div className="binder-section-footer">
-                <Button variant="icon">
-                    <PersonIcon />
-                </Button>
-                <Button variant="icon">
-                    <MapIcon />
-                </Button>
+
+            <div className="binder-sections binder-scroll-area">
+                {activeSection.items.length ? (
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={(e) => handleDragEnd(e, activeSection)}
+                        modifiers={[
+                            restrictToVerticalAxis,
+                            restrictToParentElement,
+                        ]}
+                    >
+                        <SortableContext
+                            items={activeSection.items.map((i) => i.id)}
+                            strategy={verticalListSortingStrategy}
+                        >
+                            <ul className="binder-list">
+                                {activeSection.items.map((item) => {
+                                    const isActive =
+                                        activeDocument?.kind === item.kind &&
+                                        activeDocument.id === item.id;
+                                    return (
+                                        <SortableBinderItem
+                                            key={item.id}
+                                            item={item}
+                                            isActive={isActive}
+                                            onSelect={() =>
+                                                onSelect({
+                                                    kind: item.kind,
+                                                    id: item.id,
+                                                })
+                                            }
+                                            onDelete={() => {
+                                                if (
+                                                    window.confirm(
+                                                        `Delete "${item.label}"?`
+                                                    )
+                                                ) {
+                                                    activeSection.onDelete(
+                                                        item.id
+                                                    );
+                                                }
+                                            }}
+                                        />
+                                    );
+                                })}
+                            </ul>
+                        </SortableContext>
+                    </DndContext>
+                ) : (
+                    <p className="binder-empty">Empty</p>
+                )}
+            </div>
+
+            <div className="binder-tabbar">
+                {sections.map((section) => (
+                    <Button
+                        key={section.kind}
+                        variant="icon"
+                        className={
+                            "binder-tab" +
+                            (section.kind === activeKind ? " is-active" : "")
+                        }
+                        onClick={() => handleSelectKind(section.kind)}
+                        title={section.title}
+                    >
+                        {getIconForKind(section.kind)}
+                    </Button>
+                ))}
             </div>
         </aside>
     );

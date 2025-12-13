@@ -22,7 +22,7 @@ export class GenerateOrganizationImageController
         const [request, onProgress] = args;
         return this.generateOrganizationImage.execute(
             request,
-            onProgress || (() => {})
+            onProgress
         );
     }
 

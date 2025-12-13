@@ -55,6 +55,28 @@ export class SupabaseAuthService implements IAuthService {
         if (error) throw new Error(error.message);
     }
 
+    async updateEmail(newEmail: string): Promise<User> {
+        const client = SupabaseService.getClient();
+        const { data, error } = await client.auth.updateUser({
+            email: newEmail,
+        });
+
+        if (error) throw new Error(error.message);
+        if (!data.user)
+            throw new Error("Email update failed: No user returned.");
+
+        return this.mapSupabaseUserToDomainUser(data.user);
+    }
+
+    async updatePassword(newPassword: string): Promise<void> {
+        const client = SupabaseService.getClient();
+        const { error } = await client.auth.updateUser({
+            password: newPassword,
+        });
+
+        if (error) throw new Error(error.message);
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private mapSupabaseUserToDomainUser(supabaseUser: any): User {
         // Default preferences for a new/auth-only user instance

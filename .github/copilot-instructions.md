@@ -154,4 +154,5 @@ src/
     - Expose `api.manuscript.createScrapNote` in `preload/index.ts`.
 
 6.  **Renderer**:
-    - Call `window.api.manuscript.createScrapNote()` from a React component or Zustand action.
+    - Add wrapper function to appStore. 
+    - Call appStore wrapper function from a React component or Zustand action.

@@ -1,6 +1,6 @@
 import { create } from "zustand";
 
-import { ensureAuthEvents, ensureRendererApi } from "../utils/api";
+import type { RendererApi } from "../../@interface-adapters/controllers/contracts";
 import type {
     AppStage,
     AuthMode,
@@ -37,8 +37,24 @@ const emptyAssets: WorkspaceAssets = {
     playlists: {},
 };
 
-const rendererApi = ensureRendererApi();
-const authEvents = ensureAuthEvents();
+const getRendererApi = (): RendererApi => {
+    if (!window?.api) {
+        throw new Error("Renderer bridge is unavailable.");
+    }
+
+    return window.api;
+};
+
+const getAuthEvents = (): Window["authEvents"] => {
+    if (!window?.authEvents) {
+        throw new Error("Auth events bridge is unavailable.");
+    }
+
+    return window.authEvents;
+};
+
+const rendererApi = getRendererApi();
+const authEvents = getAuthEvents();
 let unsubscribeAuthState: (() => void) | null = null;
 
 const createErrorMessage = (error: unknown, fallback: string): string => {
@@ -219,9 +235,36 @@ type AppStore = {
     setLastSavedAt: (timestamp: number | null) => void;
     setShortcutState: (id: string, state: ShortcutStates[string]) => void;
     resetShortcutState: (id: string) => void;
-    setDraggedDocument: (doc: { id: string; kind: string; title: string } | null) => void;
+    setDraggedDocument: (
+        doc: { id: string; kind: string; title: string } | null
+    ) => void;
     toggleBinder: () => void;
     toggleChat: () => void;
+    flushActiveDocumentContent: () => Promise<void>;
+
+    // IPC wrappers: keep renderer calls centralized here.
+    exportManuscript: RendererApi["project"]["exportManuscript"];
+    analyzeText: RendererApi["analysis"]["analyzeText"];
+    generalChat: RendererApi["analysis"]["generalChat"];
+    saveChapterContent: RendererApi["logistics"]["saveChapterContent"];
+    updateScrapNoteRemote: RendererApi["manuscript"]["updateScrapNote"];
+    saveCharacterInfo: RendererApi["logistics"]["saveCharacterInfo"];
+    saveLocationInfo: RendererApi["logistics"]["saveLocationInfo"];
+    saveOrganizationInfo: RendererApi["logistics"]["saveOrganizationInfo"];
+    importAsset: RendererApi["asset"]["importAsset"];
+    generateCharacterImage: RendererApi["generation"]["generateCharacterImage"];
+    generateCharacterSong: RendererApi["generation"]["generateCharacterSong"];
+    generateCharacterPlaylist: RendererApi["generation"]["generateCharacterPlaylist"];
+    generateLocationImage: RendererApi["generation"]["generateLocationImage"];
+    generateLocationSong: RendererApi["generation"]["generateLocationSong"];
+    generateLocationPlaylist: RendererApi["generation"]["generateLocationPlaylist"];
+    generateOrganizationImage: RendererApi["generation"]["generateOrganizationImage"];
+    generateOrganizationSong: RendererApi["generation"]["generateOrganizationSong"];
+    generateOrganizationPlaylist: RendererApi["generation"]["generateOrganizationPlaylist"];
+    saveUserSettings: RendererApi["logistics"]["saveUserSettings"];
+    updateAccountEmail: RendererApi["auth"]["updateEmail"];
+    updateAccountPassword: RendererApi["auth"]["updatePassword"];
+    globalFind: RendererApi["manuscript"]["globalFind"];
 };
 
 export const useAppStore = create<AppStore>((set, get) => {
@@ -506,10 +549,56 @@ export const useAppStore = create<AppStore>((set, get) => {
         setProjectSelectionError: (message) => {
             set({ projectSelectionError: message });
         },
+        flushActiveDocumentContent: async () => {
+            const projectId = get().projectId.trim();
+            const selection = get().activeDocument;
+            if (!projectId || !selection) {
+                return;
+            }
+
+            if (selection.kind === "chapter") {
+                const chapter = get().chapters.find(
+                    (c) => c.id === selection.id
+                );
+                if (!chapter) return;
+
+                await rendererApi.logistics.saveChapterContent({
+                    chapterId: chapter.id,
+                    content: chapter.content,
+                });
+                set({ lastSavedAt: Date.now() });
+                return;
+            }
+
+            if (selection.kind === "scrapNote") {
+                const note = get().scrapNotes.find(
+                    (s) => s.id === selection.id
+                );
+                if (!note) return;
+
+                await rendererApi.manuscript.updateScrapNote({
+                    scrapNoteId: note.id,
+                    content: note.content,
+                });
+                set({ lastSavedAt: Date.now() });
+            }
+        },
         returnToProjects: async () => {
             const { user } = get();
             if (!user) {
                 return;
+            }
+
+            try {
+                await get().flushActiveDocumentContent();
+            } catch (error) {
+                set({
+                    autosaveError: createErrorMessage(
+                        error,
+                        "Failed to save before leaving the project."
+                    ),
+                });
+                throw error;
             }
 
             set({
@@ -540,26 +629,34 @@ export const useAppStore = create<AppStore>((set, get) => {
         setActiveDocument: (selection) => {
             set((state) => {
                 const exists = state.openTabs.some(
-                    (tab) => tab.kind === selection.kind && tab.id === selection.id
+                    (tab) =>
+                        tab.kind === selection.kind && tab.id === selection.id
                 );
                 return {
                     activeDocument: selection,
-                    openTabs: exists ? state.openTabs : [...state.openTabs, selection],
+                    openTabs: exists
+                        ? state.openTabs
+                        : [...state.openTabs, selection],
                 };
             });
         },
         closeTab: (selection) => {
             set((state) => {
                 const newTabs = state.openTabs.filter(
-                    (tab) => !(tab.kind === selection.kind && tab.id === selection.id)
+                    (tab) =>
+                        !(
+                            tab.kind === selection.kind &&
+                            tab.id === selection.id
+                        )
                 );
-                
+
                 let nextActive = state.activeDocument;
                 if (
                     state.activeDocument?.kind === selection.kind &&
                     state.activeDocument.id === selection.id
                 ) {
-                    nextActive = newTabs.length > 0 ? newTabs[newTabs.length - 1] : null;
+                    nextActive =
+                        newTabs.length > 0 ? newTabs[newTabs.length - 1] : null;
                 }
 
                 return {
@@ -617,7 +714,10 @@ export const useAppStore = create<AppStore>((set, get) => {
             set((state) => ({
                 chapters: [...state.chapters, response.chapter],
                 activeDocument: { kind: "chapter", id: response.chapter.id },
-                openTabs: [...state.openTabs, { kind: "chapter", id: response.chapter.id }],
+                openTabs: [
+                    ...state.openTabs,
+                    { kind: "chapter", id: response.chapter.id },
+                ],
             }));
         },
         createScrapNoteEntry: async () => {
@@ -637,7 +737,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     kind: "scrapNote",
                     id: response.scrapNote.id,
                 },
-                openTabs: [...state.openTabs, { kind: "scrapNote", id: response.scrapNote.id }],
+                openTabs: [
+                    ...state.openTabs,
+                    { kind: "scrapNote", id: response.scrapNote.id },
+                ],
             }));
         },
         createCharacterEntry: async () => {
@@ -657,7 +760,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     kind: "character",
                     id: response.character.id,
                 },
-                openTabs: [...state.openTabs, { kind: "character", id: response.character.id }],
+                openTabs: [
+                    ...state.openTabs,
+                    { kind: "character", id: response.character.id },
+                ],
             }));
         },
         createLocationEntry: async () => {
@@ -674,7 +780,10 @@ export const useAppStore = create<AppStore>((set, get) => {
             set((state) => ({
                 locations: [...state.locations, response.location],
                 activeDocument: { kind: "location", id: response.location.id },
-                openTabs: [...state.openTabs, { kind: "location", id: response.location.id }],
+                openTabs: [
+                    ...state.openTabs,
+                    { kind: "location", id: response.location.id },
+                ],
             }));
         },
         createOrganizationEntry: async () => {
@@ -696,7 +805,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     kind: "organization",
                     id: response.organization.id,
                 },
-                openTabs: [...state.openTabs, { kind: "organization", id: response.organization.id }],
+                openTabs: [
+                    ...state.openTabs,
+                    { kind: "organization", id: response.organization.id },
+                ],
             }));
         },
         deleteProject: async (projectId) => {
@@ -751,7 +863,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     state.activeDocument?.kind === "chapter" &&
                     state.activeDocument.id === chapterId
                 ) {
-                    nextActive = nextTabs.length > 0 ? nextTabs[nextTabs.length - 1] : null;
+                    nextActive =
+                        nextTabs.length > 0
+                            ? nextTabs[nextTabs.length - 1]
+                            : null;
                 }
                 return {
                     chapters: nextChapters,
@@ -783,7 +898,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     state.activeDocument?.kind === "scrapNote" &&
                     state.activeDocument.id === scrapNoteId
                 ) {
-                    nextActive = nextTabs.length > 0 ? nextTabs[nextTabs.length - 1] : null;
+                    nextActive =
+                        nextTabs.length > 0
+                            ? nextTabs[nextTabs.length - 1]
+                            : null;
                 }
                 return {
                     scrapNotes: nextNotes,
@@ -815,7 +933,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     state.activeDocument?.kind === "character" &&
                     state.activeDocument.id === characterId
                 ) {
-                    nextActive = nextTabs.length > 0 ? nextTabs[nextTabs.length - 1] : null;
+                    nextActive =
+                        nextTabs.length > 0
+                            ? nextTabs[nextTabs.length - 1]
+                            : null;
                 }
                 return {
                     characters: nextCharacters,
@@ -847,7 +968,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     state.activeDocument?.kind === "location" &&
                     state.activeDocument.id === locationId
                 ) {
-                    nextActive = nextTabs.length > 0 ? nextTabs[nextTabs.length - 1] : null;
+                    nextActive =
+                        nextTabs.length > 0
+                            ? nextTabs[nextTabs.length - 1]
+                            : null;
                 }
                 return {
                     locations: nextLocations,
@@ -874,14 +998,18 @@ export const useAppStore = create<AppStore>((set, get) => {
                     (o) => o.id !== organizationId
                 );
                 const nextTabs = state.openTabs.filter(
-                    (t) => !(t.kind === "organization" && t.id === organizationId)
+                    (t) =>
+                        !(t.kind === "organization" && t.id === organizationId)
                 );
                 let nextActive = state.activeDocument;
                 if (
                     state.activeDocument?.kind === "organization" &&
                     state.activeDocument.id === organizationId
                 ) {
-                    nextActive = nextTabs.length > 0 ? nextTabs[nextTabs.length - 1] : null;
+                    nextActive =
+                        nextTabs.length > 0
+                            ? nextTabs[nextTabs.length - 1]
+                            : null;
                 }
                 return {
                     organizations: nextOrgs,
@@ -1040,31 +1168,31 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             // Optimistic update
             set((state) => {
-                if (kind === 'chapter') {
+                if (kind === "chapter") {
                     return {
                         chapters: state.chapters.map((c) =>
                             c.id === id ? { ...c, title: newTitle } : c
                         ),
                     };
-                } else if (kind === 'character') {
+                } else if (kind === "character") {
                     return {
                         characters: state.characters.map((c) =>
                             c.id === id ? { ...c, name: newTitle } : c
                         ),
                     };
-                } else if (kind === 'location') {
+                } else if (kind === "location") {
                     return {
                         locations: state.locations.map((l) =>
                             l.id === id ? { ...l, name: newTitle } : l
                         ),
                     };
-                } else if (kind === 'organization') {
+                } else if (kind === "organization") {
                     return {
                         organizations: state.organizations.map((o) =>
                             o.id === id ? { ...o, name: newTitle } : o
                         ),
                     };
-                } else if (kind === 'scrapNote') {
+                } else if (kind === "scrapNote") {
                     return {
                         scrapNotes: state.scrapNotes.map((s) =>
                             s.id === id ? { ...s, title: newTitle } : s
@@ -1076,34 +1204,34 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             // API Call
             try {
-                if (kind === 'chapter') {
+                if (kind === "chapter") {
                     await rendererApi.manuscript.renameChapter({
                         chapterId: id,
                         title: newTitle,
                     });
-                } else if (kind === 'character') {
+                } else if (kind === "character") {
                     await rendererApi.logistics.saveCharacterInfo({
                         characterId: id,
                         payload: { name: newTitle },
                     });
-                } else if (kind === 'location') {
+                } else if (kind === "location") {
                     await rendererApi.logistics.saveLocationInfo({
                         locationId: id,
                         payload: { name: newTitle },
                     });
-                } else if (kind === 'organization') {
+                } else if (kind === "organization") {
                     await rendererApi.logistics.saveOrganizationInfo({
                         organizationId: id,
                         payload: { name: newTitle },
                     });
-                } else if (kind === 'scrapNote') {
+                } else if (kind === "scrapNote") {
                     await rendererApi.manuscript.updateScrapNote({
                         scrapNoteId: id,
                         title: newTitle,
                     });
                 }
             } catch (error) {
-                console.error('Failed to rename document:', error);
+                console.error("Failed to rename document:", error);
                 // Revert optimistic update if needed (omitted for brevity)
             }
         },
@@ -1142,6 +1270,73 @@ export const useAppStore = create<AppStore>((set, get) => {
         isChatOpen: false,
         toggleChat: () => {
             set((state) => ({ isChatOpen: !state.isChatOpen }));
+        },
+
+        exportManuscript: async (request) => {
+            return rendererApi.project.exportManuscript(request);
+        },
+        analyzeText: async (request) => {
+            return rendererApi.analysis.analyzeText(request);
+        },
+        generalChat: async (request) => {
+            return rendererApi.analysis.generalChat(request);
+        },
+        saveChapterContent: async (request) => {
+            return rendererApi.logistics.saveChapterContent(request);
+        },
+        updateScrapNoteRemote: async (request) => {
+            return rendererApi.manuscript.updateScrapNote(request);
+        },
+        saveCharacterInfo: async (request) => {
+            return rendererApi.logistics.saveCharacterInfo(request);
+        },
+        saveLocationInfo: async (request) => {
+            return rendererApi.logistics.saveLocationInfo(request);
+        },
+        saveOrganizationInfo: async (request) => {
+            return rendererApi.logistics.saveOrganizationInfo(request);
+        },
+        importAsset: async (request) => {
+            return rendererApi.asset.importAsset(request);
+        },
+        generateCharacterImage: async (request) => {
+            return rendererApi.generation.generateCharacterImage(request);
+        },
+        generateCharacterSong: async (request) => {
+            return rendererApi.generation.generateCharacterSong(request);
+        },
+        generateCharacterPlaylist: async (request) => {
+            return rendererApi.generation.generateCharacterPlaylist(request);
+        },
+        generateLocationImage: async (request) => {
+            return rendererApi.generation.generateLocationImage(request);
+        },
+        generateLocationSong: async (request) => {
+            return rendererApi.generation.generateLocationSong(request);
+        },
+        generateLocationPlaylist: async (request) => {
+            return rendererApi.generation.generateLocationPlaylist(request);
+        },
+        generateOrganizationImage: async (request) => {
+            return rendererApi.generation.generateOrganizationImage(request);
+        },
+        generateOrganizationSong: async (request) => {
+            return rendererApi.generation.generateOrganizationSong(request);
+        },
+        generateOrganizationPlaylist: async (request) => {
+            return rendererApi.generation.generateOrganizationPlaylist(request);
+        },
+        saveUserSettings: async (request) => {
+            return rendererApi.logistics.saveUserSettings(request);
+        },
+        updateAccountEmail: async (request) => {
+            return rendererApi.auth.updateEmail(request);
+        },
+        updateAccountPassword: async (request) => {
+            return rendererApi.auth.updatePassword(request);
+        },
+        globalFind: async (request) => {
+            return rendererApi.manuscript.globalFind(request);
         },
         openSettings: () => {
             set({ stage: "settings" });

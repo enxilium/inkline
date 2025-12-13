@@ -20,7 +20,7 @@ export class GenerateLocationSongController
         const [request, onProgress] = args;
         return this.generateLocationSong.execute(
             request,
-            onProgress || (() => {})
+            onProgress
         );
     }
 

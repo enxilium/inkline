@@ -16,6 +16,8 @@ import { LoginUser } from "../@core/application/use-cases/auth/LoginUser";
 import { LogoutUser } from "../@core/application/use-cases/auth/LogoutUser";
 import { RegisterUser } from "../@core/application/use-cases/auth/RegisterUser";
 import { LoadStoredSession } from "../@core/application/use-cases/auth/LoadStoredSession";
+import { UpdateUserEmail } from "../@core/application/use-cases/auth/UpdateUserEmail";
+import { UpdateUserPassword } from "../@core/application/use-cases/auth/UpdateUserPassword";
 import { GenerateCharacterImage } from "../@core/application/use-cases/generation/GenerateCharacterImage";
 import { GenerateCharacterPlaylist } from "../@core/application/use-cases/generation/GenerateCharacterPlaylist";
 import { GenerateCharacterSong } from "../@core/application/use-cases/generation/GenerateCharacterSong";
@@ -62,6 +64,8 @@ import { LoginUserController } from "../@interface-adapters/controllers/auth/Log
 import { LogoutUserController } from "../@interface-adapters/controllers/auth/LogoutUserController";
 import { RegisterUserController } from "../@interface-adapters/controllers/auth/RegisterUserController";
 import { GetAuthStateController } from "../@interface-adapters/controllers/auth/GetAuthStateController";
+import { UpdateUserEmailController } from "../@interface-adapters/controllers/auth/UpdateUserEmailController";
+import { UpdateUserPasswordController } from "../@interface-adapters/controllers/auth/UpdateUserPasswordController";
 import { GenerateCharacterImageController } from "../@interface-adapters/controllers/generation/GenerateCharacterImageController";
 import { GenerateCharacterPlaylistController } from "../@interface-adapters/controllers/generation/GenerateCharacterPlaylistController";
 import { GenerateCharacterSongController } from "../@interface-adapters/controllers/generation/GenerateCharacterSongController";
@@ -161,6 +165,8 @@ type UseCaseMap = {
         logoutUser: LogoutUser;
         registerUser: RegisterUser;
         loadStoredSession: LoadStoredSession;
+        updateEmail: UpdateUserEmail;
+        updatePassword: UpdateUserPassword;
     };
     generation: {
         generateCharacterImage: GenerateCharacterImage;
@@ -303,6 +309,16 @@ export class AppBuilder {
                     svc.sessionStore,
                     svc.auth
                 ),
+                updateEmail: new UpdateUserEmail(
+                    svc.auth,
+                    repo.user,
+                    svc.sessionStore
+                ),
+                updatePassword: new UpdateUserPassword(
+                    svc.auth,
+                    repo.user,
+                    svc.sessionStore
+                ),
             },
             generation: {
                 generateCharacterImage: new GenerateCharacterImage(
@@ -377,7 +393,10 @@ export class AppBuilder {
                     repo.location
                 ),
                 saveProjectSettings: new SaveProjectSettings(repo.project),
-                saveUserSettings: new SaveUserSettings(repo.user),
+                saveUserSettings: new SaveUserSettings(
+                    repo.user,
+                    svc.sessionStore
+                ),
             },
             manuscript: {
                 createChapter: new CreateChapter(repo.chapter, repo.project),
@@ -495,6 +514,14 @@ export class AppBuilder {
                     this.authStateGateway
                 ),
                 getState: new GetAuthStateController(this.authStateGateway),
+                updateEmail: new UpdateUserEmailController(
+                    useCases.auth.updateEmail,
+                    this.authStateGateway
+                ),
+                updatePassword: new UpdateUserPasswordController(
+                    useCases.auth.updatePassword,
+                    this.authStateGateway
+                ),
             },
             generation: {
                 generateCharacterImage: new GenerateCharacterImageController(

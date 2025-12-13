@@ -7,12 +7,14 @@ import { FontFamily } from "@tiptap/extension-font-family";
 import { TextAlign } from "@tiptap/extension-text-align";
 
 import { useAppStore } from "../../state/appStore";
-import { ensureRendererApi } from "../../utils/api";
 import { TextEditor } from "../workspace/TextEditor";
-import type { AutosaveStatus, WorkspaceChapter, WorkspaceScrapNote } from "../../types";
+import type {
+    AutosaveStatus,
+    WorkspaceChapter,
+    WorkspaceScrapNote,
+} from "../../types";
 
 const AUTOSAVE_DELAY_MS = 1200;
-const rendererApi = ensureRendererApi();
 
 interface ConnectedTextEditorProps {
     documentId: string;
@@ -30,6 +32,8 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         updateChapterLocally,
         updateScrapNoteLocally,
         setLastSavedAt,
+        saveChapterContent,
+        updateScrapNoteRemote,
     } = useAppStore();
 
     // 1. Resolve Data
@@ -41,9 +45,12 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     }, [chapters, scrapNotes, documentId, kind]);
 
     // 2. Local State
-    const [autosaveStatus, setAutosaveStatus] = React.useState<AutosaveStatus>("idle");
-    const [autosaveError, setAutosaveError] = React.useState<string | null>(null);
-    
+    const [autosaveStatus, setAutosaveStatus] =
+        React.useState<AutosaveStatus>("idle");
+    const [autosaveError, setAutosaveError] = React.useState<string | null>(
+        null
+    );
+
     const autosaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
     // 3. Initialize Editor
@@ -76,7 +83,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
     // 4. Sync Content (One-way: Store -> Editor)
     // We only sync if the editor is empty or if we just mounted.
-    // We DO NOT sync on every store update to avoid cursor jumping, 
+    // We DO NOT sync on every store update to avoid cursor jumping,
     // unless we implement a complex diffing mechanism.
     // For now, we assume this component mounts when the tab opens.
     React.useEffect(() => {
@@ -84,7 +91,8 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
         const contentStr = documentData.content;
         const currentJSON = JSON.stringify(editor.getJSON());
-        const targetContent = contentStr || JSON.stringify({ type: "doc", content: [] });
+        const targetContent =
+            contentStr || JSON.stringify({ type: "doc", content: [] });
 
         try {
             const json = JSON.parse(targetContent);
@@ -93,8 +101,12 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 // Check if editor is empty to avoid overwriting user work if store updates from elsewhere
                 // For a robust system, we might need a "version" field.
                 // For now, we trust the mount.
-                if (editor.isEmpty || currentJSON === '{"type":"doc","content":[{"type":"paragraph"}]}') {
-                     editor.commands.setContent(json, { emitUpdate: false });
+                if (
+                    editor.isEmpty ||
+                    currentJSON ===
+                        '{"type":"doc","content":[{"type":"paragraph"}]}'
+                ) {
+                    editor.commands.setContent(json, { emitUpdate: false });
                 }
             }
         } catch (e) {
@@ -103,7 +115,6 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 editor.commands.setContent(html, { emitUpdate: false });
             }
         }
-        
     }, [editor, documentId]); // Only run on mount/id change, not on data change to avoid loops
 
     // 5. Autosave Logic
@@ -119,7 +130,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             const content = JSON.stringify(editor.getJSON());
 
             if (kind === "chapter") {
-                await rendererApi.logistics.saveChapterContent({
+                await saveChapterContent({
                     chapterId: documentId,
                     content,
                 });
@@ -128,7 +139,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                     updatedAt: new Date(),
                 });
             } else {
-                await rendererApi.manuscript.updateScrapNote({
+                await updateScrapNoteRemote({
                     scrapNoteId: documentId,
                     content,
                 });
@@ -144,7 +155,18 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             setAutosaveStatus("error");
             setAutosaveError((error as Error)?.message ?? "Autosave failed.");
         }
-    }, [projectId, editor, documentData, kind, documentId, updateChapterLocally, updateScrapNoteLocally, setLastSavedAt]);
+    }, [
+        projectId,
+        editor,
+        documentData,
+        kind,
+        documentId,
+        updateChapterLocally,
+        updateScrapNoteLocally,
+        setLastSavedAt,
+        saveChapterContent,
+        updateScrapNoteRemote,
+    ]);
 
     const scheduleAutosave = React.useCallback(() => {
         setAutosaveStatus("pending");
@@ -158,12 +180,35 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
     React.useEffect(() => {
         if (!editor) return;
-        const autosaveListener = () => scheduleAutosave();
+        const autosaveListener = () => {
+            scheduleAutosave();
+
+            // Keep store state hot so we can flush saves on navigation.
+            const content = JSON.stringify(editor.getJSON());
+            if (kind === "chapter") {
+                updateChapterLocally(documentId, {
+                    content,
+                    updatedAt: new Date(),
+                });
+            } else {
+                updateScrapNoteLocally(documentId, {
+                    content,
+                    updatedAt: new Date(),
+                });
+            }
+        };
         editor.on("update", autosaveListener);
         return () => {
             editor.off("update", autosaveListener);
         };
-    }, [editor, scheduleAutosave]);
+    }, [
+        editor,
+        scheduleAutosave,
+        kind,
+        documentId,
+        updateChapterLocally,
+        updateScrapNoteLocally,
+    ]);
 
     // Cleanup timer
     React.useEffect(() => {
@@ -181,21 +226,30 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
     const autosaveLabel = React.useMemo(() => {
         switch (autosaveStatus) {
-            case "saving": return "Autosaving…";
-            case "pending": return "Queued";
-            case "saved": return "Saved";
-            case "error": return "Autosave failed";
-            default: return "";
+            case "saving":
+                return "Autosaving…";
+            case "pending":
+                return "Queued";
+            case "saved":
+                return "Saved";
+            case "error":
+                return "Autosave failed";
+            default:
+                return "";
         }
     }, [autosaveStatus]);
 
     const autosaveClass = React.useMemo(() => {
         switch (autosaveStatus) {
             case "saving":
-            case "pending": return "is-warning";
-            case "saved": return "is-success";
-            case "error": return "is-error";
-            default: return "";
+            case "pending":
+                return "is-warning";
+            case "saved":
+                return "is-success";
+            case "error":
+                return "is-error";
+            default:
+                return "";
         }
     }, [autosaveStatus]);
 

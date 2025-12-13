@@ -1,5 +1,5 @@
 import "dotenv/config";
-import { app, BrowserWindow } from "electron";
+import { app, BrowserWindow, ipcMain } from "electron";
 import { AppBuilder } from "./AppBuilder";
 import { resolveDependencies } from "./dependencies";
 import { ComfyAssetGenerationService } from "../@infrastructure/ai/ComfyAssetGenerationService";
@@ -42,24 +42,37 @@ const createLoadingWindow = (): void => {
 };
 
 const createWindow = (): void => {
-    // Create the browser window.
     const mainWindow = new BrowserWindow({
         height: 600,
         width: 800,
         show: false,
-        transparent: true,
+        transparent: false,
         vibrancy: "under-window",
         visualEffectState: "active",
-        titleBarStyle: "hidden",
-        ...(process.platform !== "darwin" ? { titleBarOverlay: true } : {}),
+        titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "hidden",
+        ...(process.platform !== "darwin"
+            ? {
+                  titleBarOverlay: {
+                      // Keep this aligned with renderer CSS variables defaults.
+                      // Renderer reserves 1px for the divider to show under native window controls.
+                      height: 35,
+                      // Keep this aligned with renderer CSS variables defaults.
+                      // Renderer will override dynamically via IPC when the user changes theme.
+                      color: "#222324",
+                      symbolColor: "#f6f7fb",
+                  },
+              }
+            : {}),
         webPreferences: {
             preload: MAIN_WINDOW_PRELOAD_WEBPACK_ENTRY,
         },
     });
 
-    // and load the index.html of the app.
-    mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+    if (!app.isPackaged) {
+        mainWindow.webContents.openDevTools({ mode: "detach" });
+    }
 
+    mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
     mainWindow.maximize();
     mainWindow.show();
 };
@@ -79,8 +92,6 @@ const bootstrap = async (): Promise<void> => {
         }
     }
 
-    // Temporary delay to visualize loading screen
-
     if (loadingWindow) {
         loadingWindow.close();
         loadingWindow = null;
@@ -95,6 +106,36 @@ app.whenReady()
         console.error("Failed to bootstrap application", error);
         app.quit();
     });
+
+ipcMain.handle(
+    "window:setTitleBarOverlay",
+    (
+        event,
+        overlay: {
+            color: string;
+            symbolColor?: string;
+            height?: number;
+        }
+    ) => {
+        if (process.platform === "darwin") {
+            return;
+        }
+
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (!win) {
+            return;
+        }
+
+        const setOverlay = (
+            win as unknown as { setTitleBarOverlay?: (o: unknown) => void }
+        ).setTitleBarOverlay;
+        if (typeof setOverlay !== "function") {
+            return;
+        }
+
+        setOverlay(overlay);
+    }
+);
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits

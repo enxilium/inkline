@@ -22,7 +22,7 @@ export class GenerateLocationImageController
         const [request, onProgress] = args;
         return this.generateLocationImage.execute(
             request,
-            onProgress || (() => {})
+            onProgress
         );
     }
 

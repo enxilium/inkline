@@ -22,7 +22,7 @@ export class GenerateCharacterSongController
         const [request, onProgress] = args;
         return this.generateCharacterSong.execute(
             request,
-            onProgress || (() => {})
+            onProgress
         );
     }
 

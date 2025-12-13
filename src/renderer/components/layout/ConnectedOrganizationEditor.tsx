@@ -1,23 +1,17 @@
 import React from "react";
 import { useAppStore } from "../../state/appStore";
-import { ensureRendererApi } from "../../utils/api";
-import { OrganizationEditor, type OrganizationEditorValues } from "../workspace/OrganizationEditor";
-
-const rendererApi = ensureRendererApi();
+import {
+    OrganizationEditor,
+    type OrganizationEditorValues,
+} from "../workspace/OrganizationEditor";
 
 interface ConnectedOrganizationEditorProps {
     organizationId: string;
 }
 
-const listFromMultiline = (value: string): string[] =>
-    value
-        .split(/\r?\n/)
-        .map((entry) => entry.trim())
-        .filter(Boolean);
-
-export const ConnectedOrganizationEditor: React.FC<ConnectedOrganizationEditorProps> = ({
-    organizationId,
-}) => {
+export const ConnectedOrganizationEditor: React.FC<
+    ConnectedOrganizationEditorProps
+> = ({ organizationId }) => {
     const {
         projectId,
         organizations,
@@ -25,6 +19,11 @@ export const ConnectedOrganizationEditor: React.FC<ConnectedOrganizationEditorPr
         assets,
         updateOrganizationLocally,
         reloadActiveProject,
+        saveOrganizationInfo,
+        generateOrganizationImage,
+        generateOrganizationSong,
+        generateOrganizationPlaylist,
+        importAsset,
     } = useAppStore();
 
     const organization = React.useMemo(
@@ -75,22 +74,31 @@ export const ConnectedOrganizationEditor: React.FC<ConnectedOrganizationEditorPr
             });
 
             try {
-                await rendererApi.logistics.saveOrganizationInfo({
+                await saveOrganizationInfo({
                     organizationId: organization.id,
                     payload,
                 });
             } catch (error) {
-                updateOrganizationLocally(organization.id, originalOrganization);
+                updateOrganizationLocally(
+                    organization.id,
+                    originalOrganization
+                );
                 await reloadActiveProject();
                 throw error;
             }
         },
-        [organization, projectId, updateOrganizationLocally, reloadActiveProject]
+        [
+            organization,
+            projectId,
+            updateOrganizationLocally,
+            reloadActiveProject,
+            saveOrganizationInfo,
+        ]
     );
 
     const handleGeneratePortrait = async () => {
         if (!projectId || !organization) return;
-        await rendererApi.generation.generateOrganizationImage({
+        await generateOrganizationImage({
             projectId,
             organizationId: organization.id,
         });
@@ -101,7 +109,7 @@ export const ConnectedOrganizationEditor: React.FC<ConnectedOrganizationEditorPr
         if (!projectId || !organization) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await rendererApi.asset.importAsset({
+        await importAsset({
             projectId,
             payload: {
                 kind: "image",
@@ -116,7 +124,7 @@ export const ConnectedOrganizationEditor: React.FC<ConnectedOrganizationEditorPr
 
     const handleGenerateSong = async () => {
         if (!projectId || !organization) return;
-        await rendererApi.generation.generateOrganizationSong({
+        await generateOrganizationSong({
             projectId,
             organizationId: organization.id,
         });
@@ -127,7 +135,7 @@ export const ConnectedOrganizationEditor: React.FC<ConnectedOrganizationEditorPr
         if (!projectId || !organization) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await rendererApi.asset.importAsset({
+        await importAsset({
             projectId,
             payload: {
                 kind: "bgm",
@@ -144,7 +152,7 @@ export const ConnectedOrganizationEditor: React.FC<ConnectedOrganizationEditorPr
 
     const handleGeneratePlaylist = async () => {
         if (!projectId || !organization) return;
-        await rendererApi.generation.generateOrganizationPlaylist({
+        await generateOrganizationPlaylist({
             projectId,
             organizationId: organization.id,
         });
@@ -161,7 +169,7 @@ export const ConnectedOrganizationEditor: React.FC<ConnectedOrganizationEditorPr
             throw new Error("Invalid playlist JSON.");
         }
 
-        await rendererApi.asset.importAsset({
+        await importAsset({
             projectId,
             payload: {
                 kind: "playlist",

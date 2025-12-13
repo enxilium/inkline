@@ -22,7 +22,7 @@ export class GenerateOrganizationSongController
         const [request, onProgress] = args;
         return this.generateOrganizationSong.execute(
             request,
-            onProgress || (() => {})
+            onProgress
         );
     }
 

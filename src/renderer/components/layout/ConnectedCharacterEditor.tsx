@@ -1,9 +1,9 @@
 import React from "react";
 import { useAppStore } from "../../state/appStore";
-import { ensureRendererApi } from "../../utils/api";
-import { CharacterEditor, type CharacterEditorValues } from "../workspace/CharacterEditor";
-
-const rendererApi = ensureRendererApi();
+import {
+    CharacterEditor,
+    type CharacterEditorValues,
+} from "../workspace/CharacterEditor";
 
 interface ConnectedCharacterEditorProps {
     characterId: string;
@@ -15,9 +15,9 @@ const listFromMultiline = (value: string): string[] =>
         .map((entry) => entry.trim())
         .filter(Boolean);
 
-export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> = ({
-    characterId,
-}) => {
+export const ConnectedCharacterEditor: React.FC<
+    ConnectedCharacterEditorProps
+> = ({ characterId }) => {
     const {
         projectId,
         characters,
@@ -26,6 +26,11 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
         assets,
         updateCharacterLocally,
         reloadActiveProject,
+        saveCharacterInfo,
+        generateCharacterImage,
+        generateCharacterSong,
+        generateCharacterPlaylist,
+        importAsset,
     } = useAppStore();
 
     const character = React.useMemo(
@@ -51,9 +56,7 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
 
     const songUrl = React.useMemo(
         () =>
-            character?.bgmId
-                ? assets.bgms[character.bgmId]?.url
-                : undefined,
+            character?.bgmId ? assets.bgms[character.bgmId]?.url : undefined,
         [character, assets.bgms]
     );
 
@@ -83,7 +86,7 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
             });
 
             try {
-                await rendererApi.logistics.saveCharacterInfo({
+                await saveCharacterInfo({
                     characterId: character.id,
                     payload,
                 });
@@ -93,13 +96,19 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
                 throw error;
             }
         },
-        [character, projectId, updateCharacterLocally, reloadActiveProject]
+        [
+            character,
+            projectId,
+            updateCharacterLocally,
+            reloadActiveProject,
+            saveCharacterInfo,
+        ]
     );
 
     // Handlers
     const handleGeneratePortrait = async () => {
         if (!projectId || !character) return;
-        await rendererApi.generation.generateCharacterImage({
+        await generateCharacterImage({
             projectId,
             characterId: character.id,
         });
@@ -110,7 +119,7 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
         if (!projectId || !character) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await rendererApi.asset.importAsset({
+        await importAsset({
             projectId,
             payload: {
                 kind: "image",
@@ -125,7 +134,7 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
 
     const handleGenerateSong = async () => {
         if (!projectId || !character) return;
-        await rendererApi.generation.generateCharacterSong({
+        await generateCharacterSong({
             projectId,
             characterId: character.id,
         });
@@ -136,7 +145,7 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
         if (!projectId || !character) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await rendererApi.asset.importAsset({
+        await importAsset({
             projectId,
             payload: {
                 kind: "bgm",
@@ -153,7 +162,7 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
 
     const handleGeneratePlaylist = async () => {
         if (!projectId || !character) return;
-        await rendererApi.generation.generateCharacterPlaylist({
+        await generateCharacterPlaylist({
             projectId,
             characterId: character.id,
         });
@@ -170,7 +179,7 @@ export const ConnectedCharacterEditor: React.FC<ConnectedCharacterEditorProps> =
             throw new Error("Invalid playlist JSON.");
         }
 
-        await rendererApi.asset.importAsset({
+        await importAsset({
             projectId,
             payload: {
                 kind: "playlist",

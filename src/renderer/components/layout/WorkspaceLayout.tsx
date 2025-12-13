@@ -1,12 +1,11 @@
 import React from "react";
-import { Layout, Model, TabNode, IJsonModel, Actions, DockLocation, TabSetNode } from "flexlayout-react";
+import { Layout, Model, TabNode, IJsonModel, Actions, DockLocation } from "flexlayout-react";
 
 import { useAppStore } from "../../state/appStore";
 import { ConnectedTextEditor } from "./ConnectedTextEditor";
 import { ConnectedCharacterEditor } from "./ConnectedCharacterEditor";
 import { ConnectedLocationEditor } from "./ConnectedLocationEditor";
 import { ConnectedOrganizationEditor } from "./ConnectedOrganizationEditor";
-import type { WorkspaceDocumentRef } from "../../types";
 
 const defaultLayout: IJsonModel = {
     global: {
@@ -115,7 +114,7 @@ export const WorkspaceLayout: React.FC = () => {
             }
 
             let targetNodeId = "main-tabset";
-            let location = DockLocation.CENTER;
+            const location = DockLocation.CENTER;
             let bestTargetFound = false;
 
             const activeTabset = model.getActiveTabset();

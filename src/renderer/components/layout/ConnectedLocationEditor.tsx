@@ -1,9 +1,9 @@
 import React from "react";
 import { useAppStore } from "../../state/appStore";
-import { ensureRendererApi } from "../../utils/api";
-import { LocationEditor, type LocationEditorValues } from "../workspace/LocationEditor";
-
-const rendererApi = ensureRendererApi();
+import {
+    LocationEditor,
+    type LocationEditorValues,
+} from "../workspace/LocationEditor";
 
 interface ConnectedLocationEditorProps {
     locationId: string;
@@ -15,15 +15,20 @@ const listFromMultiline = (value: string): string[] =>
         .map((entry) => entry.trim())
         .filter(Boolean);
 
-export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = ({
-    locationId,
-}) => {
+export const ConnectedLocationEditor: React.FC<
+    ConnectedLocationEditorProps
+> = ({ locationId }) => {
     const {
         projectId,
         locations,
         assets,
         updateLocationLocally,
         reloadActiveProject,
+        saveLocationInfo,
+        generateLocationImage,
+        generateLocationSong,
+        generateLocationPlaylist,
+        importAsset,
     } = useAppStore();
 
     const location = React.useMemo(
@@ -48,10 +53,7 @@ export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = (
     );
 
     const songUrl = React.useMemo(
-        () =>
-            location?.bgmId
-                ? assets.bgms[location.bgmId]?.url
-                : undefined,
+        () => (location?.bgmId ? assets.bgms[location.bgmId]?.url : undefined),
         [location, assets.bgms]
     );
 
@@ -75,7 +77,7 @@ export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = (
             });
 
             try {
-                await rendererApi.logistics.saveLocationInfo({
+                await saveLocationInfo({
                     locationId: location.id,
                     payload,
                 });
@@ -85,12 +87,18 @@ export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = (
                 throw error;
             }
         },
-        [location, projectId, updateLocationLocally, reloadActiveProject]
+        [
+            location,
+            projectId,
+            updateLocationLocally,
+            reloadActiveProject,
+            saveLocationInfo,
+        ]
     );
 
     const handleGeneratePortrait = async () => {
         if (!projectId || !location) return;
-        await rendererApi.generation.generateLocationImage({
+        await generateLocationImage({
             projectId,
             locationId: location.id,
         });
@@ -101,7 +109,7 @@ export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = (
         if (!projectId || !location) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await rendererApi.asset.importAsset({
+        await importAsset({
             projectId,
             payload: {
                 kind: "image",
@@ -116,7 +124,7 @@ export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = (
 
     const handleGenerateSong = async () => {
         if (!projectId || !location) return;
-        await rendererApi.generation.generateLocationSong({
+        await generateLocationSong({
             projectId,
             locationId: location.id,
         });
@@ -127,7 +135,7 @@ export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = (
         if (!projectId || !location) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await rendererApi.asset.importAsset({
+        await importAsset({
             projectId,
             payload: {
                 kind: "bgm",
@@ -144,7 +152,7 @@ export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = (
 
     const handleGeneratePlaylist = async () => {
         if (!projectId || !location) return;
-        await rendererApi.generation.generateLocationPlaylist({
+        await generateLocationPlaylist({
             projectId,
             locationId: location.id,
         });
@@ -161,7 +169,7 @@ export const ConnectedLocationEditor: React.FC<ConnectedLocationEditorProps> = (
             throw new Error("Invalid playlist JSON.");
         }
 
-        await rendererApi.asset.importAsset({
+        await importAsset({
             projectId,
             payload: {
                 kind: "playlist",

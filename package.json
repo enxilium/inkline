@@ -87,12 +87,13 @@
     "dotenv": "^17.2.3",
     "electron-squirrel-startup": "^1.0.1",
     "epub-gen": "^0.1.0",
+    "flexlayout-react": "^0.8.17",
     "pdfkit": "^0.17.2",
     "portfinder": "^1.0.38",
-    "flexlayout-react": "^0.8.17",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-tabs": "^6.1.0",
+    "typed.js": "^2.1.0",
     "typescript": "^5.9.3",
     "zustand": "^5.0.8"
   }

@@ -22,7 +22,7 @@ export class GenerateCharacterImageController
         const [request, onProgress] = args;
         return this.generateCharacterImage.execute(
             request,
-            onProgress || (() => {})
+            onProgress
         );
     }
 

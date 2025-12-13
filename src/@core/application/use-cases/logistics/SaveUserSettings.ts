@@ -1,5 +1,6 @@
 import { UserPreferences } from "../../../domain/entities/user/UserPreferences";
 import { IUserRepository } from "../../../domain/repositories/IUserRepository";
+import { IUserSessionStore } from "../../../domain/services/IUserSessionStore";
 
 export interface SaveUserSettingsRequest {
     userId: string;
@@ -7,7 +8,10 @@ export interface SaveUserSettingsRequest {
 }
 
 export class SaveUserSettings {
-    constructor(private readonly userRepository: IUserRepository) {}
+    constructor(
+        private readonly userRepository: IUserRepository,
+        private readonly sessionStore: IUserSessionStore
+    ) {}
 
     async execute(request: SaveUserSettingsRequest): Promise<void> {
         const { userId, preferences } = request;
@@ -26,7 +30,8 @@ export class SaveUserSettings {
             preferences.editorFontSize ?? user.preferences.editorFontSize,
             preferences.editorFontFamily ?? user.preferences.editorFontFamily,
             preferences.defaultImageAiModel ??
-                user.preferences.defaultImageAiModel
+                user.preferences.defaultImageAiModel,
+            preferences.geminiApiKey ?? user.preferences.geminiApiKey
         );
 
         if (
@@ -39,5 +44,10 @@ export class SaveUserSettings {
         user.preferences = updatedPreferences;
         user.updatedAt = new Date();
         await this.userRepository.update(user);
+
+        const storedUser = await this.sessionStore.load();
+        if (storedUser?.id === user.id) {
+            await this.sessionStore.save(user);
+        }
     }
 }

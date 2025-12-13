@@ -1,7 +1,7 @@
 import React from "react";
+import { createPortal } from "react-dom";
 
-import { Button } from "./components/ui/Button";
-import { UserDropdown } from "./components/ui/UserDropdown";
+import { Titlebar } from "./components/layout/Titlebar";
 import { useAppStore } from "./state/appStore";
 import type { ProjectSummary } from "./types";
 import { AuthView } from "./views/AuthView";
@@ -44,7 +44,6 @@ export const App: React.FC = () => {
         projectsError,
         projectSelectionError,
         openingProjectId,
-        activeProjectName,
         bootstrapSession,
         setAuthField,
         toggleAuthMode,
@@ -54,14 +53,120 @@ export const App: React.FC = () => {
         createProject,
         deleteProject,
         openProject,
-        logout,
         returnToProjects,
-        openSettings,
+        importAsset,
     } = useAppStore();
 
     React.useEffect(() => {
         bootstrapSession();
     }, [bootstrapSession]);
+
+    React.useEffect(() => {
+        const isMac =
+            typeof navigator !== "undefined" &&
+            /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
+
+        if (isMac) {
+            document.documentElement.dataset.platform = "mac";
+        } else {
+            delete document.documentElement.dataset.platform;
+        }
+    }, []);
+
+    React.useEffect(() => {
+        const syncTitleBarOverlay = () => {
+            if (!window.windowControls?.setTitleBarOverlay) {
+                return;
+            }
+
+            const styles = getComputedStyle(document.documentElement);
+            const surface =
+                styles.getPropertyValue("--surface").trim() || "#222324";
+            const text = styles.getPropertyValue("--text").trim() || "#f6f7fb";
+            const titlebarHeightRaw = styles
+                .getPropertyValue("--titlebar-height")
+                .trim();
+            const titlebarHeight = Number.parseInt(titlebarHeightRaw, 10) || 36;
+
+            // Keep a 1px strip for the renderer to draw the divider under native window controls.
+            const overlayHeight = Math.max(0, titlebarHeight - 1);
+
+            window.windowControls
+                .setTitleBarOverlay({
+                    color: surface,
+                    symbolColor: text,
+                    height: overlayHeight,
+                })
+                .catch(() => {
+                    /* noop */
+                });
+        };
+
+        // Initial sync after CSS/fonts load.
+        syncTitleBarOverlay();
+    }, []);
+
+    React.useEffect(() => {
+        const overlay =
+            typeof navigator !== "undefined"
+                ? (
+                      navigator as unknown as {
+                          windowControlsOverlay?: {
+                              getTitlebarAreaRect?: () => {
+                                  x: number;
+                                  width: number;
+                              };
+                              addEventListener?: (
+                                  type: string,
+                                  listener: () => void
+                              ) => void;
+                              removeEventListener?: (
+                                  type: string,
+                                  listener: () => void
+                              ) => void;
+                          };
+                      }
+                  ).windowControlsOverlay
+                : undefined;
+
+        if (!overlay?.getTitlebarAreaRect) {
+            return;
+        }
+
+        const root = document.documentElement;
+
+        if (root.dataset.platform === "mac") {
+            return;
+        }
+
+        const syncInsets = () => {
+            const rect = overlay.getTitlebarAreaRect();
+            const leftInset = Math.max(0, Math.round(rect.x));
+            const rightInset = Math.max(
+                0,
+                Math.round(window.innerWidth - (rect.x + rect.width))
+            );
+
+            const gutter = 10;
+
+            root.style.setProperty(
+                "--titlebar-content-padding-left",
+                `${leftInset + gutter}px`
+            );
+            root.style.setProperty(
+                "--titlebar-content-padding-right",
+                `${rightInset + gutter}px`
+            );
+        };
+
+        syncInsets();
+        overlay.addEventListener("geometrychange", syncInsets);
+        window.addEventListener("resize", syncInsets);
+        return () => {
+            overlay.removeEventListener("geometrychange", syncInsets);
+            window.removeEventListener("resize", syncInsets);
+        };
+    }, []);
 
     const handleAuthSubmit = React.useCallback(
         (event: React.FormEvent<HTMLFormElement>) => {
@@ -129,11 +234,32 @@ export const App: React.FC = () => {
         [deleteProject]
     );
 
-    const handleLogout = React.useCallback(() => {
-        logout().catch(() => {
-            /* noop */
-        });
-    }, [logout]);
+    const handleUploadCover = React.useCallback(
+        async (projectId: string, file: File) => {
+            const arrayBuffer = await file.arrayBuffer();
+            const extension = file.name.split(".").pop() || "";
+
+            await importAsset({
+                projectId,
+                payload: {
+                    kind: "image",
+                    subjectType: "cover",
+                    subjectId: projectId,
+                    fileData: arrayBuffer,
+                    extension,
+                },
+            });
+        },
+        [importAsset]
+    );
+
+    const titlebarHost = React.useMemo(() => {
+        return document.getElementById("titlebar");
+    }, []);
+
+    const titlebar = titlebarHost
+        ? createPortal(<Titlebar />, titlebarHost)
+        : null;
 
     const renderStage = (): React.ReactNode => {
         switch (stage) {
@@ -152,11 +278,12 @@ export const App: React.FC = () => {
                         onCreateProject={handleCreateProject}
                         onOpenProject={handleOpenProject}
                         onDeleteProject={handleDeleteProject}
+                        onUploadCover={handleUploadCover}
                     />
                 );
             case "auth":
                 return (
-                    <div style={{ padding: '10vh' }}>
+                    <div style={{ padding: "10vh" }}>
                         <AuthView
                             mode={authMode}
                             form={authForm}
@@ -169,18 +296,9 @@ export const App: React.FC = () => {
                     </div>
                 );
             case "settings":
-                return (
-                    <div style={{ padding: '10vh' }}>
-                        <SettingsView onBack={returnToProjects} />
-                    </div>
-                );
+                return <SettingsView onBack={returnToProjects} />;
             case "checkingSession":
-                return (
-                    <div style={{ padding: '20px' }}>
-                        <SettingsView />
-                    </div>
-                );
-            case "checkingSession":
+                return <LoadingView />;
             default:
                 return <LoadingView />;
         }
@@ -188,25 +306,8 @@ export const App: React.FC = () => {
 
     return (
         <div className="app-container">
-            {stage === "workspace" && activeProjectName ? (
-                null
-            ) : (
-                <div className="top-nav">
-                    <div className="nav-left">
-                        <div className="brand-mark">Inkline Studio</div>
-                    </div>
-                    <div className="nav-actions">
-                        {user ? (
-                            <UserDropdown 
-                                userEmail={user.email} 
-                                onLogout={handleLogout} 
-                                onSettings={openSettings}
-                            />
-                        ) : null}
-                    </div>
-                </div>
-            )}
-            
+            {titlebar}
+
             {/* 
 
             message from the frontend dev (slave)
@@ -239,14 +340,8 @@ export const App: React.FC = () => {
             with the most minimal interface parameters.
 
             */}
-            
-            <div className="app-shell">
 
-
-                {renderStage()}
-
-
-            </div>
+            <div className="app-shell">{renderStage()}</div>
         </div>
     );
 };

@@ -1,16 +1,37 @@
 {
-  "env": {
-    "browser": true,
-    "es6": true,
-    "node": true
-  },
-  "extends": [
-    "eslint:recommended",
-    "plugin:@typescript-eslint/eslint-recommended",
-    "plugin:@typescript-eslint/recommended",
-    "plugin:import/recommended",
-    "plugin:import/electron",
-    "plugin:import/typescript"
-  ],
-  "parser": "@typescript-eslint/parser"
+    "env": {
+        "browser": true,
+        "es6": true,
+        "node": true
+    },
+    "extends": [
+        "eslint:recommended",
+        "plugin:@typescript-eslint/eslint-recommended",
+        "plugin:@typescript-eslint/recommended",
+        "plugin:import/recommended",
+        "plugin:import/electron",
+        "plugin:import/typescript"
+    ],
+    "parser": "@typescript-eslint/parser",
+    "overrides": [
+        {
+            "files": ["src/renderer/**/*.ts", "src/renderer/**/*.tsx"],
+            "rules": {
+                "no-restricted-properties": [
+                    "error",
+                    {
+                        "object": "window",
+                        "property": "api",
+                        "message": "Do not call window.api directly from renderer UI. Use appStore actions instead."
+                    }
+                ]
+            }
+        },
+        {
+            "files": ["src/renderer/state/appStore.ts"],
+            "rules": {
+                "no-restricted-properties": "off"
+            }
+        }
+    ]
 }

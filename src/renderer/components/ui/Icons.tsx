@@ -93,6 +93,29 @@ export const PlusIcon: React.FC<IconProps> = ({
     </svg>
 );
 
+export const SearchIcon: React.FC<IconProps> = ({
+    size = 16,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+);
+
 export const PanelLeftIcon: React.FC<IconProps> = ({
     size = 20,
     style,
@@ -118,6 +141,29 @@ export const PanelLeftIcon: React.FC<IconProps> = ({
             fill="currentColor"
             stroke="none"
         />
+    </svg>
+);
+
+export const PanelLeftOutlineIcon: React.FC<IconProps> = ({
+    size = 20,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+        <path d="M9 3v18" />
     </svg>
 );
 
@@ -319,7 +365,11 @@ export const AlignJustifyIcon: React.FC<IconProps> = ({
     </svg>
 );
 
-export const DownloadIcon: React.FC<IconProps> = ({ size = 16, style, ...props }) => (
+export const DownloadIcon: React.FC<IconProps> = ({
+    size = 16,
+    style,
+    ...props
+}) => (
     <svg
         xmlns="http://www.w3.org/2000/svg"
         width={size}
@@ -454,6 +504,28 @@ export const MessageSquareIcon: React.FC<IconProps> = ({
     </svg>
 );
 
+export const MessageSquareFilledIcon: React.FC<IconProps> = ({
+    size = 16,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="none"
+        style={{ ...style }}
+        {...props}
+    >
+        <path
+            d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+            fill="currentColor"
+        />
+    </svg>
+);
+
 export const PanelRightIcon: React.FC<IconProps> = ({
     size = 20,
     style,
@@ -576,3 +648,80 @@ export const PersonIcon: React.FC<IconProps> = ({
     </svg>
 );
 
+export const BinderChapterIcon: React.FC<IconProps> = ({
+    size = 16,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <path d="M4 5a3 3 0 0 1 3-3h12v18H7a3 3 0 0 0-3 3z" />
+        <path d="M4 5v18" />
+        <path d="M8 7h8" />
+        <path d="M8 11h8" />
+    </svg>
+);
+
+export const BinderScrapNoteIcon: React.FC<IconProps> = ({
+    size = 16,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+        <path d="M14 3v5h5" />
+        <path d="M8 12h8" />
+        <path d="M8 16h6" />
+    </svg>
+);
+
+export const BinderOrganizationIcon: React.FC<IconProps> = ({
+    size = 16,
+    style,
+    ...props
+}) => (
+    <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width={size}
+        height={size}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        style={{ ...style }}
+        {...props}
+    >
+        <path d="M6 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17" />
+        <path d="M4 22h16" />
+        <path d="M10 8h1" />
+        <path d="M13 8h1" />
+        <path d="M10 12h1" />
+        <path d="M13 12h1" />
+        <path d="M11 22v-4h2v4" />
+    </svg>
+);

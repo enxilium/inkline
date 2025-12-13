@@ -1,45 +1,21 @@
-import type { IpcRenderer } from "electron";
-import type { RendererApi } from "../../@interface-adapters/controllers/contracts";
-import type { AuthStatePayload } from "../../@interface-adapters/controllers/auth/AuthStateGateway";
+/**
+ * @deprecated Do not use this module.
+ * Renderer <-> main IPC calls must go through the Zustand appStore.
+ * (See eslint rule in .eslintrc.json)
+ */
 
-declare global {
-    interface Window {
-        api: RendererApi;
-        authEvents: AuthEventsBridge;
-    }
-}
-
-type AuthEventsBridge = {
-    onStateChanged(
-        listener: (payload: AuthStatePayload) => void
-    ): () => IpcRenderer;
+export const ensureRendererApi = (): never => {
+    throw new Error(
+        "Do not use ensureRendererApi(). Route IPC calls through appStore actions instead."
+    );
 };
 
-let cachedRendererApi: RendererApi | null = null;
-let cachedAuthEvents: AuthEventsBridge | null = null;
-
-export const ensureRendererApi = (): RendererApi => {
-    if (cachedRendererApi) {
-        return cachedRendererApi;
-    }
-
-    if (!window?.api) {
-        throw new Error("Renderer bridge is unavailable.");
-    }
-
-    cachedRendererApi = window.api;
-    return cachedRendererApi;
-};
-
-export const ensureAuthEvents = (): AuthEventsBridge => {
-    if (cachedAuthEvents) {
-        return cachedAuthEvents;
-    }
-
-    if (!window?.authEvents) {
-        throw new Error("Auth events bridge is unavailable.");
-    }
-
-    cachedAuthEvents = window.authEvents;
-    return cachedAuthEvents;
+/**
+ * @deprecated Do not use this module.
+ * Auth event wiring must be owned by appStore.
+ */
+export const ensureAuthEvents = (): never => {
+    throw new Error(
+        "Do not use ensureAuthEvents(). Auth events should be handled by appStore."
+    );
 };

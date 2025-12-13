@@ -97,10 +97,27 @@ const createGenerationEvents = () => {
 const generationEvents = createGenerationEvents();
 contextBridge.exposeInMainWorld("generationEvents", generationEvents);
 
+type TitleBarOverlayOptions = {
+    color: string;
+    symbolColor?: string;
+    height?: number;
+};
+
+const windowControls = {
+    setTitleBarOverlay: (options: TitleBarOverlayOptions) =>
+        ipcRenderer.invoke(
+            "window:setTitleBarOverlay",
+            options
+        ) as Promise<void>,
+};
+
+contextBridge.exposeInMainWorld("windowControls", windowControls);
+
 declare global {
     interface Window {
         api: typeof api;
         authEvents: typeof authEvents;
         generationEvents: typeof generationEvents;
+        windowControls: typeof windowControls;
     }
 }
