@@ -5,6 +5,8 @@ import { generateId } from "../../utils/id";
 
 export interface CreateOrganizationRequest {
     projectId: string;
+    /** Optional client-generated ID used for optimistic UI flows. */
+    id?: string;
 }
 
 export interface CreateOrganizationResponse {
@@ -34,7 +36,7 @@ export class CreateOrganization {
         }
 
         const now = new Date();
-        const id = generateId();
+        const id = request.id?.trim() || generateId();
         const organization = new Organization(
             id,
             "",

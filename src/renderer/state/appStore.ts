@@ -69,6 +69,24 @@ const createErrorMessage = (error: unknown, fallback: string): string => {
     return (error as Error)?.message ?? fallback;
 };
 
+const generateOptimisticId = (): string => {
+    // Electron renderer supports Web Crypto in modern versions.
+    const cryptoRef = (globalThis as unknown as { crypto?: Crypto }).crypto;
+    if (cryptoRef?.randomUUID) {
+        return cryptoRef.randomUUID();
+    }
+
+    // Fallback: keep collision probability extremely low.
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
+
+const runInBackground = (
+    promise: Promise<unknown>,
+    onError: (error: unknown) => void
+): void => {
+    promise.catch(onError);
+};
+
 const documentExists = (
     payload: OpenProjectPayload,
     selection: WorkspaceDocumentRef | null
@@ -176,6 +194,7 @@ type AppStore = {
     openTabs: WorkspaceDocumentRef[];
     autosaveStatus: AutosaveStatus;
     autosaveError: string | null;
+    cloudSyncError: string | null;
     lastSavedAt: number | null;
     shortcutStates: ShortcutStates;
     draggedDocument: { id: string; kind: string; title: string } | null;
@@ -240,6 +259,7 @@ type AppStore = {
     ) => Promise<void>;
     setAutosaveStatus: (status: AutosaveStatus) => void;
     setAutosaveError: (message: string | null) => void;
+    setCloudSyncError: (message: string | null) => void;
     setLastSavedAt: (timestamp: number | null) => void;
     setShortcutState: (id: string, state: ShortcutStates[string]) => void;
     resetShortcutState: (id: string) => void;
@@ -294,6 +314,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         | "openTabs"
         | "autosaveStatus"
         | "autosaveError"
+        | "cloudSyncError"
         | "lastSavedAt"
     > => ({
         projectId: "",
@@ -309,6 +330,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         openTabs: [] as WorkspaceDocumentRef[],
         autosaveStatus: defaultAutosaveStatus,
         autosaveError: null,
+        cloudSyncError: null,
         lastSavedAt: null,
     });
 
@@ -714,22 +736,78 @@ export const useAppStore = create<AppStore>((set, get) => {
                 throw new Error("Open a project before creating chapters.");
             }
 
-            const insertionOrder =
-                typeof order === "number" ? order : get().chapters.length;
-            const response = await rendererApi.manuscript.createChapter({
-                projectId,
-                order: insertionOrder,
+            const existing = get()
+                .chapters
+                .slice()
+                .sort((a, b) => a.order - b.order);
+            const requestedOrder =
+                typeof order === "number" ? Math.floor(order) : existing.length;
+            const normalizedOrder = Math.max(0, requestedOrder);
+            const insertIndex = Math.min(normalizedOrder, existing.length);
+
+            const now = new Date();
+            const id = generateOptimisticId();
+
+            set((state) => {
+                const sorted = state.chapters
+                    .slice()
+                    .sort((a, b) => a.order - b.order);
+
+                sorted.splice(insertIndex, 0, {
+                    id,
+                    title: "New Chapter",
+                    order: insertIndex,
+                    content: "",
+                    createdAt: now,
+                    updatedAt: now,
+                });
+
+                const nextChapters = sorted.map((chapter, index) => {
+                    if (chapter.order === index) {
+                        return chapter;
+                    }
+                    return { ...chapter, order: index, updatedAt: now };
+                });
+
+                const nextTabs = state.openTabs.some(
+                    (t) => t.kind === "chapter" && t.id === id
+                )
+                    ? state.openTabs
+                    : [...state.openTabs, { kind: "chapter", id }];
+
+                const nextProject = state.workspaceProject
+                    ? {
+                          ...state.workspaceProject,
+                          chapterIds: nextChapters.map((c) => c.id),
+                          updatedAt: now,
+                      }
+                    : state.workspaceProject;
+
+                return {
+                    workspaceProject: nextProject,
+                    chapters: nextChapters,
+                    activeDocument: { kind: "chapter", id },
+                    openTabs: nextTabs,
+                };
             });
 
-            // Optimistic update: Append the new chapter directly to the store
-            set((state) => ({
-                chapters: [...state.chapters, response.chapter],
-                activeDocument: { kind: "chapter", id: response.chapter.id },
-                openTabs: [
-                    ...state.openTabs,
-                    { kind: "chapter", id: response.chapter.id },
-                ],
-            }));
+            runInBackground(
+                rendererApi.manuscript.createChapter({
+                    projectId,
+                    order: insertIndex,
+                    id,
+                }),
+                (error) => {
+                    const message =
+                        createErrorMessage(
+                            error,
+                            "Failed to save new chapter to the cloud."
+                        ) +
+                        "\n\nYour change was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
+                    set({ cloudSyncError: message });
+                    alert(message);
+                }
+            );
         },
         createScrapNoteEntry: async () => {
             const projectId = get().projectId.trim();
@@ -737,22 +815,60 @@ export const useAppStore = create<AppStore>((set, get) => {
                 throw new Error("Open a project before creating scrap notes.");
             }
 
-            const response = await rendererApi.manuscript.createScrapNote({
-                projectId,
+            const now = new Date();
+            const id = generateOptimisticId();
+
+            set((state) => {
+                const nextNotes = [
+                    ...state.scrapNotes,
+                    {
+                        id,
+                        title: "New Scrap Note",
+                        content: "",
+                        isPinned: false,
+                        createdAt: now,
+                        updatedAt: now,
+                    },
+                ];
+
+                const nextTabs = state.openTabs.some(
+                    (t) => t.kind === "scrapNote" && t.id === id
+                )
+                    ? state.openTabs
+                    : [...state.openTabs, { kind: "scrapNote", id }];
+
+                const nextProject = state.workspaceProject
+                    ? {
+                          ...state.workspaceProject,
+                          scrapNoteIds: [
+                              ...state.workspaceProject.scrapNoteIds,
+                              id,
+                          ],
+                          updatedAt: now,
+                      }
+                    : state.workspaceProject;
+
+                return {
+                    workspaceProject: nextProject,
+                    scrapNotes: nextNotes,
+                    activeDocument: { kind: "scrapNote", id },
+                    openTabs: nextTabs,
+                };
             });
 
-            // Optimistic update: Append the new scrap note directly to the store
-            set((state) => ({
-                scrapNotes: [...state.scrapNotes, response.scrapNote],
-                activeDocument: {
-                    kind: "scrapNote",
-                    id: response.scrapNote.id,
-                },
-                openTabs: [
-                    ...state.openTabs,
-                    { kind: "scrapNote", id: response.scrapNote.id },
-                ],
-            }));
+            runInBackground(
+                rendererApi.manuscript.createScrapNote({ projectId, id }),
+                (error) => {
+                    const message =
+                        createErrorMessage(
+                            error,
+                            "Failed to save new scrap note to the cloud."
+                        ) +
+                        "\n\nYour change was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
+                    set({ cloudSyncError: message });
+                    alert(message);
+                }
+            );
         },
         createCharacterEntry: async () => {
             const projectId = get().projectId.trim();
@@ -760,22 +876,71 @@ export const useAppStore = create<AppStore>((set, get) => {
                 throw new Error("Open a project before creating characters.");
             }
 
-            const response = await rendererApi.world.createCharacter({
-                projectId,
+            const now = new Date();
+            const id = generateOptimisticId();
+
+            set((state) => {
+                const nextCharacters = [
+                    ...state.characters,
+                    {
+                        id,
+                        name: "",
+                        race: "",
+                        age: null,
+                        description: "",
+                        currentLocationId: null,
+                        backgroundLocationId: null,
+                        organizationId: null,
+                        traits: [],
+                        goals: [],
+                        secrets: [],
+                        tags: [],
+                        bgmId: null,
+                        playlistId: null,
+                        galleryImageIds: [],
+                        createdAt: now,
+                        updatedAt: now,
+                    },
+                ];
+
+                const nextTabs = state.openTabs.some(
+                    (t) => t.kind === "character" && t.id === id
+                )
+                    ? state.openTabs
+                    : [...state.openTabs, { kind: "character", id }];
+
+                const nextProject = state.workspaceProject
+                    ? {
+                          ...state.workspaceProject,
+                          characterIds: [
+                              ...state.workspaceProject.characterIds,
+                              id,
+                          ],
+                          updatedAt: now,
+                      }
+                    : state.workspaceProject;
+
+                return {
+                    workspaceProject: nextProject,
+                    characters: nextCharacters,
+                    activeDocument: { kind: "character", id },
+                    openTabs: nextTabs,
+                };
             });
 
-            // Optimistic update: Append the new character directly to the store
-            set((state) => ({
-                characters: [...state.characters, response.character],
-                activeDocument: {
-                    kind: "character",
-                    id: response.character.id,
-                },
-                openTabs: [
-                    ...state.openTabs,
-                    { kind: "character", id: response.character.id },
-                ],
-            }));
+            runInBackground(
+                rendererApi.world.createCharacter({ projectId, id }),
+                (error) => {
+                    const message =
+                        createErrorMessage(
+                            error,
+                            "Failed to save new character to the cloud."
+                        ) +
+                        "\n\nYour change was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
+                    set({ cloudSyncError: message });
+                    alert(message);
+                }
+            );
         },
         createLocationEntry: async () => {
             const projectId = get().projectId.trim();
@@ -783,19 +948,65 @@ export const useAppStore = create<AppStore>((set, get) => {
                 throw new Error("Open a project before creating locations.");
             }
 
-            const response = await rendererApi.world.createLocation({
-                projectId,
+            const now = new Date();
+            const id = generateOptimisticId();
+
+            set((state) => {
+                const nextLocations = [
+                    ...state.locations,
+                    {
+                        id,
+                        name: "",
+                        description: "",
+                        culture: "",
+                        history: "",
+                        conflicts: [],
+                        tags: [],
+                        createdAt: now,
+                        updatedAt: now,
+                        bgmId: null,
+                        playlistId: null,
+                        galleryImageIds: [],
+                        characterIds: [],
+                        organizationIds: [],
+                    },
+                ];
+
+                const nextTabs = state.openTabs.some(
+                    (t) => t.kind === "location" && t.id === id
+                )
+                    ? state.openTabs
+                    : [...state.openTabs, { kind: "location", id }];
+
+                const nextProject = state.workspaceProject
+                    ? {
+                          ...state.workspaceProject,
+                          locationIds: [...state.workspaceProject.locationIds, id],
+                          updatedAt: now,
+                      }
+                    : state.workspaceProject;
+
+                return {
+                    workspaceProject: nextProject,
+                    locations: nextLocations,
+                    activeDocument: { kind: "location", id },
+                    openTabs: nextTabs,
+                };
             });
 
-            // Optimistic update: Append the new location directly to the store
-            set((state) => ({
-                locations: [...state.locations, response.location],
-                activeDocument: { kind: "location", id: response.location.id },
-                openTabs: [
-                    ...state.openTabs,
-                    { kind: "location", id: response.location.id },
-                ],
-            }));
+            runInBackground(
+                rendererApi.world.createLocation({ projectId, id }),
+                (error) => {
+                    const message =
+                        createErrorMessage(
+                            error,
+                            "Failed to save new location to the cloud."
+                        ) +
+                        "\n\nYour change was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
+                    set({ cloudSyncError: message });
+                    alert(message);
+                }
+            );
         },
         createOrganizationEntry: async () => {
             const projectId = get().projectId.trim();
@@ -805,22 +1016,65 @@ export const useAppStore = create<AppStore>((set, get) => {
                 );
             }
 
-            const response = await rendererApi.world.createOrganization({
-                projectId,
+            const now = new Date();
+            const id = generateOptimisticId();
+
+            set((state) => {
+                const nextOrganizations = [
+                    ...state.organizations,
+                    {
+                        id,
+                        name: "",
+                        description: "",
+                        mission: "",
+                        tags: [],
+                        locationIds: [],
+                        galleryImageIds: [],
+                        playlistId: null,
+                        bgmId: null,
+                        createdAt: now,
+                        updatedAt: now,
+                    },
+                ];
+
+                const nextTabs = state.openTabs.some(
+                    (t) => t.kind === "organization" && t.id === id
+                )
+                    ? state.openTabs
+                    : [...state.openTabs, { kind: "organization", id }];
+
+                const nextProject = state.workspaceProject
+                    ? {
+                          ...state.workspaceProject,
+                          organizationIds: [
+                              ...state.workspaceProject.organizationIds,
+                              id,
+                          ],
+                          updatedAt: now,
+                      }
+                    : state.workspaceProject;
+
+                return {
+                    workspaceProject: nextProject,
+                    organizations: nextOrganizations,
+                    activeDocument: { kind: "organization", id },
+                    openTabs: nextTabs,
+                };
             });
 
-            // Optimistic update: Append the new organization directly to the store
-            set((state) => ({
-                organizations: [...state.organizations, response.organization],
-                activeDocument: {
-                    kind: "organization",
-                    id: response.organization.id,
-                },
-                openTabs: [
-                    ...state.openTabs,
-                    { kind: "organization", id: response.organization.id },
-                ],
-            }));
+            runInBackground(
+                rendererApi.world.createOrganization({ projectId, id }),
+                (error) => {
+                    const message =
+                        createErrorMessage(
+                            error,
+                            "Failed to save new organization to the cloud."
+                        ) +
+                        "\n\nYour change was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
+                    set({ cloudSyncError: message });
+                    alert(message);
+                }
+            );
         },
         deleteProject: async (projectId) => {
             const { user } = get();
@@ -1213,44 +1467,53 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {};
             });
 
-            // API Call
-            try {
-                if (kind === "chapter") {
-                    await rendererApi.manuscript.renameChapter({
-                        chapterId: id,
-                        title: newTitle,
-                    });
-                } else if (kind === "character") {
-                    await rendererApi.logistics.saveCharacterInfo({
-                        characterId: id,
-                        payload: { name: newTitle },
-                    });
-                } else if (kind === "location") {
-                    await rendererApi.logistics.saveLocationInfo({
-                        locationId: id,
-                        payload: { name: newTitle },
-                    });
-                } else if (kind === "organization") {
-                    await rendererApi.logistics.saveOrganizationInfo({
-                        organizationId: id,
-                        payload: { name: newTitle },
-                    });
-                } else if (kind === "scrapNote") {
-                    await rendererApi.manuscript.updateScrapNote({
-                        scrapNoteId: id,
-                        title: newTitle,
-                    });
-                }
-            } catch (error) {
-                console.error("Failed to rename document:", error);
-                // Revert optimistic update if needed (omitted for brevity)
-            }
+            const writePromise =
+                kind === "chapter"
+                    ? rendererApi.manuscript.renameChapter({
+                          chapterId: id,
+                          title: newTitle,
+                      })
+                    : kind === "character"
+                      ? rendererApi.logistics.saveCharacterInfo({
+                            characterId: id,
+                            payload: { name: newTitle },
+                        })
+                      : kind === "location"
+                        ? rendererApi.logistics.saveLocationInfo({
+                              locationId: id,
+                              payload: { name: newTitle },
+                          })
+                        : kind === "organization"
+                          ? rendererApi.logistics.saveOrganizationInfo({
+                                organizationId: id,
+                                payload: { name: newTitle },
+                            })
+                          : kind === "scrapNote"
+                            ? rendererApi.manuscript.updateScrapNote({
+                                  scrapNoteId: id,
+                                  title: newTitle,
+                              })
+                            : Promise.resolve();
+
+            runInBackground(writePromise, (error) => {
+                const message =
+                    createErrorMessage(
+                        error,
+                        "Failed to save rename to the cloud."
+                    ) +
+                    "\n\nYour rename was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
+                set({ cloudSyncError: message });
+                alert(message);
+            });
         },
         setAutosaveStatus: (status) => {
             set({ autosaveStatus: status });
         },
         setAutosaveError: (message) => {
             set({ autosaveError: message });
+        },
+        setCloudSyncError: (message) => {
+            set({ cloudSyncError: message });
         },
         setLastSavedAt: (timestamp) => {
             set({ lastSavedAt: timestamp });

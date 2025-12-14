@@ -6,6 +6,11 @@ import { generateId } from "../../utils/id";
 export interface CreateChapterRequest {
     projectId: string;
     order: number;
+    /**
+     * Optional client-generated ID used for optimistic UI flows.
+     * When omitted, the use case generates a globally unique ID.
+     */
+    id?: string;
 }
 
 export interface CreateChapterResponse {
@@ -45,7 +50,7 @@ export class CreateChapter {
 
         const now = new Date();
         const title = "New Chapter";
-        const id = generateId();
+        const id = request.id?.trim() || generateId();
         const chapter = new Chapter(id, title, insertIndex, "", now, now);
 
         await this.chapterRepository.create(projectId, chapter);

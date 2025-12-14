@@ -5,6 +5,8 @@ import { generateId } from "../../utils/id";
 
 export interface CreateCharacterRequest {
     projectId: string;
+    /** Optional client-generated ID used for optimistic UI flows. */
+    id?: string;
 }
 
 export interface CreateCharacterResponse {
@@ -32,7 +34,7 @@ export class CreateCharacter {
         }
 
         const now = new Date();
-        const id = generateId();
+        const id = request.id?.trim() || generateId();
         const character = new Character(
             id,
             "",
