@@ -737,8 +737,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             }
 
             const existing = get()
-                .chapters
-                .slice()
+                .chapters.slice()
                 .sort((a, b) => a.order - b.order);
             const requestedOrder =
                 typeof order === "number" ? Math.floor(order) : existing.length;
@@ -981,7 +980,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                 const nextProject = state.workspaceProject
                     ? {
                           ...state.workspaceProject,
-                          locationIds: [...state.workspaceProject.locationIds, id],
+                          locationIds: [
+                              ...state.workspaceProject.locationIds,
+                              id,
+                          ],
                           updatedAt: now,
                       }
                     : state.workspaceProject;
