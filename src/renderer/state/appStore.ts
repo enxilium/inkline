@@ -1,6 +1,14 @@
 import { create } from "zustand";
 
 import type { RendererApi } from "../../@interface-adapters/controllers/contracts";
+import { globalSearchEngine } from "./globalSearchEngine";
+import type {
+    GlobalFindAndReplaceRequest,
+    GlobalFindAndReplaceResponse,
+    GlobalFindRequest,
+    GlobalFindResponse,
+    SearchDocumentSnapshot,
+} from "./globalSearchTypes";
 import type {
     AppStage,
     AuthMode,
@@ -264,7 +272,10 @@ type AppStore = {
     saveUserSettings: RendererApi["logistics"]["saveUserSettings"];
     updateAccountEmail: RendererApi["auth"]["updateEmail"];
     updateAccountPassword: RendererApi["auth"]["updatePassword"];
-    globalFind: RendererApi["manuscript"]["globalFind"];
+    globalFind: (request: GlobalFindRequest) => Promise<GlobalFindResponse>;
+    globalFindAndReplace: (
+        request: GlobalFindAndReplaceRequest
+    ) => Promise<GlobalFindAndReplaceResponse>;
 };
 
 export const useAppStore = create<AppStore>((set, get) => {
@@ -1336,7 +1347,266 @@ export const useAppStore = create<AppStore>((set, get) => {
             return rendererApi.auth.updatePassword(request);
         },
         globalFind: async (request) => {
-            return rendererApi.manuscript.globalFind(request);
+            const projectId = get().projectId.trim();
+            if (!projectId) {
+                throw new Error("Project is not open.");
+            }
+
+            if (request.projectId.trim() !== projectId) {
+                throw new Error("Search request project mismatch.");
+            }
+
+            const term = request.term.trim();
+            if (!term) {
+                return { totalOccurrences: 0, results: [] };
+            }
+
+            const normalizeLabel = (
+                value: string | null | undefined,
+                fallback: string
+            ): string => {
+                const trimmed = value?.trim();
+                return trimmed ? trimmed : fallback;
+            };
+
+            const joinParts = (
+                parts: Array<string | null | undefined>
+            ): string => {
+                return parts
+                    .filter(
+                        (p): p is string =>
+                            typeof p === "string" && p.trim().length > 0
+                    )
+                    .join("\n");
+            };
+
+            // Ordering: binder section order, then relative order within each section.
+            // NOTE: The product spec mentioned "chapters -> scrap note -> chapter -> location -> organization".
+            // We treat the second "chapter" as "character" to match the binder sections and icon examples.
+            const chapterDocs = get()
+                .chapters.slice()
+                .sort((a, b) => a.order - b.order)
+                .map((chapter, index) => ({
+                    kind: "chapter" as const,
+                    id: chapter.id,
+                    title: `${chapter.order + 1}. ${normalizeLabel(
+                        chapter.title,
+                        "Untitled Chapter"
+                    )}`,
+                    content: chapter.content,
+                    contentFormat: "tiptap-json" as const,
+                    binderIndex: index,
+                }));
+
+            const scrapNoteDocs = get().scrapNotes.map((note, index) => ({
+                kind: "scrapNote" as const,
+                id: note.id,
+                title: normalizeLabel(note.title, "Untitled Note"),
+                content: note.content,
+                contentFormat: "tiptap-json" as const,
+                binderIndex: index,
+            }));
+
+            const characterDocs = get().characters.map((character, index) => ({
+                kind: "character" as const,
+                id: character.id,
+                title: normalizeLabel(character.name, "Untitled Character"),
+                content: joinParts([
+                    character.name,
+                    character.race,
+                    character.age != null ? String(character.age) : "",
+                    character.description,
+                    ...(character.traits ?? []),
+                    ...(character.goals ?? []),
+                    ...(character.secrets ?? []),
+                    ...(character.tags ?? []),
+                ]),
+                contentFormat: "plain" as const,
+                binderIndex: index,
+            }));
+
+            const locationDocs = get().locations.map((location, index) => ({
+                kind: "location" as const,
+                id: location.id,
+                title: normalizeLabel(location.name, "Untitled Location"),
+                content: joinParts([
+                    location.name,
+                    location.description,
+                    location.culture,
+                    location.history,
+                    ...(location.conflicts ?? []),
+                    ...(location.tags ?? []),
+                ]),
+                contentFormat: "plain" as const,
+                binderIndex: index,
+            }));
+
+            const organizationDocs = get().organizations.map((org, index) => ({
+                kind: "organization" as const,
+                id: org.id,
+                title: normalizeLabel(org.name, "Untitled Organization"),
+                content: joinParts([
+                    org.name,
+                    org.description,
+                    org.mission,
+                    ...(org.tags ?? []),
+                ]),
+                contentFormat: "plain" as const,
+                binderIndex: index,
+            }));
+
+            const docs: SearchDocumentSnapshot[] = [
+                ...chapterDocs,
+                ...scrapNoteDocs,
+                ...characterDocs,
+                ...locationDocs,
+                ...organizationDocs,
+            ];
+
+            return globalSearchEngine.globalFind({
+                docs,
+                term,
+                caseSensitive: request.caseSensitive ?? false,
+            });
+        },
+        globalFindAndReplace: async (request) => {
+            const currentProjectId = get().projectId.trim();
+            if (!currentProjectId) {
+                throw new Error("Project is not open.");
+            }
+
+            if (request.projectId.trim() !== currentProjectId) {
+                throw new Error("Find/replace request project mismatch.");
+            }
+
+            const find = request.find;
+            if (!find) {
+                throw new Error("Find term cannot be empty.");
+            }
+
+            const escapeRegExp = (term: string): string => {
+                return term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            };
+
+            const flags = request.caseSensitive ? "g" : "gi";
+            const regex = new RegExp(escapeRegExp(find), flags);
+
+            const replaceInJson = (
+                node: unknown,
+                regex: RegExp,
+                replaceText: string
+            ): number => {
+                let count = 0;
+
+                if (!node || typeof node !== "object") {
+                    return 0;
+                }
+
+                const candidate = node as {
+                    type?: unknown;
+                    text?: unknown;
+                    content?: unknown;
+                };
+
+                if (
+                    candidate.type === "text" &&
+                    typeof candidate.text === "string"
+                ) {
+                    const matches = candidate.text.match(regex);
+                    if (matches && matches.length > 0) {
+                        count += matches.length;
+                        const replaced = candidate.text.replace(
+                            regex,
+                            replaceText
+                        );
+                        (node as { text?: string }).text = replaced;
+                    }
+                    return count;
+                }
+
+                if (Array.isArray(candidate.content)) {
+                    for (const child of candidate.content) {
+                        count += replaceInJson(child, regex, replaceText);
+                    }
+                }
+                return count;
+            };
+
+            let replacements = 0;
+
+            for (const chapter of get().chapters) {
+                let newContent = chapter.content;
+                let matchCount = 0;
+
+                try {
+                    const json = JSON.parse(chapter.content);
+                    matchCount = replaceInJson(json, regex, request.replace);
+                    if (matchCount > 0) {
+                        newContent = JSON.stringify(json);
+                    }
+                } catch {
+                    const matches = chapter.content.match(regex);
+                    if (matches && matches.length > 0) {
+                        matchCount = matches.length;
+                        newContent = chapter.content.replace(
+                            regex,
+                            request.replace
+                        );
+                    }
+                }
+
+                if (matchCount > 0) {
+                    replacements += matchCount;
+                    get().updateChapterLocally(chapter.id, {
+                        content: newContent,
+                        updatedAt: new Date(),
+                    });
+                    await get().saveChapterContent({
+                        chapterId: chapter.id,
+                        content: newContent,
+                    });
+                }
+            }
+
+            for (const note of get().scrapNotes) {
+                let newContent = note.content;
+                let matchCount = 0;
+
+                try {
+                    const json = JSON.parse(note.content);
+                    matchCount = replaceInJson(json, regex, request.replace);
+                    if (matchCount > 0) {
+                        newContent = JSON.stringify(json);
+                    }
+                } catch {
+                    const matches = note.content.match(regex);
+                    if (matches && matches.length > 0) {
+                        matchCount = matches.length;
+                        newContent = note.content.replace(
+                            regex,
+                            request.replace
+                        );
+                    }
+                }
+
+                if (matchCount > 0) {
+                    replacements += matchCount;
+                    get().updateScrapNoteLocally(note.id, {
+                        content: newContent,
+                        updatedAt: new Date(),
+                    });
+                    await get().updateScrapNoteRemote({
+                        scrapNoteId: note.id,
+                        content: newContent,
+                    });
+                }
+            }
+
+            if (replacements > 0) {
+                get().setLastSavedAt(Date.now());
+            }
+
+            return { replacements };
         },
         openSettings: () => {
             set({ stage: "settings" });

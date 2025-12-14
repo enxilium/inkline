@@ -74,6 +74,11 @@ html[data-platform="mac"] {
     right: 0;
     -webkit-app-region: drag;
     z-index: 9999;
+
+    /* Avoid starting HTML drag/drop gestures from the titlebar. */
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-user-drag: none;
 }
 
 /* Draw divider as its own 1px strip so it can appear under native titleBarOverlay controls. */
@@ -198,6 +203,10 @@ html[data-platform="mac"] {
     font-family: inherit;
     cursor: pointer;
     padding: 0 24px;
+
+    /* Inputs must remain selectable/editable even inside a draggable region. */
+    -webkit-user-select: text;
+    user-select: text;
 }
 
 .titlebar-search-input.is-project-title {
@@ -210,6 +219,104 @@ html[data-platform="mac"] {
 
 .titlebar-search-input::placeholder {
     color: var(--text-subtle);
+}
+
+.titlebar-search-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    background: var(--surface);
+    border: 1px solid var(--stroke);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    max-height: min(360px, calc(100vh - var(--titlebar-height) - 20px));
+    z-index: 10000;
+}
+
+.titlebar-search-results {
+    list-style: none;
+    margin: 0;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    max-height: inherit;
+    overflow: auto;
+}
+
+.titlebar-search-empty {
+    padding: 10px 12px;
+    color: var(--text-subtle);
+    font-size: 0.78rem;
+}
+
+.titlebar-search-result {
+    width: 100%;
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    text-align: left;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+}
+
+.titlebar-search-result:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.titlebar-search-snippet {
+    flex: 1;
+    min-width: 0;
+}
+
+.titlebar-search-snippet-text {
+    display: block;
+    font-size: 0.76rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.titlebar-search-match {
+    font-weight: 650;
+    color: var(--accent);
+}
+
+.titlebar-search-ellipsis {
+    color: var(--text-subtle);
+}
+
+.titlebar-search-file {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-width: 140px;
+    max-width: 240px;
+}
+
+.titlebar-search-file-icon {
+    color: var(--text-subtle);
+    display: inline-flex;
+    align-items: center;
+}
+
+.titlebar-search-file-label {
+    color: var(--text-subtle);
+    font-size: 0.74rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .titlebar-actions {

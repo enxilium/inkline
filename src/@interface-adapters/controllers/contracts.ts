@@ -29,8 +29,6 @@ import type { CreateChapterController } from "./manuscript/CreateChapterControll
 import type { CreateScrapNoteController } from "./manuscript/CreateScrapNoteController";
 import type { DeleteChapterController } from "./manuscript/DeleteChapterController";
 import type { DeleteScrapNoteController } from "./manuscript/DeleteScrapNoteController";
-import type { GlobalFindController } from "./manuscript/GlobalFindController";
-import type { GlobalFindAndReplaceController } from "./manuscript/GlobalFindAndReplaceController";
 import type { MoveChapterController } from "./manuscript/MoveChapterController";
 import type { RenameChapterController } from "./manuscript/RenameChapterController";
 import type { UpdateScrapNoteController } from "./manuscript/UpdateScrapNoteController";
@@ -96,8 +94,6 @@ export interface ControllerInstanceMap {
         createScrapNote: CreateScrapNoteController;
         deleteChapter: DeleteChapterController;
         deleteScrapNote: DeleteScrapNoteController;
-        globalFind: GlobalFindController;
-        globalFindAndReplace: GlobalFindAndReplaceController;
         moveChapter: MoveChapterController;
         renameChapter: RenameChapterController;
         updateScrapNote: UpdateScrapNoteController;
@@ -179,8 +175,6 @@ export const controllerChannels: ControllerChannelMap = {
         createScrapNote: "manuscript:createScrapNote",
         deleteChapter: "manuscript:deleteChapter",
         deleteScrapNote: "manuscript:deleteScrapNote",
-        globalFind: "manuscript:globalFind",
-        globalFindAndReplace: "manuscript:globalFindAndReplace",
         moveChapter: "manuscript:moveChapter",
         renameChapter: "manuscript:renameChapter",
         updateScrapNote: "manuscript:updateScrapNote",
