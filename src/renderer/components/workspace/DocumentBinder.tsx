@@ -152,8 +152,19 @@ const SortableBinderItem = ({
     };
 
     const handleDragStart = (e: React.DragEvent) => {
-        // Set data for FlexLayout to recognize
-        e.dataTransfer.setData("text/plain", item.label);
+        // Use a custom payload so this drag is treated as a tiling action,
+        // not as plain text that can be dropped into an editor.
+        e.dataTransfer.setData(
+            "application/x-inkline-document-ref",
+            JSON.stringify({
+                id: item.id,
+                kind: item.kind,
+                title: item.label,
+            })
+        );
+        // Keep a text/plain entry to satisfy some drag-and-drop consumers,
+        // but avoid putting the document title here.
+        e.dataTransfer.setData("text/plain", "");
         e.dataTransfer.effectAllowed = "copy";
 
         // Set global state for WorkspaceLayout to read

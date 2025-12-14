@@ -4,12 +4,10 @@ import { useAppStore } from "../state/appStore";
 import { WorkspaceLayout } from "../components/layout/WorkspaceLayout";
 import { ConnectedDocumentBinder } from "../components/layout/ConnectedDocumentBinder";
 import { ChatPanel } from "../components/workspace/ChatPanel";
+import { WorkspaceFooter } from "../components/layout/WorkspaceFooter";
 
 export const WorkspaceView: React.FC = () => {
-    const {
-        isBinderOpen,
-        isChatOpen,
-    } = useAppStore();
+    const { isBinderOpen, isChatOpen } = useAppStore();
 
     const [isPeeking, setIsPeeking] = React.useState(false);
     const peekTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -35,7 +33,7 @@ export const WorkspaceView: React.FC = () => {
         : "workspace-chat-container is-closed";
 
     return (
-        <div className="i-hate-ts">
+        <div className="workspace-view">
             <div className="workspace-container">
                 <div
                     className={containerClass}
@@ -64,6 +62,8 @@ export const WorkspaceView: React.FC = () => {
                     {isChatOpen && <ChatPanel />}
                 </div>
             </div>
+
+            <WorkspaceFooter />
         </div>
     );
 };

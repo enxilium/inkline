@@ -2526,6 +2526,106 @@ input.toolbar-color:focus {
     margin-right: 10px;
 }
 
+.workspace-view {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.workspace-footer {
+    flex: 0 0 auto;
+    height: 28px;
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding: 0 12px;
+    background: var(--surface);
+    border-top: 1px solid var(--stroke);
+}
+
+.workspace-footer-left {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    min-width: 0;
+}
+
+.workspace-footer-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.workspace-footer-right {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.workspace-footer-brand {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+    opacity: 0.8;
+    user-select: none;
+}
+
+.workspace-footer-stat {
+    font-size: 0.75rem;
+    color: var(--text-subtle);
+    user-select: none;
+}
+
+.workspace-footer-autosave {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: var(--text-subtle);
+}
+
+.workspace-footer-autosave-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--text-subtle);
+    opacity: 0.45;
+}
+
+.workspace-footer-autosave-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.workspace-footer-autosave-icon.is-success {
+    color: var(--text-success);
+}
+
+.workspace-footer-autosave-icon.is-error {
+    color: var(--text-error);
+}
+
+@keyframes inkline-footer-spin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.workspace-footer-autosave-icon.is-spinning {
+    animation: inkline-footer-spin 0.9s linear infinite;
+    color: var(--text-warning);
+}
+
 .workspace-binder-container {
     position: relative;
     height: 100%;

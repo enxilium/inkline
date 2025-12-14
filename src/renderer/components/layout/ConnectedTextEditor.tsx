@@ -9,11 +9,7 @@ import { TextAlign } from "@tiptap/extension-text-align";
 import { useAppStore } from "../../state/appStore";
 import { TextEditor } from "../workspace/TextEditor";
 import { SearchAndReplace } from "../../tiptap/searchAndReplace";
-import type {
-    AutosaveStatus,
-    WorkspaceChapter,
-    WorkspaceScrapNote,
-} from "../../types";
+import type { AutosaveStatus } from "../../types";
 
 const AUTOSAVE_DELAY_MS = 1200;
 
@@ -28,10 +24,13 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 }) => {
     const {
         projectId,
+        activeDocument,
         chapters,
         scrapNotes,
         updateChapterLocally,
         updateScrapNoteLocally,
+        setAutosaveStatus: setGlobalAutosaveStatus,
+        setAutosaveError: setGlobalAutosaveError,
         setLastSavedAt,
         saveChapterContent,
         updateScrapNoteRemote,
@@ -51,6 +50,24 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     const [autosaveError, setAutosaveError] = React.useState<string | null>(
         null
     );
+
+    const isActiveEditor =
+        activeDocument?.kind === kind && activeDocument.id === documentId;
+
+    React.useEffect(() => {
+        if (!isActiveEditor) {
+            return;
+        }
+
+        setGlobalAutosaveStatus(autosaveStatus);
+        setGlobalAutosaveError(autosaveError);
+    }, [
+        autosaveError,
+        autosaveStatus,
+        isActiveEditor,
+        setGlobalAutosaveError,
+        setGlobalAutosaveStatus,
+    ]);
 
     const autosaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
