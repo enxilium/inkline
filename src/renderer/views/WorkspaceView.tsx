@@ -5,9 +5,16 @@ import { WorkspaceLayout } from "../components/layout/WorkspaceLayout";
 import { ConnectedDocumentBinder } from "../components/layout/ConnectedDocumentBinder";
 import { ChatPanel } from "../components/workspace/ChatPanel";
 import { WorkspaceFooter } from "../components/layout/WorkspaceFooter";
+import type { WorkspaceDocumentKind } from "../types";
 
 export const WorkspaceView: React.FC = () => {
     const { isBinderOpen, isChatOpen } = useAppStore();
+    const activeDocument = useAppStore((state) => state.activeDocument);
+
+    const [binderActiveKind, setBinderActiveKind] =
+        React.useState<WorkspaceDocumentKind>(
+            activeDocument?.kind ?? "chapter"
+        );
 
     const [isPeeking, setIsPeeking] = React.useState(false);
     const peekTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -32,8 +39,28 @@ export const WorkspaceView: React.FC = () => {
         ? "workspace-chat-container is-open"
         : "workspace-chat-container is-closed";
 
+    React.useEffect(() => {
+        if (!activeDocument) {
+            return;
+        }
+        if (activeDocument.kind !== binderActiveKind) {
+            setBinderActiveKind(activeDocument.kind);
+        }
+    }, [activeDocument, binderActiveKind]);
+
+    const binderWidth = isBinderOpen ? 260 : 12;
+    const chatWidth = isChatOpen ? 320 : 0;
+
     return (
-        <div className="workspace-view">
+        <div
+            className="workspace-view"
+            style={
+                {
+                    "--workspace-binder-width": `${binderWidth}px`,
+                    "--workspace-chat-width": `${chatWidth}px`,
+                } as React.CSSProperties
+            }
+        >
             <div className="workspace-container">
                 <div
                     className={containerClass}
@@ -41,7 +68,11 @@ export const WorkspaceView: React.FC = () => {
                     onMouseLeave={handleMouseLeave}
                 >
                     {isBinderOpen ? (
-                        <ConnectedDocumentBinder />
+                        <ConnectedDocumentBinder
+                            activeKind={binderActiveKind}
+                            onActiveKindChange={setBinderActiveKind}
+                            showTabbar={false}
+                        />
                     ) : (
                         <>
                             <div className="binder-peek-strip" />
@@ -49,7 +80,11 @@ export const WorkspaceView: React.FC = () => {
                                 className={`binder-peek-overlay ${isPeeking ? "is-visible" : ""}`}
                             >
                                 <div className="binder-content">
-                                    <ConnectedDocumentBinder />
+                                    <ConnectedDocumentBinder
+                                        activeKind={binderActiveKind}
+                                        onActiveKindChange={setBinderActiveKind}
+                                        showTabbar={false}
+                                    />
                                 </div>
                             </div>
                         </>
@@ -63,7 +98,11 @@ export const WorkspaceView: React.FC = () => {
                 </div>
             </div>
 
-            <WorkspaceFooter />
+            <WorkspaceFooter
+                binderActiveKind={binderActiveKind}
+                onBinderActiveKindChange={setBinderActiveKind}
+                isBinderOpen={isBinderOpen}
+            />
         </div>
     );
 };

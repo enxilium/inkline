@@ -1,8 +1,13 @@
 import React from "react";
 import { useAppStore } from "../../state/appStore";
 import { DocumentBinder } from "../workspace/DocumentBinder";
+import type { WorkspaceDocumentKind } from "../../types";
 
-export const ConnectedDocumentBinder: React.FC = () => {
+export const ConnectedDocumentBinder: React.FC<{
+    activeKind?: WorkspaceDocumentKind;
+    onActiveKindChange?: (kind: WorkspaceDocumentKind) => void;
+    showTabbar?: boolean;
+}> = ({ activeKind, onActiveKindChange, showTabbar }) => {
     const store = useAppStore();
 
     return (
@@ -13,6 +18,9 @@ export const ConnectedDocumentBinder: React.FC = () => {
             locations={store.locations}
             organizations={store.organizations}
             activeDocument={store.activeDocument}
+            activeKind={activeKind}
+            onActiveKindChange={onActiveKindChange}
+            showTabbar={showTabbar}
             onSelect={store.setActiveDocument}
             onCreateChapter={store.createChapterEntry}
             onCreateScrapNote={store.createScrapNoteEntry}
@@ -30,6 +38,7 @@ export const ConnectedDocumentBinder: React.FC = () => {
             onReorderLocations={store.reorderLocations}
             onReorderOrganizations={store.reorderOrganizations}
             onToggleCollapse={store.toggleBinder}
+            isBinderOpen={store.isBinderOpen}
         />
     );
 };
