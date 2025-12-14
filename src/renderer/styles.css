@@ -1006,6 +1006,7 @@ html {
     max-width: 1400px;
     margin-inline: auto;
     width: 100%;
+    padding: clamp(1rem, 3vw, 2rem);
 }
 
 .projectselect-intro {
@@ -1143,6 +1144,7 @@ html {
     flex-wrap: wrap;
     column-gap: 1.25rem;
     row-gap: 1.75rem;
+    margin-top: 1rem;
 }
 
 .project-card {

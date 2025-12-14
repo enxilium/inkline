@@ -18,7 +18,6 @@ import {
     PlusIcon,
 } from "../ui/Icons";
 import { LinkDialog } from "../dialogs/LinkDialog";
-import type { AutosaveStatus } from "../../types";
 
 interface TextEditorProps {
     editor: Editor | null;
@@ -51,6 +50,46 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     autosaveLabel,
     autosaveClass,
 }) => {
+    const DEFAULT_FALLBACK_COLOR = "#f6f7fb";
+    const [themeTextColor, setThemeTextColor] = React.useState(
+        DEFAULT_FALLBACK_COLOR
+    );
+
+    React.useEffect(() => {
+        const computed = window
+            .getComputedStyle(document.documentElement)
+            .getPropertyValue("--text")
+            .trim();
+
+        if (/^#[0-9a-fA-F]{6}$/.test(computed)) {
+            setThemeTextColor(computed);
+        }
+    }, []);
+
+    const normalizeHtmlColor = React.useCallback(
+        (value: string | null | undefined) => {
+            if (value && /^#[0-9a-fA-F]{6}$/.test(value)) {
+                return value;
+            }
+
+            if (value) {
+                const match = value.match(/var\((--[^)]+)\)/);
+                if (match) {
+                    const resolved = window
+                        .getComputedStyle(document.documentElement)
+                        .getPropertyValue(match[1])
+                        .trim();
+
+                    if (/^#[0-9a-fA-F]{6}$/.test(resolved)) {
+                        return resolved;
+                    }
+                }
+            }
+
+            return themeTextColor;
+        },
+        [themeTextColor]
+    );
     const stage = useAppStore((state) => state.stage);
     const [renderTick, setRenderTick] = React.useState(0);
     const [isLinkDialogOpen, setLinkDialogOpen] = React.useState(false);
@@ -387,10 +426,9 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                                 type="color"
                                 className="toolbar-color"
                                 aria-label="Text color"
-                                value={
-                                    editor.getAttributes("textStyle").color ??
-                                    "var(--text)"
-                                }
+                                value={normalizeHtmlColor(
+                                    editor.getAttributes("textStyle").color
+                                )}
                                 onChange={(event) =>
                                     editor
                                         .chain()
