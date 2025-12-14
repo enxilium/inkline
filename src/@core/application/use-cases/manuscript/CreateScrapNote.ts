@@ -5,6 +5,8 @@ import { generateId } from "../../utils/id";
 
 export interface CreateScrapNoteRequest {
     projectId: string;
+    /** Optional client-generated ID used for optimistic UI flows. */
+    id?: string;
 }
 
 export interface CreateScrapNoteResponse {
@@ -33,7 +35,7 @@ export class CreateScrapNote {
 
         const now = new Date();
         const title = "New Scrap Note";
-        const id = generateId();
+        const id = request.id?.trim() || generateId();
         const scrapNote = new ScrapNote(id, title, "", false, now, now);
 
         await this.scrapNoteRepository.create(projectId, scrapNote);

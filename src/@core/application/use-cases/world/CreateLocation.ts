@@ -5,6 +5,8 @@ import { generateId } from "../../utils/id";
 
 export interface CreateLocationRequest {
     projectId: string;
+    /** Optional client-generated ID used for optimistic UI flows. */
+    id?: string;
 }
 
 export interface CreateLocationResponse {
@@ -32,7 +34,7 @@ export class CreateLocation {
         }
 
         const now = new Date();
-        const id = generateId();
+        const id = request.id?.trim() || generateId();
         const location = new Location(
             id,
             "",
