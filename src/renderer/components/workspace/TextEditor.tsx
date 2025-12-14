@@ -45,11 +45,7 @@ const fontOptions = [
     { label: "IBM Plex Mono", value: "'IBM Plex Mono', monospace" },
 ];
 
-export const TextEditor: React.FC<TextEditorProps> = ({
-    editor,
-    autosaveLabel,
-    autosaveClass,
-}) => {
+export const TextEditor: React.FC<TextEditorProps> = ({ editor }) => {
     const DEFAULT_FALLBACK_COLOR = "#f6f7fb";
     const [themeTextColor, setThemeTextColor] = React.useState(
         DEFAULT_FALLBACK_COLOR
@@ -441,16 +437,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                                 label="Clear"
                                 onClick={clearFormatting}
                             />
-                            {autosaveLabel && (
-                                <>
-                                    <div className="toolbar-divider" />
-                                    <div
-                                        className={`status-pill ${autosaveClass} autosave-status`}
-                                    >
-                                        {autosaveLabel}
-                                    </div>
-                                </>
-                            )}
                         </div>
                         <div className="editor-surface">
                             {isFindOpen ? (
@@ -619,7 +605,14 @@ export const TextEditor: React.FC<TextEditorProps> = ({
 
                             <div className="editor-scroll">
                                 <div className="editor-body">
-                                    <EditorContent editor={editor} />
+                                    <EditorContent
+                                        editor={editor}
+                                        onDropCapture={(event) => {
+                                            // Prevent inserting dragged text (e.g. document/tab titles)
+                                            // into the editor. Dragging is reserved for tiling.
+                                            event.preventDefault();
+                                        }}
+                                    />
                                 </div>
                             </div>
                         </div>

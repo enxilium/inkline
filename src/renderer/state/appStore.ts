@@ -442,6 +442,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         openTabs: [],
         autosaveStatus: defaultAutosaveStatus,
         autosaveError: null,
+        cloudSyncError: null,
         lastSavedAt: null,
         draggedDocument: null,
         shortcutStates: defaultShortcutStates,
@@ -670,6 +671,8 @@ export const useAppStore = create<AppStore>((set, get) => {
                     openTabs: exists
                         ? state.openTabs
                         : [...state.openTabs, selection],
+                    autosaveStatus: defaultAutosaveStatus,
+                    autosaveError: null,
                 };
             });
         },
@@ -695,6 +698,8 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {
                     openTabs: newTabs,
                     activeDocument: nextActive,
+                    autosaveStatus: defaultAutosaveStatus,
+                    autosaveError: null,
                 };
             });
         },
@@ -768,11 +773,12 @@ export const useAppStore = create<AppStore>((set, get) => {
                     return { ...chapter, order: index, updatedAt: now };
                 });
 
+                const nextTab: WorkspaceDocumentRef = { kind: "chapter", id };
                 const nextTabs = state.openTabs.some(
                     (t) => t.kind === "chapter" && t.id === id
                 )
                     ? state.openTabs
-                    : [...state.openTabs, { kind: "chapter", id }];
+                    : [...state.openTabs, nextTab];
 
                 const nextProject = state.workspaceProject
                     ? {
@@ -785,7 +791,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {
                     workspaceProject: nextProject,
                     chapters: nextChapters,
-                    activeDocument: { kind: "chapter", id },
+                    activeDocument: nextTab,
                     openTabs: nextTabs,
                 };
             });
@@ -830,11 +836,15 @@ export const useAppStore = create<AppStore>((set, get) => {
                     },
                 ];
 
+                const nextTab: WorkspaceDocumentRef = {
+                    kind: "scrapNote",
+                    id,
+                };
                 const nextTabs = state.openTabs.some(
                     (t) => t.kind === "scrapNote" && t.id === id
                 )
                     ? state.openTabs
-                    : [...state.openTabs, { kind: "scrapNote", id }];
+                    : [...state.openTabs, nextTab];
 
                 const nextProject = state.workspaceProject
                     ? {
@@ -850,7 +860,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {
                     workspaceProject: nextProject,
                     scrapNotes: nextNotes,
-                    activeDocument: { kind: "scrapNote", id },
+                    activeDocument: nextTab,
                     openTabs: nextTabs,
                 };
             });
@@ -902,11 +912,15 @@ export const useAppStore = create<AppStore>((set, get) => {
                     },
                 ];
 
+                const nextTab: WorkspaceDocumentRef = {
+                    kind: "character",
+                    id,
+                };
                 const nextTabs = state.openTabs.some(
                     (t) => t.kind === "character" && t.id === id
                 )
                     ? state.openTabs
-                    : [...state.openTabs, { kind: "character", id }];
+                    : [...state.openTabs, nextTab];
 
                 const nextProject = state.workspaceProject
                     ? {
@@ -922,7 +936,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {
                     workspaceProject: nextProject,
                     characters: nextCharacters,
-                    activeDocument: { kind: "character", id },
+                    activeDocument: nextTab,
                     openTabs: nextTabs,
                 };
             });
@@ -971,11 +985,15 @@ export const useAppStore = create<AppStore>((set, get) => {
                     },
                 ];
 
+                const nextTab: WorkspaceDocumentRef = {
+                    kind: "location",
+                    id,
+                };
                 const nextTabs = state.openTabs.some(
                     (t) => t.kind === "location" && t.id === id
                 )
                     ? state.openTabs
-                    : [...state.openTabs, { kind: "location", id }];
+                    : [...state.openTabs, nextTab];
 
                 const nextProject = state.workspaceProject
                     ? {
@@ -991,7 +1009,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {
                     workspaceProject: nextProject,
                     locations: nextLocations,
-                    activeDocument: { kind: "location", id },
+                    activeDocument: nextTab,
                     openTabs: nextTabs,
                 };
             });
@@ -1039,11 +1057,15 @@ export const useAppStore = create<AppStore>((set, get) => {
                     },
                 ];
 
+                const nextTab: WorkspaceDocumentRef = {
+                    kind: "organization",
+                    id,
+                };
                 const nextTabs = state.openTabs.some(
                     (t) => t.kind === "organization" && t.id === id
                 )
                     ? state.openTabs
-                    : [...state.openTabs, { kind: "organization", id }];
+                    : [...state.openTabs, nextTab];
 
                 const nextProject = state.workspaceProject
                     ? {
@@ -1059,7 +1081,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {
                     workspaceProject: nextProject,
                     organizations: nextOrganizations,
-                    activeDocument: { kind: "organization", id },
+                    activeDocument: nextTab,
                     openTabs: nextTabs,
                 };
             });

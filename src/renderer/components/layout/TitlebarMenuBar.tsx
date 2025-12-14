@@ -11,15 +11,29 @@ import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
 import { Button } from "../ui/Button";
 import { useAppStore } from "../../state/appStore";
+import { getTextStats } from "../../utils/textStats";
 
 type MenuKey = "file" | "edit" | null;
 
 export const TitlebarMenuBar: React.FC = () => {
-    const { projectId, exportManuscript, returnToProjects } = useAppStore();
+    const { projectId, exportManuscript, returnToProjects, chapters } =
+        useAppStore();
     const [openMenu, setOpenMenu] = React.useState<MenuKey>(null);
     const [isRangeDialogOpen, setIsRangeDialogOpen] = React.useState(false);
+    const [isProjectStatsOpen, setIsProjectStatsOpen] = React.useState(false);
     const [rangeStart, setRangeStart] = React.useState("");
     const [rangeEnd, setRangeEnd] = React.useState("");
+
+    const manuscriptWordCount = React.useMemo(() => {
+        return chapters.reduce((sum, chapter) => {
+            return sum + getTextStats(chapter.content).wordCount;
+        }, 0);
+    }, [chapters]);
+
+    const estimatedPages = React.useMemo(() => {
+        const wordsPerPage = 250;
+        return Math.max(1, Math.ceil(manuscriptWordCount / wordsPerPage));
+    }, [manuscriptWordCount]);
 
     React.useEffect(() => {
         const handleMouseDown = (event: MouseEvent) => {
@@ -121,6 +135,18 @@ export const TitlebarMenuBar: React.FC = () => {
                             >
                                 Export Manuscript...
                             </button>
+
+                            <button
+                                type="button"
+                                className="project-card-menu-item"
+                                role="menuitem"
+                                onClick={() => {
+                                    setOpenMenu(null);
+                                    setIsProjectStatsOpen(true);
+                                }}
+                            >
+                                Project Statistics
+                            </button>
                         </div>
                     ) : null}
                 </div>
@@ -221,6 +247,48 @@ export const TitlebarMenuBar: React.FC = () => {
                                 }}
                             >
                                 Apply
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+
+            <Dialog
+                open={isProjectStatsOpen}
+                onOpenChange={setIsProjectStatsOpen}
+            >
+                <DialogContent className="titlebar-range-dialog">
+                    <DialogHeader>
+                        <DialogTitle>Project Statistics</DialogTitle>
+                        <DialogDescription>
+                            Manuscript totals (chapters only).
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="dialog-form">
+                        <div className="dialog-field">
+                            <Label>Total word count</Label>
+                            <div className="status-pill is-muted">
+                                {manuscriptWordCount.toLocaleString()} words
+                            </div>
+                        </div>
+                        <div className="dialog-field">
+                            <Label>Estimated paperback pages</Label>
+                            <div className="status-pill is-muted">
+                                {estimatedPages.toLocaleString()} pages
+                            </div>
+                            <div className="dialog-hint">
+                                Based on ~250 words per page.
+                            </div>
+                        </div>
+
+                        <div className="dialog-actions">
+                            <Button
+                                type="button"
+                                variant="primary"
+                                onClick={() => setIsProjectStatsOpen(false)}
+                            >
+                                Close
                             </Button>
                         </div>
                     </div>
