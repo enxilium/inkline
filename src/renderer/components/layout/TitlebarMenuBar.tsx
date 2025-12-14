@@ -53,16 +53,13 @@ export const TitlebarMenuBar: React.FC = () => {
     };
 
     return (
-        <div
-            className="titlebar-menubar titlebar-no-drag"
-            data-titlebar-menubar-root
-        >
+        <div className="titlebar-menubar" data-titlebar-menubar-root>
             <div className="titlebar-menubar-row">
                 <div className="titlebar-menubar-item">
                     <button
                         type="button"
                         className={cx(
-                            "titlebar-menubar-button",
+                            "titlebar-menubar-button titlebar-no-drag",
                             openMenu === "file" && "is-open"
                         )}
                         onClick={() => toggleMenu("file")}
@@ -72,7 +69,10 @@ export const TitlebarMenuBar: React.FC = () => {
                     </button>
 
                     {openMenu === "file" ? (
-                        <div className="titlebar-menu" role="menu">
+                        <div
+                            className="titlebar-menu titlebar-no-drag"
+                            role="menu"
+                        >
                             <button
                                 type="button"
                                 className="project-card-menu-item"
@@ -129,7 +129,7 @@ export const TitlebarMenuBar: React.FC = () => {
                     <button
                         type="button"
                         className={cx(
-                            "titlebar-menubar-button",
+                            "titlebar-menubar-button titlebar-no-drag",
                             openMenu === "edit" && "is-open"
                         )}
                         onClick={() => toggleMenu("edit")}
@@ -139,7 +139,10 @@ export const TitlebarMenuBar: React.FC = () => {
                     </button>
 
                     {openMenu === "edit" ? (
-                        <div className="titlebar-menu" role="menu">
+                        <div
+                            className="titlebar-menu titlebar-no-drag"
+                            role="menu"
+                        >
                             <button
                                 type="button"
                                 className="project-card-menu-item"

@@ -149,13 +149,18 @@ export const App: React.FC = () => {
 
             const gutter = 10;
 
+            // Safety clamp: on some Electron/platform combos the overlay rect can
+            // report 0 inset even when native window controls are present.
+            // Keep a sane minimum so those controls never overlap our buttons.
+            const minLeft = 10;
+            const minRight = 140;
             root.style.setProperty(
                 "--titlebar-content-padding-left",
-                `${leftInset + gutter}px`
+                `${Math.max(leftInset + gutter, minLeft)}px`
             );
             root.style.setProperty(
                 "--titlebar-content-padding-right",
-                `${rightInset + gutter}px`
+                `${Math.max(rightInset + gutter, minRight)}px`
             );
         };
 

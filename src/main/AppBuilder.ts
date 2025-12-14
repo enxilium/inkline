@@ -38,8 +38,6 @@ import { CreateChapter } from "../@core/application/use-cases/manuscript/CreateC
 import { CreateScrapNote } from "../@core/application/use-cases/manuscript/CreateScrapNote";
 import { DeleteChapter } from "../@core/application/use-cases/manuscript/DeleteChapter";
 import { DeleteScrapNote } from "../@core/application/use-cases/manuscript/DeleteScrapNote";
-import { GlobalFind } from "../@core/application/use-cases/manuscript/GlobalFind";
-import { GlobalFindAndReplace } from "../@core/application/use-cases/manuscript/GlobalFindAndReplace";
 import { MoveChapter } from "../@core/application/use-cases/manuscript/MoveChapter";
 import { RenameChapter } from "../@core/application/use-cases/manuscript/RenameChapter";
 import { UpdateScrapNote } from "../@core/application/use-cases/manuscript/UpdateScrapNote";
@@ -86,8 +84,6 @@ import { CreateChapterController } from "../@interface-adapters/controllers/manu
 import { CreateScrapNoteController } from "../@interface-adapters/controllers/manuscript/CreateScrapNoteController";
 import { DeleteChapterController } from "../@interface-adapters/controllers/manuscript/DeleteChapterController";
 import { DeleteScrapNoteController } from "../@interface-adapters/controllers/manuscript/DeleteScrapNoteController";
-import { GlobalFindController } from "../@interface-adapters/controllers/manuscript/GlobalFindController";
-import { GlobalFindAndReplaceController } from "../@interface-adapters/controllers/manuscript/GlobalFindAndReplaceController";
 import { MoveChapterController } from "../@interface-adapters/controllers/manuscript/MoveChapterController";
 import { RenameChapterController } from "../@interface-adapters/controllers/manuscript/RenameChapterController";
 import { UpdateScrapNoteController } from "../@interface-adapters/controllers/manuscript/UpdateScrapNoteController";
@@ -193,8 +189,6 @@ type UseCaseMap = {
         createScrapNote: CreateScrapNote;
         deleteChapter: DeleteChapter;
         deleteScrapNote: DeleteScrapNote;
-        globalFind: GlobalFind;
-        globalFindAndReplace: GlobalFindAndReplace;
         moveChapter: MoveChapter;
         renameChapter: RenameChapter;
         updateScrapNote: UpdateScrapNote;
@@ -409,8 +403,6 @@ export class AppBuilder {
                     repo.scrapNote,
                     repo.project
                 ),
-                globalFind: new GlobalFind(repo.chapter),
-                globalFindAndReplace: new GlobalFindAndReplace(repo.chapter),
                 moveChapter: new MoveChapter(repo.project, repo.chapter),
                 renameChapter: new RenameChapter(repo.chapter),
                 updateScrapNote: new UpdateScrapNote(repo.scrapNote),
@@ -592,12 +584,6 @@ export class AppBuilder {
                 ),
                 deleteScrapNote: new DeleteScrapNoteController(
                     useCases.manuscript.deleteScrapNote
-                ),
-                globalFind: new GlobalFindController(
-                    useCases.manuscript.globalFind
-                ),
-                globalFindAndReplace: new GlobalFindAndReplaceController(
-                    useCases.manuscript.globalFindAndReplace
                 ),
                 moveChapter: new MoveChapterController(
                     useCases.manuscript.moveChapter
