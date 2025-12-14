@@ -1427,6 +1427,100 @@ html {
     background: rgba(255, 255, 255, 0.08);
 }
 
+.editor-find-dropdown {
+    z-index: 5;
+    background: var(--surface);
+    border: 1px solid var(--stroke);
+    border-radius: 10px;
+    box-shadow: none;
+    padding: 10px;
+    display: inline-flex;
+    flex-direction: column;
+    gap: 8px;
+    max-width: min(520px, calc(100% - 24px));
+}
+
+.editor-find-sticky {
+    position: absolute;
+    top: 12px;
+    right: 10px;
+    z-index: 6;
+    display: block;
+    pointer-events: none;
+}
+
+.editor-find-sticky .editor-find-dropdown {
+    pointer-events: auto;
+}
+
+.editor-find-chevron {
+    transition: transform 120ms ease;
+}
+
+.editor-find-chevron.is-open {
+    transform: rotate(180deg);
+}
+
+.editor-find-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.input.editor-find-input {
+    width: auto;
+    flex: 1 1 220px;
+    min-width: 140px;
+}
+
+.editor-find-btn {
+    white-space: nowrap;
+}
+
+.editor-find-btn.btn-icon {
+    padding: 0.28rem;
+}
+
+.editor-find-btn.btn-icon.is-active {
+    background: var(--accent-transparent);
+    color: var(--accent);
+    border-color: var(--accent-transparent2);
+}
+
+.editor-find-aa {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+}
+
+.editor-find-icon-stack {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.editor-find-icon-stack-plus {
+    position: absolute;
+    right: -4px;
+    bottom: -4px;
+    background: var(--surface);
+    border-radius: 999px;
+}
+
+.inkline-editor-search-result {
+    background: var(--accent-transparent);
+    border-radius: 3px;
+    box-shadow: inset 0 -1px 0 var(--accent-transparent2);
+}
+
+.inkline-editor-search-result-selected {
+    background: var(--accent-transparent2);
+    border-radius: 3px;
+    box-shadow: 0 0 0 1px var(--accent-transparent2);
+}
+
 .btn.is-loading {
     opacity: 0.65;
 }
@@ -1494,11 +1588,20 @@ input.toolbar-color:focus {
     background: var(--surface-strong);
     border: 1px solid var(--stroke);
     border-radius: calc(var(--radius) + 4px);
-    padding: 2rem;
+    position: relative;
     height: 100%;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
     flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.editor-scroll {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: 2rem;
     display: flex;
     flex-direction: column;
 }

@@ -8,6 +8,7 @@ import { TextAlign } from "@tiptap/extension-text-align";
 
 import { useAppStore } from "../../state/appStore";
 import { TextEditor } from "../workspace/TextEditor";
+import { SearchAndReplace } from "../../tiptap/searchAndReplace";
 import type {
     AutosaveStatus,
     WorkspaceChapter,
@@ -60,6 +61,11 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             TextStyle,
             FontFamily.configure({ types: ["textStyle"] }),
             TextAlign.configure({ types: ["heading", "paragraph"] }),
+            SearchAndReplace.configure({
+                searchResultClass: "inkline-editor-search-result",
+                selectedResultClass: "inkline-editor-search-result-selected",
+                disableRegex: true,
+            }),
             StarterKit.configure({
                 heading: { levels: [1, 2, 3] },
                 bulletList: { keepMarks: true },
