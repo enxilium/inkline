@@ -1,13 +1,28 @@
 import React from "react";
 
 import { useAppStore } from "../../state/appStore";
-import { CheckIcon, CloseIcon, RefreshCwIcon } from "../ui/Icons";
+import {
+    BinderChapterIcon,
+    BinderOrganizationIcon,
+    BinderScrapNoteIcon,
+    CheckIcon,
+    CloseIcon,
+    MapIcon,
+    PersonIcon,
+    RefreshCwIcon,
+} from "../ui/Icons";
 import { getTextStats } from "../../utils/textStats";
+import type { WorkspaceDocumentKind } from "../../types";
+import { Button } from "../ui/Button";
 
 const formatInt = (value: number): string =>
     value.toLocaleString(undefined, { maximumFractionDigits: 0 });
 
-export const WorkspaceFooter: React.FC = () => {
+export const WorkspaceFooter: React.FC<{
+    binderActiveKind: WorkspaceDocumentKind;
+    onBinderActiveKindChange: (kind: WorkspaceDocumentKind) => void;
+    isBinderOpen: boolean;
+}> = ({ binderActiveKind, onBinderActiveKindChange, isBinderOpen }) => {
     const { activeDocument, chapters, autosaveStatus, autosaveError } =
         useAppStore();
 
@@ -91,35 +106,95 @@ export const WorkspaceFooter: React.FC = () => {
 
     const shouldShowAutosave = Boolean(activeDocument);
 
+    const binderSections: Array<{
+        kind: WorkspaceDocumentKind;
+        title: string;
+    }> = React.useMemo(
+        () => [
+            { kind: "chapter", title: "Chapters" },
+            { kind: "scrapNote", title: "Scrap Notes" },
+            { kind: "character", title: "Characters" },
+            { kind: "location", title: "Locations" },
+            { kind: "organization", title: "Organizations" },
+        ],
+        []
+    );
+
+    const renderBinderIcon = (kind: WorkspaceDocumentKind) => {
+        switch (kind) {
+            case "chapter":
+                return <BinderChapterIcon size={16} />;
+            case "scrapNote":
+                return <BinderScrapNoteIcon size={16} />;
+            case "character":
+                return <PersonIcon size={16} />;
+            case "location":
+                return <MapIcon size={16} />;
+            case "organization":
+                return <BinderOrganizationIcon size={16} />;
+        }
+    };
+
     return (
         <div className="workspace-footer" role="contentinfo">
-            <div className="workspace-footer-left">
-                {shouldShowAutosave ? (
-                    <div
-                        className="workspace-footer-autosave"
-                        title={autosaveTitle}
-                    >
-                        {renderAutosaveIcon()}
+            <div className="workspace-footer-binder">
+                {isBinderOpen ? (
+                    <div className="binder-tabbar workspace-footer-binder-tabbar">
+                        {binderSections.map((section) => (
+                            <Button
+                                key={section.kind}
+                                variant="icon"
+                                className={
+                                    "binder-tab" +
+                                    (section.kind === binderActiveKind
+                                        ? " is-active"
+                                        : "")
+                                }
+                                onClick={() =>
+                                    onBinderActiveKindChange(section.kind)
+                                }
+                                title={section.title}
+                            >
+                                {renderBinderIcon(section.kind)}
+                            </Button>
+                        ))}
                     </div>
                 ) : null}
             </div>
 
-            <div className="workspace-footer-center">
-                {activeChapterStats ? (
-                    <div
-                        className="workspace-footer-stat"
-                        onMouseEnter={() => setIsHoveringCount(true)}
-                        onMouseLeave={() => setIsHoveringCount(false)}
-                        title={
-                            isHoveringCount ? "Word count" : "Character count"
-                        }
-                    >
-                        {isHoveringCount
-                            ? `${formatInt(activeChapterStats.characterCount)} chars`
-                            : `${formatInt(activeChapterStats.wordCount)} words`}
-                    </div>
-                ) : null}
+            <div className="workspace-footer-main">
+                <div className="workspace-footer-left">
+                    {shouldShowAutosave ? (
+                        <div
+                            className="workspace-footer-autosave"
+                            title={autosaveTitle}
+                        >
+                            {renderAutosaveIcon()}
+                        </div>
+                    ) : null}
+                </div>
+
+                <div className="workspace-footer-center">
+                    {activeChapterStats ? (
+                        <div
+                            className="workspace-footer-stat"
+                            onMouseEnter={() => setIsHoveringCount(true)}
+                            onMouseLeave={() => setIsHoveringCount(false)}
+                            title={
+                                isHoveringCount
+                                    ? "Word count"
+                                    : "Character count"
+                            }
+                        >
+                            {isHoveringCount
+                                ? `${formatInt(activeChapterStats.characterCount)} chars`
+                                : `${formatInt(activeChapterStats.wordCount)} words`}
+                        </div>
+                    ) : null}
+                </div>
             </div>
+
+            <div className="workspace-footer-chat" aria-hidden="true" />
 
             <div className="workspace-footer-right">
                 <div className="workspace-footer-brand">INKLINE STUDIO</div>

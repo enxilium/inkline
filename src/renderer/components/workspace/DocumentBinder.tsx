@@ -36,6 +36,7 @@ import {
     BinderOrganizationIcon,
     BinderScrapNoteIcon,
     ChevronLeftIcon,
+    ChevronRightIcon,
     GripVerticalIcon,
     MapIcon,
     PersonIcon,
@@ -67,6 +68,14 @@ export type DocumentBinderProps = {
     onReorderLocations: (newOrder: string[]) => void;
     onReorderOrganizations: (newOrder: string[]) => void;
     onToggleCollapse?: () => void;
+    /** Used to choose the correct icon for the toggle button (collapse vs expand/pin-open). */
+    isBinderOpen?: boolean;
+
+    /** Optional external control for which section is active. */
+    activeKind?: WorkspaceDocumentKind;
+    onActiveKindChange?: (kind: WorkspaceDocumentKind) => void;
+    /** When false, the bottom section tabbar is not rendered. */
+    showTabbar?: boolean;
 };
 
 type BinderItem = {
@@ -283,6 +292,10 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     onReorderLocations,
     onReorderOrganizations,
     onToggleCollapse,
+    isBinderOpen,
+    activeKind: controlledActiveKind,
+    onActiveKindChange,
+    showTabbar = true,
 }) => {
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -295,9 +308,12 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         })
     );
 
-    const [activeKind, setActiveKind] = React.useState<WorkspaceDocumentKind>(
-        activeDocument?.kind ?? "chapter"
-    );
+    const [uncontrolledActiveKind, setUncontrolledActiveKind] =
+        React.useState<WorkspaceDocumentKind>(
+            activeDocument?.kind ?? "chapter"
+        );
+
+    const activeKind = controlledActiveKind ?? uncontrolledActiveKind;
 
     const handleDragEnd = (event: DragEndEvent, section: BinderSection) => {
         const { active, over } = event;
@@ -320,7 +336,11 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     };
 
     const handleSelectKind = (kind: WorkspaceDocumentKind) => {
-        setActiveKind(kind);
+        if (onActiveKindChange) {
+            onActiveKindChange(kind);
+            return;
+        }
+        setUncontrolledActiveKind(kind);
     };
 
     const getIconForKind = (kind: WorkspaceDocumentKind) => {
@@ -420,6 +440,9 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     const activeSection =
         sections.find((section) => section.kind === activeKind) ?? sections[0];
 
+    const toggleIcon =
+        (isBinderOpen ?? true) ? <ChevronLeftIcon /> : <ChevronRightIcon />;
+
     return (
         <aside className="binder-panel">
             <div className="binder-header">
@@ -427,7 +450,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                     <p className="panel-label">EXPLORER</p>
                     <div className="panel-actions">
                         <Button variant="icon" onClick={onToggleCollapse}>
-                            <ChevronLeftIcon />
+                            {toggleIcon}
                         </Button>
                     </div>
                 </div>
@@ -504,22 +527,26 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                 )}
             </div>
 
-            <div className="binder-tabbar">
-                {sections.map((section) => (
-                    <Button
-                        key={section.kind}
-                        variant="icon"
-                        className={
-                            "binder-tab" +
-                            (section.kind === activeKind ? " is-active" : "")
-                        }
-                        onClick={() => handleSelectKind(section.kind)}
-                        title={section.title}
-                    >
-                        {getIconForKind(section.kind)}
-                    </Button>
-                ))}
-            </div>
+            {showTabbar ? (
+                <div className="binder-tabbar">
+                    {sections.map((section) => (
+                        <Button
+                            key={section.kind}
+                            variant="icon"
+                            className={
+                                "binder-tab" +
+                                (section.kind === activeKind
+                                    ? " is-active"
+                                    : "")
+                            }
+                            onClick={() => handleSelectKind(section.kind)}
+                            title={section.title}
+                        >
+                            {getIconForKind(section.kind)}
+                        </Button>
+                    ))}
+                </div>
+            ) : null}
         </aside>
     );
 };
