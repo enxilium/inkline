@@ -10,6 +10,13 @@ import { ICharacterRepository } from "../../@core/domain/repositories/ICharacter
 import { ILocationRepository } from "../../@core/domain/repositories/ILocationRepository";
 import { IOrganizationRepository } from "../../@core/domain/repositories/IOrganizationRepository";
 import { IScrapNoteRepository } from "../../@core/domain/repositories/IScrapNoteRepository";
+import {
+    extractPlainText,
+    sanitizeReplacementTextForEdits,
+    splitWordsForEditIndexing,
+} from "../../@core/application/utils/tiptapText";
+
+const EDIT_MODEL = "gemini-2.5-pro";
 
 export class GeminiAITextService implements IAITextService {
     private sessionStore: IUserSessionStore;
@@ -106,14 +113,23 @@ export class GeminiAITextService implements IAITextService {
     async editManuscript(
         chapterIds: string[],
         context: NarrativeContext
-    ): Promise<
-        {
+    ): Promise<{
+        comments: {
             chapterId: string;
             comment: string;
+            wordNumberStart?: number;
+            wordNumberEnd?: number;
+            originalText?: string;
+        }[];
+        replacements: {
+            chapterId: string;
             wordNumberStart: number;
             wordNumberEnd: number;
-        }[]
-    > {
+            originalText: string;
+            replacementText: string;
+            comment?: string;
+        }[];
+    }> {
         const client = await this.getModel();
         const contextStr = this.formatContext(context);
 
@@ -122,23 +138,51 @@ export class GeminiAITextService implements IAITextService {
             chapterIds.map((id) => this.chapterRepository.findById(id))
         );
 
-        const validChapters = chapters.filter((c) => c !== null);
+        const validChapters = chapters.filter(
+            (c): c is NonNullable<typeof c> => c !== null
+        );
         if (validChapters.length === 0) {
-            return [];
+            return { comments: [], replacements: [] };
         }
 
+        const tokensByChapterId = new Map<string, string[]>();
+
         const manuscriptContent = validChapters
-            .map(
-                (c) =>
-                    `--- CHAPTER ID: ${c.id} ---\nTitle: ${c.title}\nContent: ${c.content}`
-            )
+            .map((c) => {
+                const plainText = extractPlainText(c.content);
+                const tokens = splitWordsForEditIndexing(plainText);
+                tokensByChapterId.set(c.id, tokens);
+                const numberedWords =
+                    tokens.length === 0
+                        ? ""
+                        : tokens
+                              .map((word, index) => `${index + 1}: ${word}`)
+                              .join("\n");
+                return `--- CHAPTER ID: ${c.id} ---\nTitle: ${c.title}\nWords (1-based index => token):\n${numberedWords}`;
+            })
             .join("\n\n");
 
         const systemInstruction = `You are an expert editor.
-            Your task is to review the provided manuscript chapters and provide specific comments and suggestions.
-            You must identify the exact location of each comment using word counts relative to the start of the chapter.
-            The word count starts at 0.
-            Return the result as a JSON array.`;
+
+    Your task: review the provided manuscript chapters and return two kinds of edits:
+    1) General comments (may be chapter-level or anchored to a specific text range)
+    2) Text replacements (Google Docs-style “replace X with Y”)
+
+        IMPORTANT word indexing rules:
+        - You are given each chapter as numbered word tokens: "1: <token>", "2: <token>", etc.
+        - Tokens are WORDS ONLY. They intentionally exclude surrounding punctuation.
+            (Example: the text "Hello," would be tokenized as "Hello".)
+    - If you include a range, word indices are INCLUSIVE and 1-based.
+    - wordNumberStart and wordNumberEnd refer to these exact token numbers, relative to the start of THAT chapter.
+    - Do NOT estimate word boundaries from prose. Use the provided numbering.
+
+        Output requirements:
+    - Return STRICT JSON (no markdown, no prose) matching the provided response schema.
+        - For range-level items, include originalText EXACTLY as the concatenation of tokens wordNumberStart..wordNumberEnd joined by single spaces.
+            (This means originalText must be derivable directly from the numbered tokens and MUST NOT include punctuation.)
+    - For chapter-level comments, omit wordNumberStart, wordNumberEnd, and originalText.
+    - For replacements, comment is optional (may be empty or omitted).
+    - For replacements, replacementText MUST NOT include punctuation. Use words only (letters/numbers/spaces, apostrophes/hyphens allowed).`;
 
         const prompt = `
             --- NARRATIVE CONTEXT ---
@@ -150,28 +194,51 @@ export class GeminiAITextService implements IAITextService {
             Please review the manuscript and provide comments.`;
 
         const result = await client.models.generateContent({
-            model: "gemini-2.5-flash",
+            model: EDIT_MODEL,
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
                 responseMimeType: "application/json",
                 responseSchema: {
-                    type: "ARRAY",
-                    items: {
-                        type: "OBJECT",
-                        properties: {
-                            chapterId: { type: "STRING" },
-                            comment: { type: "STRING" },
-                            wordNumberStart: { type: "NUMBER" },
-                            wordNumberEnd: { type: "NUMBER" },
+                    type: "OBJECT",
+                    properties: {
+                        comments: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    chapterId: { type: "STRING" },
+                                    comment: { type: "STRING" },
+                                    wordNumberStart: { type: "NUMBER" },
+                                    wordNumberEnd: { type: "NUMBER" },
+                                    originalText: { type: "STRING" },
+                                },
+                                required: ["chapterId", "comment"],
+                            },
                         },
-                        required: [
-                            "chapterId",
-                            "comment",
-                            "wordNumberStart",
-                            "wordNumberEnd",
-                        ],
+                        replacements: {
+                            type: "ARRAY",
+                            items: {
+                                type: "OBJECT",
+                                properties: {
+                                    chapterId: { type: "STRING" },
+                                    wordNumberStart: { type: "NUMBER" },
+                                    wordNumberEnd: { type: "NUMBER" },
+                                    originalText: { type: "STRING" },
+                                    replacementText: { type: "STRING" },
+                                    comment: { type: "STRING" },
+                                },
+                                required: [
+                                    "chapterId",
+                                    "wordNumberStart",
+                                    "wordNumberEnd",
+                                    "originalText",
+                                    "replacementText",
+                                ],
+                            },
+                        },
                     },
+                    required: ["comments", "replacements"],
                 },
             },
         });
@@ -179,13 +246,166 @@ export class GeminiAITextService implements IAITextService {
         try {
             const text = result.text;
             if (text) {
-                return JSON.parse(text);
+                const parsed = JSON.parse(text) as {
+                    comments?: unknown;
+                    replacements?: unknown;
+                };
+
+                const asRecord = (
+                    value: unknown
+                ): Record<string, unknown> | null => {
+                    if (!value || typeof value !== "object") {
+                        return null;
+                    }
+                    return value as Record<string, unknown>;
+                };
+
+                const rawComments = Array.isArray(parsed.comments)
+                    ? (parsed.comments as unknown[])
+                    : [];
+                const rawReplacements = Array.isArray(parsed.replacements)
+                    ? (parsed.replacements as unknown[])
+                    : [];
+
+                const comments = rawComments
+                    .map((item) => {
+                        const rec = asRecord(item);
+                        if (!rec) {
+                            return null;
+                        }
+
+                        const chapterId =
+                            typeof rec["chapterId"] === "string"
+                                ? (rec["chapterId"] as string)
+                                : null;
+                        const comment =
+                            typeof rec["comment"] === "string"
+                                ? (rec["comment"] as string)
+                                : "";
+                        if (!chapterId || !comment) {
+                            return null;
+                        }
+
+                        const start =
+                            typeof rec["wordNumberStart"] === "number"
+                                ? (rec["wordNumberStart"] as number)
+                                : undefined;
+                        const end =
+                            typeof rec["wordNumberEnd"] === "number"
+                                ? (rec["wordNumberEnd"] as number)
+                                : undefined;
+
+                        // Chapter-level comment
+                        if (!start || !end) {
+                            return { chapterId, comment };
+                        }
+
+                        const tokens = tokensByChapterId.get(chapterId);
+                        if (
+                            !tokens ||
+                            start < 1 ||
+                            end < start ||
+                            end > tokens.length
+                        ) {
+                            // Degrade invalid ranged comment into a chapter-level comment.
+                            return { chapterId, comment };
+                        }
+
+                        return {
+                            chapterId,
+                            comment,
+                            wordNumberStart: start,
+                            wordNumberEnd: end,
+                            // Enforce exact token-span text to avoid LLM formatting drift.
+                            originalText: tokens
+                                .slice(start - 1, end)
+                                .join(" "),
+                        };
+                    })
+                    .filter(Boolean) as {
+                    chapterId: string;
+                    comment: string;
+                    wordNumberStart?: number;
+                    wordNumberEnd?: number;
+                    originalText?: string;
+                }[];
+
+                const replacements = rawReplacements
+                    .map((item) => {
+                        const rec = asRecord(item);
+                        if (!rec) {
+                            return null;
+                        }
+
+                        const chapterId =
+                            typeof rec["chapterId"] === "string"
+                                ? (rec["chapterId"] as string)
+                                : null;
+                        const start =
+                            typeof rec["wordNumberStart"] === "number"
+                                ? (rec["wordNumberStart"] as number)
+                                : null;
+                        const end =
+                            typeof rec["wordNumberEnd"] === "number"
+                                ? (rec["wordNumberEnd"] as number)
+                                : null;
+                        const replacementText =
+                            typeof rec["replacementText"] === "string"
+                                ? (rec["replacementText"] as string)
+                                : null;
+                        const comment =
+                            typeof rec["comment"] === "string"
+                                ? (rec["comment"] as string)
+                                : undefined;
+
+                        if (!chapterId || !start || !end || !replacementText) {
+                            return null;
+                        }
+
+                        const sanitizedReplacementText =
+                            sanitizeReplacementTextForEdits(replacementText);
+                        if (!sanitizedReplacementText) {
+                            return null;
+                        }
+
+                        const tokens = tokensByChapterId.get(chapterId);
+                        if (
+                            !tokens ||
+                            start < 1 ||
+                            end < start ||
+                            end > tokens.length
+                        ) {
+                            return null;
+                        }
+
+                        return {
+                            chapterId,
+                            wordNumberStart: start,
+                            wordNumberEnd: end,
+                            // Enforce exact token-span text to avoid LLM formatting drift.
+                            originalText: tokens
+                                .slice(start - 1, end)
+                                .join(" "),
+                            replacementText: sanitizedReplacementText,
+                            comment,
+                        };
+                    })
+                    .filter(Boolean) as {
+                    chapterId: string;
+                    wordNumberStart: number;
+                    wordNumberEnd: number;
+                    originalText: string;
+                    replacementText: string;
+                    comment?: string;
+                }[];
+
+                return { comments, replacements };
             }
         } catch (e) {
             console.error("Failed to parse JSON response", e);
         }
 
-        return [];
+        return { comments: [], replacements: [] };
     }
 
     async *chat(

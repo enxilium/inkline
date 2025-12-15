@@ -39,6 +39,7 @@ import {
     ChevronRightIcon,
     GripVerticalIcon,
     MapIcon,
+    MessageSquareFilledIcon,
     PersonIcon,
     PlusIcon,
 } from "../ui/Icons";
@@ -83,6 +84,7 @@ type BinderItem = {
     label: string;
     prefix?: string;
     kind: WorkspaceDocumentKind;
+    hasPendingEdits?: boolean;
 };
 
 type BinderSection = {
@@ -250,6 +252,11 @@ const SortableBinderItem = ({
                         </span>
                     ) : null}
                     <span className="binder-item-label">{item.label}</span>
+                    {item.kind === "chapter" && item.hasPendingEdits ? (
+                        <span className="binder-item-pending" aria-hidden>
+                            <MessageSquareFilledIcon size={14} />
+                        </span>
+                    ) : null}
                 </button>
             )}
             <button
@@ -297,6 +304,10 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     onActiveKindChange,
     showTabbar = true,
 }) => {
+    const pendingEditsByChapterId = useAppStore(
+        (state) => state.pendingEditsByChapterId
+    );
+
     const sensors = useSensors(
         useSensor(PointerSensor, {
             activationConstraint: {
@@ -366,6 +377,11 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             label: normalizeLabel(chapter.title, "Untitled Chapter"),
             prefix: String(chapter.order + 1),
             kind: "chapter",
+            hasPendingEdits:
+                (pendingEditsByChapterId[chapter.id]?.comments?.length ?? 0) >
+                    0 ||
+                (pendingEditsByChapterId[chapter.id]?.replacements?.length ??
+                    0) > 0,
         }));
 
     const scrapNoteItems: BinderItem[] = scrapNotes.map((note) => ({

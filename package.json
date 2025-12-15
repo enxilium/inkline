@@ -73,6 +73,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@saintno/comfyui-sdk": "^0.2.49",
+    "@sereneinserenade/tiptap-comment-extension": "^0.1.2",
     "@supabase/supabase-js": "^2.84.0",
     "@tiptap/extension-color": "^3.11.0",
     "@tiptap/extension-font-family": "^3.11.0",

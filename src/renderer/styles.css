@@ -1620,6 +1620,11 @@ input.toolbar-color:focus {
     outline: none;
 }
 
+.editor-body [data-comment-id] {
+    background: var(--accent-transparent);
+    box-shadow: inset 0 -1px 0 var(--accent-transparent2);
+}
+
 .editor-body p {
     margin: 0 0 0.85rem;
 }
@@ -1749,6 +1754,111 @@ input.toolbar-color:focus {
     gap: 1rem;
     height: 100%;
     overflow-y: hidden;
+}
+
+.connected-editor {
+    position: relative;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.chapter-edits-banner {
+    background: var(--surface-strong);
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.chapter-edits-banner-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--text-subtle);
+    margin-bottom: 0.5rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.chapter-edits-banner-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.chapter-edits-banner-item {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-items: flex-start;
+}
+
+.chapter-edits-banner-text {
+    color: var(--text);
+    font-size: 0.95rem;
+    line-height: 1.4;
+    flex: 1;
+}
+
+.chapter-edit-bubble {
+    background: var(--surface-strong);
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius);
+    padding: 0.75rem;
+    z-index: 1000;
+}
+
+.chapter-edit-bubble-replace {
+    color: var(--text);
+    font-size: 0.95rem;
+    line-height: 1.4;
+    font-weight: 600;
+    margin-bottom: 0.65rem;
+}
+
+.chapter-edit-bubble-quote {
+    display: inline-block;
+    max-width: 100%;
+    font-family: var(--font-mono);
+    font-weight: 500;
+    padding: 0.12rem 0.35rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.chapter-edit-bubble-comment {
+    margin-bottom: 0.75rem;
+    padding-left: 0.65rem;
+    border-left: 2px solid var(--accent-transparent2);
+}
+
+.chapter-edit-bubble-comment-label {
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-subtle);
+    margin-bottom: 0.25rem;
+}
+
+.chapter-edit-bubble-comment-text {
+    color: var(--text);
+    font-size: 0.92rem;
+    line-height: 1.35;
+}
+
+.chapter-edit-bubble-text {
+    color: var(--text);
+    font-size: 0.95rem;
+    line-height: 1.4;
+    margin-bottom: 0.75rem;
+}
+
+.chapter-edit-bubble-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.5rem;
 }
 
 .text-editor-header {
@@ -2026,6 +2136,27 @@ input.toolbar-color:focus {
     width: 20px;
     height: 20px;
     pointer-events: none;
+}
+
+.binder-item-pending {
+    position: absolute;
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    color: var(--text-subtle);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    transition:
+        right 0.1s ease,
+        color 0.1s ease;
+}
+
+.binder-list li:hover .binder-item-pending,
+.binder-item.is-active .binder-item-pending {
+    right: 32px;
+    color: var(--text);
 }
 
 .binder-list li:hover .binder-item-delete {

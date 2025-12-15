@@ -55,11 +55,32 @@ export const App: React.FC = () => {
         openProject,
         returnToProjects,
         importAsset,
+        pendingEditsById,
     } = useAppStore();
+
+    const pendingEditsCount = React.useMemo(() => {
+        return Object.keys(pendingEditsById).length;
+    }, [pendingEditsById]);
 
     React.useEffect(() => {
         bootstrapSession();
     }, [bootstrapSession]);
+
+    React.useEffect(() => {
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            if (stage !== "workspace" || pendingEditsCount === 0) {
+                return;
+            }
+
+            event.preventDefault();
+            // Required for Chromium to show the confirmation dialog.
+            event.returnValue = "";
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () =>
+            window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [pendingEditsCount, stage]);
 
     React.useEffect(() => {
         const isMac =
