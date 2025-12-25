@@ -48,7 +48,7 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             const raw = await fs.readFile(filePath, "utf-8");
             const parsed = JSON.parse(raw) as SessionFileSchema;
             const user = this.deserialize(parsed.user);
-            
+
             // Merge device-local preferences (like API key) that persist across logouts
             const localPrefs = await this.loadLocalPreferences();
             if (localPrefs.geminiApiKey && !user.preferences.geminiApiKey) {
@@ -60,7 +60,7 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
                     localPrefs.geminiApiKey
                 );
             }
-            
+
             return user;
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code === "ENOENT") {
@@ -83,11 +83,11 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
         await fs.writeFile(filePath, JSON.stringify(payload, null, 2), {
             encoding: "utf-8",
         });
-        
+
         // Also persist device-local preferences so they survive logout
         if (user.preferences.geminiApiKey) {
-            await this.saveLocalPreferences({ 
-                geminiApiKey: user.preferences.geminiApiKey 
+            await this.saveLocalPreferences({
+                geminiApiKey: user.preferences.geminiApiKey,
             });
         }
     }
@@ -118,7 +118,7 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             FilesystemUserSessionStore.SESSION_FILENAME
         );
     }
-    
+
     private async resolveLocalPrefsFilePath(): Promise<string> {
         if (!app.isReady()) {
             await app.whenReady();
@@ -130,7 +130,7 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             FilesystemUserSessionStore.LOCAL_PREFS_FILENAME
         );
     }
-    
+
     private async loadLocalPreferences(): Promise<LocalPreferencesSchema> {
         try {
             const filePath = await this.resolveLocalPrefsFilePath();
@@ -144,17 +144,19 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             return {};
         }
     }
-    
-    private async saveLocalPreferences(prefs: LocalPreferencesSchema): Promise<void> {
+
+    private async saveLocalPreferences(
+        prefs: LocalPreferencesSchema
+    ): Promise<void> {
         try {
             const filePath = await this.resolveLocalPrefsFilePath();
             const directory = path.dirname(filePath);
             await fs.mkdir(directory, { recursive: true });
-            
+
             // Merge with existing preferences
             const existing = await this.loadLocalPreferences();
             const merged = { ...existing, ...prefs };
-            
+
             await fs.writeFile(filePath, JSON.stringify(merged, null, 2), {
                 encoding: "utf-8",
             });
