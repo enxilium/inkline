@@ -98,6 +98,7 @@ import { OverwriteChapterController } from "../@interface-adapters/controllers/m
 import { OverwriteScrapNoteController } from "../@interface-adapters/controllers/manuscript/OverwriteScrapNoteController";
 import { RenameChapterController } from "../@interface-adapters/controllers/manuscript/RenameChapterController";
 import { UpdateScrapNoteController } from "../@interface-adapters/controllers/manuscript/UpdateScrapNoteController";
+import { GetSyncStateController } from "../@interface-adapters/controllers/sync/GetSyncStateController";
 import { CreateProjectController } from "../@interface-adapters/controllers/project/CreateProjectController";
 import { DeleteProjectController } from "../@interface-adapters/controllers/project/DeleteProjectController";
 import { ExportManuscriptController } from "../@interface-adapters/controllers/project/ExportManuscriptController";
@@ -131,6 +132,8 @@ import type { IPlaylistGenerationService } from "../@core/domain/services/IPlayl
 import type { IStorageService } from "../@core/domain/services/IStorageService";
 import type { IUserSessionStore } from "../@core/domain/services/IUserSessionStore";
 import { ElectronAuthStateGateway } from "./auth/ElectronAuthStateGateway";
+import { ElectronSyncStateGateway } from "../@interface-adapters/controllers/sync/SyncStateGateway";
+import type { EntityType } from "../@infrastructure/db/offline/DeletionLog";
 
 export type RepositoryDependencies = {
     asset: IAssetRepository;
@@ -256,6 +259,7 @@ const invokeController = <
 export class AppBuilder {
     private controllers: ControllerInstanceMap | null = null;
     private readonly authStateGateway = new ElectronAuthStateGateway();
+    private readonly syncStateGateway = new ElectronSyncStateGateway();
 
     constructor(private readonly dependencies: AppBuilderDependencies) {}
 
@@ -263,6 +267,11 @@ export class AppBuilder {
         const useCases = this.createUseCases();
         this.controllers = this.createControllers(useCases);
         this.registerIpcHandlers();
+
+        // Wire up sync state gateway to the synchronization service
+        this.dependencies.syncService.setSyncStateGateway(
+            this.syncStateGateway
+        );
 
         this.authStateGateway.on("auth-changed", (user) => {
             if (user) {
@@ -272,8 +281,24 @@ export class AppBuilder {
             }
         });
 
-        // Note: Conflicts are now auto-resolved using "most recent wins" strategy.
-        // No need to notify the renderer about conflicts.
+        // Register conflict resolution IPC handler
+        ipcMain.handle(
+            "sync:resolveConflict",
+            async (
+                _event,
+                entityType: EntityType,
+                entityId: string,
+                projectId: string,
+                resolution: "accept-remote" | "keep-local"
+            ) => {
+                await this.dependencies.syncService.resolveConflict(
+                    entityType,
+                    entityId,
+                    projectId,
+                    resolution
+                );
+            }
+        );
 
         await this.initializeAuthState(useCases.auth.loadStoredSession);
     }
@@ -680,6 +705,9 @@ export class AppBuilder {
                 reorderProjectItems: new ReorderProjectItemsController(
                     useCases.project.reorderProjectItems
                 ),
+            },
+            sync: {
+                getSyncState: new GetSyncStateController(this.syncStateGateway),
             },
             world: {
                 createCharacter: new CreateCharacterController(

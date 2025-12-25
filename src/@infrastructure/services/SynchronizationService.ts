@@ -1,4 +1,8 @@
 import { EventEmitter } from "events";
+import {
+    RealtimeChannel,
+    RealtimePostgresChangesPayload,
+} from "@supabase/supabase-js";
 import { SupabaseProjectRepository } from "../db/SupabaseProjectRepository";
 import { FileSystemProjectRepository } from "../db/filesystem/FileSystemProjectRepository";
 import { SupabaseChapterRepository } from "../db/SupabaseChapterRepository";
@@ -19,14 +23,34 @@ import * as path from "path";
 import { Buffer } from "buffer";
 import { deletionLog, EntityType } from "../db/offline/DeletionLog";
 import { SupabaseDeletionLogRepository } from "../db/SupabaseDeletionLogRepository";
+import {
+    SyncStateGateway,
+    RemoteChangePayload,
+    EntityType as SyncEntityType,
+} from "../../@interface-adapters/controllers/sync/SyncStateGateway";
+
+/**
+ * Queued realtime event to be processed after a sync operation completes.
+ */
+type QueuedRealtimeEvent = {
+    entityType: SyncEntityType;
+    entityId: string;
+    projectId: string;
+    eventType: "INSERT" | "UPDATE" | "DELETE";
+    timestamp: number;
+};
 
 /**
  * SynchronizationService handles bidirectional sync between local filesystem and Supabase.
  *
+ * Architecture: Incremental Sync with Event Queuing
+ * - Realtime subscriptions push granular entity updates to the renderer
+ * - Events received during full sync are queued and replayed afterward
+ * - Automatic reconnection with exponential backoff on channel failure
+ *
  * Conflict Resolution Strategy: "Most Recent Wins"
  * - When syncing, the entity with the most recent updatedAt timestamp is used as the source of truth.
- * - This applies consistently to all entity types (chapters, characters, locations, organizations,
- *   scrap notes, and assets).
+ * - If user has local changes newer than remote, a conflict dialog is shown
  *
  * Deletion Handling:
  * - Deletions are tracked in a local deletion log when offline.
@@ -35,6 +59,8 @@ import { SupabaseDeletionLogRepository } from "../db/SupabaseDeletionLogReposito
  * - Remote deletion logs allow other devices to sync deletions.
  */
 export class SynchronizationService extends EventEmitter {
+    private syncStateGateway: SyncStateGateway | null = null;
+
     constructor(
         private supabaseProjectRepo: SupabaseProjectRepository,
         private fsProjectRepo: FileSystemProjectRepository,
@@ -55,12 +81,34 @@ export class SynchronizationService extends EventEmitter {
         super();
     }
 
+    setSyncStateGateway(gateway: SyncStateGateway): void {
+        this.syncStateGateway = gateway;
+    }
+
     private syncInterval: NodeJS.Timeout | null = null;
+    private realtimeChannel: RealtimeChannel | null = null;
     private isSyncing = false;
     private wasOffline = false;
+    private currentUserId: string | null = null;
+    private isOnline = false;
+
+    // Event queue for realtime events received during sync
+    private eventQueue: QueuedRealtimeEvent[] = [];
+    private isProcessingQueue = false;
+
+    // Reconnection state
+    private reconnectAttempts = 0;
+    private reconnectTimeout: NodeJS.Timeout | null = null;
+    private readonly maxReconnectAttempts = 10;
+    private readonly baseReconnectDelay = 1000; // 1 second
+
+    // Cache of user's project IDs for filtering (populated during sync)
+    private userProjectIds: Set<string> = new Set();
 
     startAutoSync(userId: string) {
         this.stopAutoSync();
+        this.currentUserId = userId;
+        this.reconnectAttempts = 0;
         console.log(
             `[SynchronizationService] Starting auto-sync for user ${userId}`
         );
@@ -68,14 +116,33 @@ export class SynchronizationService extends EventEmitter {
         // Cleanup old deletion logs on app launch (30+ days old)
         void this.cleanupOldDeletionLogs(userId);
 
-        // Initial sync
+        // Initial sync - this also populates userProjectIds
         void this.syncAll(userId);
 
-        // Poll for connection status
-        this.syncInterval = setInterval(async () => {
-            const isOnline = await this.checkConnection();
+        // Set up Supabase Realtime subscriptions for all entity tables
+        this.setupRealtimeSubscriptions(userId);
 
-            if (isOnline) {
+        // Immediate connection check
+        this.checkConnection(userId).then((online) => {
+            console.log(
+                `[SynchronizationService] Initial connection check: ${
+                    online ? "Online" : "Offline"
+                }`
+            );
+            this.isOnline = online;
+            this.syncStateGateway?.setStatus(online ? "online" : "offline");
+        });
+
+        // Poll for connection status (every 30 seconds)
+        this.syncInterval = setInterval(async () => {
+            const online = await this.checkConnection(userId);
+
+            if (online !== this.isOnline) {
+                this.isOnline = online;
+                this.syncStateGateway?.setStatus(online ? "online" : "offline");
+            }
+
+            if (online) {
                 if (this.wasOffline) {
                     console.log(
                         "[SynchronizationService] Connection restored. Running re-connection sync."
@@ -90,21 +157,699 @@ export class SynchronizationService extends EventEmitter {
     }
 
     stopAutoSync() {
+        this.currentUserId = null;
+        this.userProjectIds.clear();
+        this.eventQueue = [];
+
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
+
         if (this.syncInterval) {
             console.log("[SynchronizationService] Stopping auto-sync");
             clearInterval(this.syncInterval);
             this.syncInterval = null;
         }
+
+        // Unsubscribe from realtime channel
+        if (this.realtimeChannel) {
+            console.log("[SynchronizationService] Unsubscribing from realtime");
+            SupabaseService.getClient().removeChannel(this.realtimeChannel);
+            this.realtimeChannel = null;
+        }
+
+        this.isOnline = false;
+        this.syncStateGateway?.setStatus("offline");
     }
 
-    private async checkConnection(): Promise<boolean> {
+    private setupRealtimeSubscriptions(userId: string): void {
+        // Clean up existing channel if any
+        if (this.realtimeChannel) {
+            SupabaseService.getClient().removeChannel(this.realtimeChannel);
+            this.realtimeChannel = null;
+        }
+
+        const client = SupabaseService.getClient();
+
+        // Create a single channel that listens to all relevant tables
+        // Note: Child entity tables (chapters, characters, etc.) don't have user_id filters
+        // because Supabase Realtime doesn't support joins. We filter client-side using userProjectIds.
+        this.realtimeChannel = client
+            .channel(`sync-${userId}-${Date.now()}`) // Unique channel name for reconnection
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "projects",
+                    filter: `user_id=eq.${userId}`,
+                },
+                (payload) => this.handleRealtimeChange("project", payload)
+            )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "chapters" },
+                (payload) => this.handleRealtimeChange("chapter", payload)
+            )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "characters" },
+                (payload) => this.handleRealtimeChange("character", payload)
+            )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "locations" },
+                (payload) => this.handleRealtimeChange("location", payload)
+            )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "organizations" },
+                (payload) => this.handleRealtimeChange("organization", payload)
+            )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "scrap_notes" },
+                (payload) => this.handleRealtimeChange("scrapNote", payload)
+            )
+            .on(
+                "postgres_changes",
+                { event: "*", schema: "public", table: "assets" },
+                (payload) => this.handleAssetRealtimeChange(payload)
+            )
+            .subscribe(async (status) => {
+                console.log(
+                    `[SynchronizationService] Realtime subscription status: ${status}`
+                );
+                if (status === "SUBSCRIBED") {
+                    this.isOnline = true;
+                    this.reconnectAttempts = 0; // Reset on successful connection
+                    this.syncStateGateway?.setStatus("online");
+
+                    // Cancel any pending reconnection attempts since we're now connected
+                    if (this.reconnectTimeout) {
+                        clearTimeout(this.reconnectTimeout);
+                        this.reconnectTimeout = null;
+                    }
+                } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
+                    this.isOnline = false;
+                    this.syncStateGateway?.setStatus("offline");
+                    this.scheduleReconnect(userId);
+                }
+            });
+    }
+
+    /**
+     * Schedule a reconnection attempt with exponential backoff.
+     */
+    private scheduleReconnect(userId: string): void {
+        if (!this.currentUserId || this.currentUserId !== userId) {
+            return; // User logged out or changed
+        }
+
+        // Don't schedule if we already have a pending reconnection
+        if (this.reconnectTimeout) {
+            return;
+        }
+
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error(
+                "[SynchronizationService] Max reconnection attempts reached. Manual refresh required."
+            );
+            return;
+        }
+
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 60s (capped)
+        const delay = Math.min(
+            this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
+            60000
+        );
+        this.reconnectAttempts++;
+
+        console.log(
+            `[SynchronizationService] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`
+        );
+
+        this.reconnectTimeout = setTimeout(() => {
+            this.reconnectTimeout = null; // Clear the reference before attempting reconnection
+            if (this.currentUserId === userId) {
+                console.log(
+                    `[SynchronizationService] Attempting reconnection...`
+                );
+                this.setupRealtimeSubscriptions(userId);
+            }
+        }, delay);
+    }
+
+    // Type for Supabase realtime payload records
+    private extractRecordFields(record: Record<string, unknown>): {
+        projectId: string;
+        entityId: string;
+        updatedAt: string;
+        assetType?: string;
+    } {
+        return {
+            projectId:
+                (record.project_id as string) || (record.id as string) || "",
+            entityId: (record.id as string) || "",
+            updatedAt:
+                (record.updated_at as string) || new Date().toISOString(),
+            assetType: record.type as string | undefined,
+        };
+    }
+
+    private handleRealtimeChange(
+        entityType: SyncEntityType,
+        payload: RealtimePostgresChangesPayload<Record<string, unknown>>
+    ): void {
+        const record = (payload.new || payload.old) as
+            | Record<string, unknown>
+            | undefined;
+        if (!record) return;
+
+        const { projectId, entityId, updatedAt } =
+            this.extractRecordFields(record);
+
+        // Filter out changes for projects we don't own (security filter)
+        // Projects table is already filtered by user_id in the subscription,
+        // but child entities need client-side filtering
+        if (entityType !== "project" && !this.userProjectIds.has(projectId)) {
+            // This change is for another user's project - ignore it
+            return;
+        }
+
+        // For INSERT on projects, add to our project IDs set
+        if (entityType === "project" && payload.eventType === "INSERT") {
+            this.userProjectIds.add(entityId);
+        }
+
+        const changePayload: RemoteChangePayload = {
+            entityType,
+            entityId,
+            projectId,
+            changeType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
+            updatedAt,
+        };
+
+        console.log(
+            `[SynchronizationService] Realtime change: ${entityType} ${payload.eventType}`,
+            entityId
+        );
+
+        // Emit event for the UI to handle
+        this.emit("remote-change", changePayload);
+        this.syncStateGateway?.notifyRemoteChange(changePayload);
+
+        // If we're currently syncing, queue the event for later processing
+        if (this.isSyncing) {
+            this.eventQueue.push({
+                entityType,
+                entityId,
+                projectId,
+                eventType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
+                timestamp: Date.now(),
+            });
+            console.log(
+                `[SynchronizationService] Queued event during sync: ${entityType} ${payload.eventType}`
+            );
+            return;
+        }
+
+        // Process the change immediately
+        if (this.currentUserId) {
+            void this.handleRemoteEntityChange(
+                entityType,
+                entityId,
+                projectId,
+                payload.eventType
+            );
+        }
+    }
+
+    private handleAssetRealtimeChange(
+        payload: RealtimePostgresChangesPayload<Record<string, unknown>>
+    ): void {
+        const record = (payload.new || payload.old) as
+            | Record<string, unknown>
+            | undefined;
+        if (!record) return;
+
+        const { assetType } = this.extractRecordFields(record);
+        if (!assetType) return;
+
+        let entityType: SyncEntityType;
+
+        switch (assetType) {
+            case "image":
+                entityType = "image";
+                break;
+            case "bgm":
+                entityType = "bgm";
+                break;
+            case "playlist":
+                entityType = "playlist";
+                break;
+            default:
+                return; // Unknown asset type
+        }
+
+        this.handleRealtimeChange(entityType, payload);
+    }
+
+    private async handleRemoteEntityChange(
+        entityType: SyncEntityType,
+        entityId: string,
+        projectId: string,
+        eventType: string
+    ): Promise<void> {
+        // Handle project entity changes - sync and notify
+        if (entityType === "project") {
+            if (eventType === "DELETE") {
+                // Project deleted remotely - notify renderer
+                this.syncStateGateway?.notifyEntityDeleted({
+                    entityType,
+                    entityId,
+                    projectId: entityId, // For projects, projectId = entityId
+                });
+                return;
+            }
+
+            // For INSERT/UPDATE on projects, sync and notify
+            try {
+                const remoteProject =
+                    await this.supabaseProjectRepo.findById(entityId);
+                if (remoteProject) {
+                    await this.fsProjectRepo.update(remoteProject);
+                    this.syncStateGateway?.notifyEntityUpdated({
+                        entityType,
+                        entityId,
+                        projectId: entityId,
+                        data: remoteProject,
+                    });
+                }
+            } catch (error) {
+                console.error(
+                    `[SynchronizationService] Failed to sync project ${entityId}`,
+                    error
+                );
+            }
+            return;
+        }
+
+        if (eventType === "DELETE") {
+            // Remote deletion - delete locally and notify renderer
+            await this.deleteLocalEntity(entityType as EntityType, entityId);
+            this.syncStateGateway?.notifyEntityDeleted({
+                entityType,
+                entityId,
+                projectId,
+            });
+            return;
+        }
+
+        // For INSERT or UPDATE, sync the entity
+        try {
+            const remoteUpdatedAt = await this.getRemoteUpdatedAt(
+                entityType as EntityType,
+                entityId
+            );
+            const localUpdatedAt = await this.getLocalUpdatedAt(
+                entityType as EntityType,
+                entityId
+            );
+
+            if (!remoteUpdatedAt) return;
+
+            // If no local version or remote is newer, update local and notify
+            if (!localUpdatedAt || remoteUpdatedAt > localUpdatedAt) {
+                const entity = await this.syncSingleEntityAndReturn(
+                    entityType as EntityType,
+                    entityId,
+                    projectId
+                );
+                if (entity) {
+                    this.syncStateGateway?.notifyEntityUpdated({
+                        entityType,
+                        entityId,
+                        projectId,
+                        data: entity,
+                    });
+                }
+            } else if (localUpdatedAt > remoteUpdatedAt) {
+                // Local is newer - this is a conflict scenario
+                // The user on this device made changes while another device pushed to DB
+                // We notify the user via the gateway
+                const entityName = await this.getEntityName(
+                    entityType as EntityType,
+                    entityId
+                );
+                this.syncStateGateway?.notifyConflict({
+                    entityType,
+                    entityId,
+                    projectId,
+                    entityName: entityName || entityId,
+                    localUpdatedAt: localUpdatedAt.toISOString(),
+                    remoteUpdatedAt: remoteUpdatedAt.toISOString(),
+                });
+            }
+        } catch (error) {
+            console.error(
+                `[SynchronizationService] Failed to handle remote change for ${entityType}:${entityId}`,
+                error
+            );
+        }
+    }
+
+    private async getEntityName(
+        type: EntityType | "project",
+        id: string
+    ): Promise<string | null> {
+        try {
+            switch (type) {
+                case "project": {
+                    const project = await this.fsProjectRepo.findById(id);
+                    return project?.title ?? null;
+                }
+                case "chapter": {
+                    const chapter = await this.fsChapterRepo.findById(id);
+                    return chapter?.title ?? null;
+                }
+                case "character": {
+                    const character = await this.fsCharacterRepo.findById(id);
+                    return character?.name ?? null;
+                }
+                case "location": {
+                    const location = await this.fsLocationRepo.findById(id);
+                    return location?.name ?? null;
+                }
+                case "organization": {
+                    const organization =
+                        await this.fsOrganizationRepo.findById(id);
+                    return organization?.name ?? null;
+                }
+                case "scrapNote": {
+                    const scrapNote = await this.fsScrapNoteRepo.findById(id);
+                    return scrapNote?.title ?? null;
+                }
+                default:
+                    return null;
+            }
+        } catch {
+            return null;
+        }
+    }
+
+    /**
+     * Sync a single entity from remote to local and return the synced entity.
+     * Used for incremental updates to notify the renderer with fresh data.
+     */
+    private async syncSingleEntityAndReturn(
+        type: EntityType,
+        id: string,
+        projectId: string
+    ): Promise<unknown | null> {
+        switch (type) {
+            case "chapter": {
+                const chapter = await this.supabaseChapterRepo.findById(id);
+                if (chapter) {
+                    await this.fsChapterRepo.update(chapter);
+                    return chapter;
+                }
+                return null;
+            }
+            case "character": {
+                const character = await this.supabaseCharacterRepo.findById(id);
+                if (character) {
+                    await this.fsCharacterRepo.update(character);
+                    return character;
+                }
+                return null;
+            }
+            case "location": {
+                const location = await this.supabaseLocationRepo.findById(id);
+                if (location) {
+                    await this.fsLocationRepo.update(location);
+                    return location;
+                }
+                return null;
+            }
+            case "organization": {
+                const organization =
+                    await this.supabaseOrganizationRepo.findById(id);
+                if (organization) {
+                    await this.fsOrganizationRepo.update(organization);
+                    return organization;
+                }
+                return null;
+            }
+            case "scrapNote": {
+                const scrapNote = await this.supabaseScrapNoteRepo.findById(id);
+                if (scrapNote) {
+                    await this.fsScrapNoteRepo.update(scrapNote);
+                    return scrapNote;
+                }
+                return null;
+            }
+            case "image": {
+                const image = await this.supabaseAssetRepo.findImageById(id);
+                if (image) {
+                    await this.downloadAsset(image.storagePath);
+                    await this.fsAssetRepo.saveImage(projectId, image);
+                    return image;
+                }
+                return null;
+            }
+            case "bgm": {
+                const bgm = await this.supabaseAssetRepo.findBGMById(id);
+                if (bgm) {
+                    await this.downloadAsset(bgm.storagePath);
+                    await this.fsAssetRepo.saveBGM(projectId, bgm);
+                    return bgm;
+                }
+                return null;
+            }
+            case "playlist": {
+                const playlist =
+                    await this.supabaseAssetRepo.findPlaylistById(id);
+                if (playlist) {
+                    if (playlist.storagePath)
+                        await this.downloadAsset(playlist.storagePath);
+                    await this.fsAssetRepo.savePlaylist(projectId, playlist);
+                    return playlist;
+                }
+                return null;
+            }
+            default:
+                return null;
+        }
+    }
+
+    private async syncSingleEntity(
+        type: EntityType,
+        id: string,
+        projectId: string
+    ): Promise<void> {
+        switch (type) {
+            case "chapter": {
+                const chapter = await this.supabaseChapterRepo.findById(id);
+                if (chapter) await this.fsChapterRepo.update(chapter);
+                break;
+            }
+            case "character": {
+                const character = await this.supabaseCharacterRepo.findById(id);
+                if (character) await this.fsCharacterRepo.update(character);
+                break;
+            }
+            case "location": {
+                const location = await this.supabaseLocationRepo.findById(id);
+                if (location) await this.fsLocationRepo.update(location);
+                break;
+            }
+            case "organization": {
+                const organization =
+                    await this.supabaseOrganizationRepo.findById(id);
+                if (organization)
+                    await this.fsOrganizationRepo.update(organization);
+                break;
+            }
+            case "scrapNote": {
+                const scrapNote = await this.supabaseScrapNoteRepo.findById(id);
+                if (scrapNote) await this.fsScrapNoteRepo.update(scrapNote);
+                break;
+            }
+            case "image": {
+                const image = await this.supabaseAssetRepo.findImageById(id);
+                if (image) {
+                    await this.downloadAsset(image.storagePath);
+                    await this.fsAssetRepo.saveImage(projectId, image);
+                }
+                break;
+            }
+            case "bgm": {
+                const bgm = await this.supabaseAssetRepo.findBGMById(id);
+                if (bgm) {
+                    await this.downloadAsset(bgm.storagePath);
+                    await this.fsAssetRepo.saveBGM(projectId, bgm);
+                }
+                break;
+            }
+            case "playlist": {
+                const playlist =
+                    await this.supabaseAssetRepo.findPlaylistById(id);
+                if (playlist) {
+                    if (playlist.storagePath)
+                        await this.downloadAsset(playlist.storagePath);
+                    await this.fsAssetRepo.savePlaylist(projectId, playlist);
+                }
+                break;
+            }
+        }
+    }
+
+    /**
+     * Called by renderer when user resolves a conflict.
+     * Returns the resolved entity data so the UI can update.
+     */
+    async resolveConflict(
+        entityType: EntityType,
+        entityId: string,
+        projectId: string,
+        resolution: "accept-remote" | "keep-local"
+    ): Promise<void> {
+        let entity: unknown = null;
+
+        if (resolution === "accept-remote") {
+            entity = await this.syncSingleEntityAndReturn(
+                entityType,
+                entityId,
+                projectId
+            );
+        } else {
+            // keep-local: push local version to remote
+            entity = await this.pushLocalToRemoteAndReturn(
+                entityType,
+                entityId,
+                projectId
+            );
+        }
+
+        // Notify the renderer with the resolved entity
+        if (entity) {
+            this.syncStateGateway?.notifyEntityUpdated({
+                entityType: entityType as SyncEntityType,
+                entityId,
+                projectId,
+                data: entity,
+            });
+        }
+    }
+
+    /**
+     * Push local entity to remote and return the entity.
+     */
+    private async pushLocalToRemoteAndReturn(
+        type: EntityType,
+        id: string,
+        projectId: string
+    ): Promise<unknown | null> {
+        switch (type) {
+            case "chapter": {
+                const chapter = await this.fsChapterRepo.findById(id);
+                if (chapter) {
+                    await this.supabaseChapterRepo.update(chapter);
+                    return chapter;
+                }
+                return null;
+            }
+            case "character": {
+                const character = await this.fsCharacterRepo.findById(id);
+                if (character) {
+                    await this.supabaseCharacterRepo.update(character);
+                    return character;
+                }
+                return null;
+            }
+            case "location": {
+                const location = await this.fsLocationRepo.findById(id);
+                if (location) {
+                    await this.supabaseLocationRepo.update(location);
+                    return location;
+                }
+                return null;
+            }
+            case "organization": {
+                const organization = await this.fsOrganizationRepo.findById(id);
+                if (organization) {
+                    await this.supabaseOrganizationRepo.update(organization);
+                    return organization;
+                }
+                return null;
+            }
+            case "scrapNote": {
+                const scrapNote = await this.fsScrapNoteRepo.findById(id);
+                if (scrapNote) {
+                    await this.supabaseScrapNoteRepo.update(scrapNote);
+                    return scrapNote;
+                }
+                return null;
+            }
+            case "image": {
+                const image = await this.fsAssetRepo.findImageById(id);
+                if (image) {
+                    await this.uploadAsset(image.storagePath);
+                    await this.supabaseAssetRepo.saveImage(projectId, image);
+                    return image;
+                }
+                return null;
+            }
+            case "bgm": {
+                const bgm = await this.fsAssetRepo.findBGMById(id);
+                if (bgm) {
+                    await this.uploadAsset(bgm.storagePath);
+                    await this.supabaseAssetRepo.saveBGM(projectId, bgm);
+                    return bgm;
+                }
+                return null;
+            }
+            case "playlist": {
+                const playlist = await this.fsAssetRepo.findPlaylistById(id);
+                if (playlist) {
+                    if (playlist.storagePath)
+                        await this.uploadAsset(playlist.storagePath);
+                    await this.supabaseAssetRepo.savePlaylist(
+                        projectId,
+                        playlist
+                    );
+                    return playlist;
+                }
+                return null;
+            }
+            default:
+                return null;
+        }
+    }
+
+    private async checkConnection(userId: string): Promise<boolean> {
         try {
             const { error } = await SupabaseService.getClient()
                 .from("projects")
                 .select("id", { count: "exact", head: true })
+                .eq("user_id", userId)
                 .limit(1);
-            return !error;
-        } catch {
+
+            if (error) {
+                console.error(
+                    "[SynchronizationService] Connection check failed:",
+                    error
+                );
+                return false;
+            }
+            return true;
+        } catch (error) {
+            console.error(
+                "[SynchronizationService] Connection check exception:",
+                error
+            );
             return false;
         }
     }
@@ -135,12 +880,13 @@ export class SynchronizationService extends EventEmitter {
     async syncAll(userId: string) {
         if (this.isSyncing) return;
         this.isSyncing = true;
+        this.syncStateGateway?.setStatus("syncing");
 
         try {
             // Process pending deletions first
             await this.processDeletionLog(userId);
 
-            // Sync projects
+            // Sync projects and populate userProjectIds cache
             const remoteProjects =
                 await this.supabaseProjectRepo.findAllByUserId(userId);
             const localProjects =
@@ -148,6 +894,15 @@ export class SynchronizationService extends EventEmitter {
             const localProjectMap = new Map(
                 localProjects.map((p) => [p.id, p])
             );
+
+            // Update the project IDs cache for filtering realtime events
+            this.userProjectIds.clear();
+            for (const p of remoteProjects) {
+                this.userProjectIds.add(p.id);
+            }
+            for (const p of localProjects) {
+                this.userProjectIds.add(p.id);
+            }
 
             for (const remoteP of remoteProjects) {
                 const localP = localProjectMap.get(remoteP.id);
@@ -175,10 +930,66 @@ export class SynchronizationService extends EventEmitter {
             }
 
             console.log("[SynchronizationService] Sync complete");
+            this.syncStateGateway?.setLastSyncedAt(new Date());
+            this.isOnline = true;
+            this.syncStateGateway?.setStatus("online");
         } catch (error) {
             console.error("[SynchronizationService] Sync failed:", error);
+            this.syncStateGateway?.setStatus("offline");
         } finally {
             this.isSyncing = false;
+            // Process any events that were queued during sync
+            void this.processEventQueue();
+        }
+    }
+
+    /**
+     * Process queued realtime events that arrived during a sync operation.
+     * Deduplicates by entityId (keeping only the most recent event per entity).
+     */
+    private async processEventQueue(): Promise<void> {
+        if (this.isProcessingQueue || this.eventQueue.length === 0) {
+            return;
+        }
+
+        this.isProcessingQueue = true;
+
+        try {
+            // Deduplicate: keep only the most recent event per entity
+            const latestByEntity = new Map<string, QueuedRealtimeEvent>();
+            for (const event of this.eventQueue) {
+                const key = `${event.entityType}:${event.entityId}`;
+                const existing = latestByEntity.get(key);
+                if (!existing || event.timestamp > existing.timestamp) {
+                    latestByEntity.set(key, event);
+                }
+            }
+
+            // Clear the queue
+            this.eventQueue = [];
+
+            console.log(
+                `[SynchronizationService] Processing ${latestByEntity.size} queued events`
+            );
+
+            // Process each unique event
+            for (const event of latestByEntity.values()) {
+                if (!this.currentUserId) break; // User logged out
+
+                await this.handleRemoteEntityChange(
+                    event.entityType,
+                    event.entityId,
+                    event.projectId,
+                    event.eventType
+                );
+            }
+        } catch (error) {
+            console.error(
+                "[SynchronizationService] Error processing event queue:",
+                error
+            );
+        } finally {
+            this.isProcessingQueue = false;
         }
     }
 

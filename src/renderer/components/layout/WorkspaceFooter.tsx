@@ -10,6 +10,8 @@ import {
     MapIcon,
     PersonIcon,
     RefreshCwIcon,
+    WifiIcon,
+    WifiOffIcon,
 } from "../ui/Icons";
 import { getTextStats } from "../../utils/textStats";
 import type { WorkspaceDocumentKind } from "../../types";
@@ -23,8 +25,14 @@ export const WorkspaceFooter: React.FC<{
     onBinderActiveKindChange: (kind: WorkspaceDocumentKind) => void;
     isBinderOpen: boolean;
 }> = ({ binderActiveKind, onBinderActiveKindChange, isBinderOpen }) => {
-    const { activeDocument, chapters, autosaveStatus, autosaveError } =
-        useAppStore();
+    const {
+        activeDocument,
+        chapters,
+        autosaveStatus,
+        autosaveError,
+        syncStatus,
+        lastSyncedAt,
+    } = useAppStore();
 
     const [isHoveringCount, setIsHoveringCount] = React.useState(false);
 
@@ -172,6 +180,15 @@ export const WorkspaceFooter: React.FC<{
                             {renderAutosaveIcon()}
                         </div>
                     ) : null}
+                    <div
+                        className={`workspace-footer-connection is-${syncStatus}`}
+                        title={getSyncStatusTitle(syncStatus, lastSyncedAt)}
+                    >
+                        {renderSyncIcon(syncStatus)}
+                        <span className="workspace-footer-connection-label">
+                            {getSyncStatusLabel(syncStatus)}
+                        </span>
+                    </div>
                 </div>
 
                 <div className="workspace-footer-center">
@@ -201,4 +218,53 @@ export const WorkspaceFooter: React.FC<{
             </div>
         </div>
     );
+};
+
+const getSyncStatusLabel = (
+    status: "online" | "offline" | "syncing"
+): string => {
+    switch (status) {
+        case "online":
+            return "Online";
+        case "offline":
+            return "Offline";
+        case "syncing":
+            return "Syncing...";
+    }
+};
+
+const getSyncStatusTitle = (
+    status: "online" | "offline" | "syncing",
+    lastSyncedAt: string | null
+): string => {
+    const lastSyncStr = lastSyncedAt
+        ? `Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}`
+        : "";
+
+    switch (status) {
+        case "online":
+            return `Online - syncing to cloud${lastSyncStr ? `\n${lastSyncStr}` : ""}`;
+        case "offline":
+            return "Offline - changes saved locally";
+        case "syncing":
+            return "Synchronizing with cloud...";
+    }
+};
+
+const renderSyncIcon = (status: "online" | "offline" | "syncing") => {
+    switch (status) {
+        case "online":
+            return <WifiIcon size={14} />;
+        case "offline":
+            return <WifiOffIcon size={14} />;
+        case "syncing":
+            return (
+                <span
+                    className="workspace-footer-sync-icon is-spinning"
+                    aria-hidden="true"
+                >
+                    <RefreshCwIcon size={14} />
+                </span>
+            );
+    }
 };

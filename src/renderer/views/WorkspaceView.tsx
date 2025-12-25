@@ -5,6 +5,7 @@ import { WorkspaceLayout } from "../components/layout/WorkspaceLayout";
 import { ConnectedDocumentBinder } from "../components/layout/ConnectedDocumentBinder";
 import { ChatPanel } from "../components/workspace/ChatPanel";
 import { WorkspaceFooter } from "../components/layout/WorkspaceFooter";
+import { ConflictResolutionDialog } from "../components/dialogs/ConflictResolutionDialog";
 import type { WorkspaceDocumentKind } from "../types";
 
 export const WorkspaceView: React.FC = () => {
@@ -261,6 +262,8 @@ export const WorkspaceView: React.FC = () => {
                 onBinderActiveKindChange={setBinderActiveKind}
                 isBinderOpen={isBinderOpen}
             />
+
+            <ConflictResolutionDialog />
         </div>
     );
 };

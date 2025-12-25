@@ -8,6 +8,18 @@ import {
     AUTH_STATE_CHANGED_CHANNEL,
     type AuthStatePayload,
 } from "../controllers/auth/AuthStateGateway";
+import {
+    SYNC_STATE_CHANGED_CHANNEL,
+    SYNC_REMOTE_CHANGE_CHANNEL,
+    SYNC_CONFLICT_CHANNEL,
+    SYNC_ENTITY_UPDATED_CHANNEL,
+    SYNC_ENTITY_DELETED_CHANNEL,
+    type SyncStatePayload,
+    type RemoteChangePayload,
+    type ConflictPayload,
+    type EntityUpdatedPayload,
+    type EntityDeletedPayload,
+} from "../controllers/sync/SyncStateGateway";
 
 type AsyncHandler = (...args: unknown[]) => Promise<unknown>;
 
@@ -95,7 +107,100 @@ const authEvents = createAuthEvents();
 
 contextBridge.exposeInMainWorld("authEvents", authEvents);
 
-// Note: syncEvents was removed as conflicts are now auto-resolved using "most recent wins" strategy.
+// Sync events for real-time synchronization status and conflicts
+type SyncStateListener = (payload: SyncStatePayload) => void;
+type RemoteChangeListener = (payload: RemoteChangePayload) => void;
+type ConflictListener = (payload: ConflictPayload) => void;
+type EntityUpdatedListener = (payload: EntityUpdatedPayload) => void;
+type EntityDeletedListener = (payload: EntityDeletedPayload) => void;
+
+const createSyncEvents = () => {
+    const onStateChanged = (listener: SyncStateListener) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            payload: SyncStatePayload
+        ) => {
+            listener(payload);
+        };
+        ipcRenderer.on(SYNC_STATE_CHANGED_CHANNEL, handler);
+        return () =>
+            ipcRenderer.removeListener(SYNC_STATE_CHANGED_CHANNEL, handler);
+    };
+
+    const onRemoteChange = (listener: RemoteChangeListener) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            payload: RemoteChangePayload
+        ) => {
+            listener(payload);
+        };
+        ipcRenderer.on(SYNC_REMOTE_CHANGE_CHANNEL, handler);
+        return () =>
+            ipcRenderer.removeListener(SYNC_REMOTE_CHANGE_CHANNEL, handler);
+    };
+
+    const onConflict = (listener: ConflictListener) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            payload: ConflictPayload
+        ) => {
+            listener(payload);
+        };
+        ipcRenderer.on(SYNC_CONFLICT_CHANNEL, handler);
+        return () => ipcRenderer.removeListener(SYNC_CONFLICT_CHANNEL, handler);
+    };
+
+    const onEntityUpdated = (listener: EntityUpdatedListener) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            payload: EntityUpdatedPayload
+        ) => {
+            listener(payload);
+        };
+        ipcRenderer.on(SYNC_ENTITY_UPDATED_CHANNEL, handler);
+        return () =>
+            ipcRenderer.removeListener(SYNC_ENTITY_UPDATED_CHANNEL, handler);
+    };
+
+    const onEntityDeleted = (listener: EntityDeletedListener) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            payload: EntityDeletedPayload
+        ) => {
+            listener(payload);
+        };
+        ipcRenderer.on(SYNC_ENTITY_DELETED_CHANNEL, handler);
+        return () =>
+            ipcRenderer.removeListener(SYNC_ENTITY_DELETED_CHANNEL, handler);
+    };
+
+    const resolveConflict = (
+        entityType: string,
+        entityId: string,
+        projectId: string,
+        resolution: "accept-remote" | "keep-local"
+    ) => {
+        return ipcRenderer.invoke(
+            "sync:resolveConflict",
+            entityType,
+            entityId,
+            projectId,
+            resolution
+        );
+    };
+
+    return {
+        onStateChanged,
+        onRemoteChange,
+        onConflict,
+        onEntityUpdated,
+        onEntityDeleted,
+        resolveConflict,
+    };
+};
+
+const syncEvents = createSyncEvents();
+contextBridge.exposeInMainWorld("syncEvents", syncEvents);
 
 type GenerationProgressListener = (payload: {
     type: "audio" | "image";
@@ -140,6 +245,7 @@ declare global {
         api: typeof api;
         ui: typeof ui;
         authEvents: typeof authEvents;
+        syncEvents: typeof syncEvents;
         generationEvents: typeof generationEvents;
         windowControls: typeof windowControls;
     }

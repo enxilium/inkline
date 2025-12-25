@@ -3,6 +3,30 @@ import { Chapter } from "../../../@core/domain/entities/story/Chapter";
 import { fileSystemService } from "../../storage/FileSystemService";
 import * as path from "path";
 
+const defaultContent: Record<string, unknown> = {
+    type: "doc",
+    content: [] as unknown[],
+};
+
+/**
+ * Safely parse chapter content string to object.
+ * Returns default empty doc structure for empty/invalid content.
+ */
+const parseChapterContent = (raw: string): Record<string, unknown> => {
+    if (!raw || !raw.trim()) {
+        return defaultContent;
+    }
+    try {
+        const parsed = JSON.parse(raw);
+        return typeof parsed === "object" && parsed !== null
+            ? (parsed as Record<string, unknown>)
+            : defaultContent;
+    } catch (error) {
+        console.warn("Invalid chapter content JSON. Using default doc.", error);
+        return defaultContent;
+    }
+};
+
 type FileSystemChapter = {
     id: string;
     projectId: string;
@@ -50,7 +74,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
             projectId: projectId,
             title: chapter.title,
             order: chapter.order,
-            content: JSON.parse(chapter.content),
+            content: parseChapterContent(chapter.content),
             createdAt: chapter.createdAt.toISOString(),
             updatedAt: chapter.updatedAt.toISOString(),
         };
@@ -115,7 +139,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
                 projectId: location.projectId,
                 title: chapter.title,
                 order: chapter.order,
-                content: JSON.parse(chapter.content),
+                content: parseChapterContent(chapter.content),
                 createdAt: chapter.createdAt.toISOString(),
                 updatedAt: chapter.updatedAt.toISOString(),
             };

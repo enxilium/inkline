@@ -30,15 +30,38 @@ type SessionFileSchema = {
     user: StoredUserPayload;
 };
 
+/**
+ * Schema for device-local preferences that persist across logouts.
+ * These settings are device-specific and should NOT be cleared on logout.
+ */
+type LocalPreferencesSchema = {
+    geminiApiKey?: string;
+};
+
 export class FilesystemUserSessionStore implements IUserSessionStore {
     private static SESSION_FILENAME = "user-session.json";
+    private static LOCAL_PREFS_FILENAME = "local-preferences.json";
 
     async load(): Promise<User | null> {
         try {
             const filePath = await this.resolveSessionFilePath();
             const raw = await fs.readFile(filePath, "utf-8");
             const parsed = JSON.parse(raw) as SessionFileSchema;
-            return this.deserialize(parsed.user);
+            const user = this.deserialize(parsed.user);
+            
+            // Merge device-local preferences (like API key) that persist across logouts
+            const localPrefs = await this.loadLocalPreferences();
+            if (localPrefs.geminiApiKey && !user.preferences.geminiApiKey) {
+                user.preferences = new UserPreferences(
+                    user.preferences.theme,
+                    user.preferences.editorFontSize,
+                    user.preferences.editorFontFamily,
+                    user.preferences.defaultImageAiModel,
+                    localPrefs.geminiApiKey
+                );
+            }
+            
+            return user;
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code === "ENOENT") {
                 return null;
@@ -60,9 +83,18 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
         await fs.writeFile(filePath, JSON.stringify(payload, null, 2), {
             encoding: "utf-8",
         });
+        
+        // Also persist device-local preferences so they survive logout
+        if (user.preferences.geminiApiKey) {
+            await this.saveLocalPreferences({ 
+                geminiApiKey: user.preferences.geminiApiKey 
+            });
+        }
     }
 
     async clear(): Promise<void> {
+        // Only clear the session file, NOT the local preferences
+        // This preserves API keys across logouts
         try {
             const filePath = await this.resolveSessionFilePath();
             await fs.unlink(filePath);
@@ -85,6 +117,50 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             userDataPath,
             FilesystemUserSessionStore.SESSION_FILENAME
         );
+    }
+    
+    private async resolveLocalPrefsFilePath(): Promise<string> {
+        if (!app.isReady()) {
+            await app.whenReady();
+        }
+
+        const userDataPath = app.getPath("userData");
+        return path.join(
+            userDataPath,
+            FilesystemUserSessionStore.LOCAL_PREFS_FILENAME
+        );
+    }
+    
+    private async loadLocalPreferences(): Promise<LocalPreferencesSchema> {
+        try {
+            const filePath = await this.resolveLocalPrefsFilePath();
+            const raw = await fs.readFile(filePath, "utf-8");
+            return JSON.parse(raw) as LocalPreferencesSchema;
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                return {};
+            }
+            console.warn("Failed to load local preferences:", error);
+            return {};
+        }
+    }
+    
+    private async saveLocalPreferences(prefs: LocalPreferencesSchema): Promise<void> {
+        try {
+            const filePath = await this.resolveLocalPrefsFilePath();
+            const directory = path.dirname(filePath);
+            await fs.mkdir(directory, { recursive: true });
+            
+            // Merge with existing preferences
+            const existing = await this.loadLocalPreferences();
+            const merged = { ...existing, ...prefs };
+            
+            await fs.writeFile(filePath, JSON.stringify(merged, null, 2), {
+                encoding: "utf-8",
+            });
+        } catch (error) {
+            console.warn("Failed to save local preferences:", error);
+        }
     }
 
     private serialize(user: User): StoredUserPayload {

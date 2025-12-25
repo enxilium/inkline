@@ -2788,6 +2788,29 @@ input.toolbar-color:focus {
     color: var(--text-warning);
 }
 
+.workspace-footer-connection {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 11px;
+    transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.workspace-footer-connection.is-online {
+    color: var(--text-success, #22c55e);
+}
+
+.workspace-footer-connection.is-offline {
+    color: var(--text-warning, #eab308);
+    background-color: rgba(234, 179, 8, 0.1);
+}
+
+.workspace-footer-connection-label {
+    opacity: 0.9;
+}
+
 .workspace-binder-container {
     position: relative;
     height: 100%;

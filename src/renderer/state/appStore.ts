@@ -28,6 +28,8 @@ import type {
     WorkspaceAssets,
     WorkspaceAssetBundle,
     WorkspaceImageAsset,
+    WorkspaceBGMAsset,
+    WorkspacePlaylistAsset,
 } from "../types";
 
 const initialAuthForm = {
@@ -61,9 +63,23 @@ const getAuthEvents = (): Window["authEvents"] => {
     return window.authEvents;
 };
 
+const getSyncEvents = (): Window["syncEvents"] => {
+    if (!window?.syncEvents) {
+        throw new Error("Sync events bridge is unavailable.");
+    }
+
+    return window.syncEvents;
+};
+
 const rendererApi = getRendererApi();
 const authEvents = getAuthEvents();
+const syncEvents = getSyncEvents();
 let unsubscribeAuthState: (() => void) | null = null;
+let unsubscribeSyncState: (() => void) | null = null;
+let unsubscribeRemoteChange: (() => void) | null = null;
+let unsubscribeConflict: (() => void) | null = null;
+let unsubscribeEntityUpdated: (() => void) | null = null;
+let unsubscribeEntityDeleted: (() => void) | null = null;
 
 const createErrorMessage = (error: unknown, fallback: string): string => {
     return (error as Error)?.message ?? fallback;
@@ -223,6 +239,16 @@ type AppStore = {
     autosaveStatus: AutosaveStatus;
     autosaveError: string | null;
     cloudSyncError: string | null;
+    syncStatus: "online" | "offline" | "syncing";
+    lastSyncedAt: string | null;
+    pendingConflict: {
+        entityType: string;
+        entityId: string;
+        projectId: string;
+        entityName: string;
+        localUpdatedAt: string;
+        remoteUpdatedAt: string;
+    } | null;
     lastSavedAt: number | null;
     shortcutStates: ShortcutStates;
     draggedDocument: { id: string; kind: string; title: string } | null;
@@ -331,6 +357,12 @@ type AppStore = {
     setAutosaveStatus: (status: AutosaveStatus) => void;
     setAutosaveError: (message: string | null) => void;
     setCloudSyncError: (message: string | null) => void;
+    setSyncStatus: (status: "online" | "offline" | "syncing") => void;
+    setLastSyncedAt: (timestamp: string | null) => void;
+    setPendingConflict: (conflict: AppStore["pendingConflict"]) => void;
+    resolveConflict: (
+        resolution: "accept-remote" | "keep-local"
+    ) => Promise<void>;
     setLastSavedAt: (timestamp: number | null) => void;
     setShortcutState: (id: string, state: ShortcutStates[string]) => void;
     resetShortcutState: (id: string) => void;
@@ -477,6 +509,296 @@ export const useAppStore = create<AppStore>((set, get) => {
         });
     };
 
+    const ensureSyncSubscription = () => {
+        if (unsubscribeSyncState) {
+            return;
+        }
+
+        // Fetch initial sync state immediately
+        runInBackground(
+            rendererApi.sync.getSyncState().then((payload) => {
+                set({
+                    syncStatus: payload.status,
+                    lastSyncedAt: payload.lastSyncedAt,
+                });
+            }),
+            (error) =>
+                console.error("Failed to fetch initial sync state", error)
+        );
+
+        // Subscribe to sync state changes (online/offline/syncing)
+        unsubscribeSyncState = syncEvents.onStateChanged((payload) => {
+            set({
+                syncStatus: payload.status,
+                lastSyncedAt: payload.lastSyncedAt,
+            });
+        });
+
+        // Subscribe to remote changes - log only, actual updates come via entity events
+        unsubscribeRemoteChange = syncEvents.onRemoteChange((payload) => {
+            const { projectId, stage } = get();
+
+            // Only log changes for the currently open project
+            if (stage === "workspace" && payload.projectId === projectId) {
+                console.log(
+                    `[appStore] Remote change detected: ${payload.entityType} ${payload.changeType}`
+                );
+            }
+        });
+
+        // Subscribe to conflicts - show conflict resolution dialog
+        unsubscribeConflict = syncEvents.onConflict((payload) => {
+            const { projectId, stage } = get();
+
+            // Only show conflicts for the currently open project
+            if (stage === "workspace" && payload.projectId === projectId) {
+                console.log(
+                    `[appStore] Conflict detected: ${payload.entityType} ${payload.entityName}`
+                );
+                set({ pendingConflict: payload });
+            }
+        });
+
+        // Subscribe to incremental entity updates - update state in place
+        unsubscribeEntityUpdated = syncEvents.onEntityUpdated((payload) => {
+            const { projectId, stage, assets } = get();
+
+            // Only handle updates for the currently open project
+            if (stage !== "workspace" || payload.projectId !== projectId) {
+                return;
+            }
+
+            console.log(
+                `[appStore] Entity updated: ${payload.entityType} ${payload.entityId}`
+            );
+
+            const data = payload.data;
+
+            switch (payload.entityType) {
+                case "project": {
+                    set({
+                        workspaceProject: data as unknown as WorkspaceProject,
+                    });
+                    break;
+                }
+                case "chapter": {
+                    const chapter = data as unknown as WorkspaceChapter;
+                    set((state) => ({
+                        chapters: state.chapters.some(
+                            (c) => c.id === chapter.id
+                        )
+                            ? state.chapters.map((c) =>
+                                  c.id === chapter.id ? chapter : c
+                              )
+                            : [...state.chapters, chapter].sort(
+                                  (a, b) => a.order - b.order
+                              ),
+                    }));
+                    break;
+                }
+                case "character": {
+                    const character = data as unknown as WorkspaceCharacter;
+                    set((state) => ({
+                        characters: state.characters.some(
+                            (c) => c.id === character.id
+                        )
+                            ? state.characters.map((c) =>
+                                  c.id === character.id ? character : c
+                              )
+                            : [...state.characters, character],
+                    }));
+                    break;
+                }
+                case "location": {
+                    const location = data as unknown as WorkspaceLocation;
+                    set((state) => ({
+                        locations: state.locations.some(
+                            (l) => l.id === location.id
+                        )
+                            ? state.locations.map((l) =>
+                                  l.id === location.id ? location : l
+                              )
+                            : [...state.locations, location],
+                    }));
+                    break;
+                }
+                case "organization": {
+                    const organization =
+                        data as unknown as WorkspaceOrganization;
+                    set((state) => ({
+                        organizations: state.organizations.some(
+                            (o) => o.id === organization.id
+                        )
+                            ? state.organizations.map((o) =>
+                                  o.id === organization.id ? organization : o
+                              )
+                            : [...state.organizations, organization],
+                    }));
+                    break;
+                }
+                case "scrapNote": {
+                    const scrapNote = data as unknown as WorkspaceScrapNote;
+                    set((state) => ({
+                        scrapNotes: state.scrapNotes.some(
+                            (s) => s.id === scrapNote.id
+                        )
+                            ? state.scrapNotes.map((s) =>
+                                  s.id === scrapNote.id ? scrapNote : s
+                              )
+                            : [...state.scrapNotes, scrapNote],
+                    }));
+                    break;
+                }
+                case "image": {
+                    const image = data as unknown as WorkspaceImageAsset;
+                    set({
+                        assets: {
+                            ...assets,
+                            images: { ...assets.images, [image.id]: image },
+                        },
+                    });
+                    break;
+                }
+                case "bgm": {
+                    const bgm = data as unknown as WorkspaceBGMAsset;
+                    set({
+                        assets: {
+                            ...assets,
+                            bgms: { ...assets.bgms, [bgm.id]: bgm },
+                        },
+                    });
+                    break;
+                }
+                case "playlist": {
+                    const playlist = data as unknown as WorkspacePlaylistAsset;
+                    set({
+                        assets: {
+                            ...assets,
+                            playlists: {
+                                ...assets.playlists,
+                                [playlist.id]: playlist,
+                            },
+                        },
+                    });
+                    break;
+                }
+            }
+        });
+
+        // Subscribe to entity deletions - remove from state
+        unsubscribeEntityDeleted = syncEvents.onEntityDeleted((payload) => {
+            const { projectId, stage, assets, activeDocument, openTabs } =
+                get();
+
+            // Only handle deletions for the currently open project
+            if (stage !== "workspace" || payload.projectId !== projectId) {
+                return;
+            }
+
+            console.log(
+                `[appStore] Entity deleted: ${payload.entityType} ${payload.entityId}`
+            );
+
+            const entityId = payload.entityId;
+
+            // Helper to clean up tabs and active document if needed
+            const cleanupDocumentRefs = (
+                kind: string
+            ): {
+                activeDocument: WorkspaceDocumentRef | null;
+                openTabs: WorkspaceDocumentRef[];
+            } => {
+                const newTabs = openTabs.filter(
+                    (t) => !(t.kind === kind && t.id === entityId)
+                );
+                const newActive =
+                    activeDocument?.kind === kind &&
+                    activeDocument?.id === entityId
+                        ? (newTabs[0] ?? null)
+                        : activeDocument;
+                return { activeDocument: newActive, openTabs: newTabs };
+            };
+
+            switch (payload.entityType) {
+                case "project": {
+                    // If current project is deleted, go back to project selection
+                    set({
+                        ...resetWorkspaceState(),
+                        stage: "projectSelect",
+                    });
+                    break;
+                }
+                case "chapter": {
+                    set((state) => ({
+                        chapters: state.chapters.filter(
+                            (c) => c.id !== entityId
+                        ),
+                        ...cleanupDocumentRefs("chapter"),
+                    }));
+                    break;
+                }
+                case "character": {
+                    set((state) => ({
+                        characters: state.characters.filter(
+                            (c) => c.id !== entityId
+                        ),
+                        ...cleanupDocumentRefs("character"),
+                    }));
+                    break;
+                }
+                case "location": {
+                    set((state) => ({
+                        locations: state.locations.filter(
+                            (l) => l.id !== entityId
+                        ),
+                        ...cleanupDocumentRefs("location"),
+                    }));
+                    break;
+                }
+                case "organization": {
+                    set((state) => ({
+                        organizations: state.organizations.filter(
+                            (o) => o.id !== entityId
+                        ),
+                        ...cleanupDocumentRefs("organization"),
+                    }));
+                    break;
+                }
+                case "scrapNote": {
+                    set((state) => ({
+                        scrapNotes: state.scrapNotes.filter(
+                            (s) => s.id !== entityId
+                        ),
+                        ...cleanupDocumentRefs("scrapNote"),
+                    }));
+                    break;
+                }
+                case "image": {
+                    const { [entityId]: _, ...remainingImages } = assets.images;
+                    set({
+                        assets: { ...assets, images: remainingImages },
+                    });
+                    break;
+                }
+                case "bgm": {
+                    const { [entityId]: _, ...remainingBgms } = assets.bgms;
+                    set({
+                        assets: { ...assets, bgms: remainingBgms },
+                    });
+                    break;
+                }
+                case "playlist": {
+                    const { [entityId]: _, ...remainingPlaylists } =
+                        assets.playlists;
+                    set({
+                        assets: { ...assets, playlists: remainingPlaylists },
+                    });
+                    break;
+                }
+            }
+        });
+    };
+
     const loadProjectWorkspace = async (
         targetProjectId: string,
         preferredSelection?: WorkspaceDocumentRef | null
@@ -537,11 +859,15 @@ export const useAppStore = create<AppStore>((set, get) => {
         autosaveStatus: defaultAutosaveStatus,
         autosaveError: null,
         cloudSyncError: null,
+        syncStatus: "offline",
+        lastSyncedAt: null,
+        pendingConflict: null,
         lastSavedAt: null,
         draggedDocument: null,
         shortcutStates: defaultShortcutStates,
         bootstrapSession: async () => {
             ensureAuthSubscription();
+            ensureSyncSubscription();
             set({ stage: "checkingSession" });
             try {
                 const snapshot = await rendererApi.auth.getState();
@@ -1646,6 +1972,42 @@ export const useAppStore = create<AppStore>((set, get) => {
         },
         setCloudSyncError: (message) => {
             set({ cloudSyncError: message });
+        },
+        setSyncStatus: (status) => {
+            set({ syncStatus: status });
+        },
+        setLastSyncedAt: (timestamp) => {
+            set({ lastSyncedAt: timestamp });
+        },
+        setPendingConflict: (conflict) => {
+            set({ pendingConflict: conflict });
+        },
+        resolveConflict: async (resolution) => {
+            const { pendingConflict, projectId } = get();
+            if (!pendingConflict) return;
+
+            try {
+                await syncEvents.resolveConflict(
+                    pendingConflict.entityType,
+                    pendingConflict.entityId,
+                    pendingConflict.projectId,
+                    resolution
+                );
+
+                // If we accepted remote changes and this is the current project, reload
+                if (
+                    resolution === "accept-remote" &&
+                    pendingConflict.projectId === projectId
+                ) {
+                    // Reload the project to get fresh data
+                    const { reloadActiveProject } = get();
+                    await reloadActiveProject();
+                }
+            } catch (error) {
+                console.error("Failed to resolve conflict:", error);
+            } finally {
+                set({ pendingConflict: null });
+            }
         },
         setLastSavedAt: (timestamp) => {
             set({ lastSavedAt: timestamp });

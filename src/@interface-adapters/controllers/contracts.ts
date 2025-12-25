@@ -51,6 +51,7 @@ import type { DeleteOrganizationController } from "./world/DeleteOrganizationCon
 import type { OverwriteCharacterController } from "./world/OverwriteCharacterController";
 import type { OverwriteLocationController } from "./world/OverwriteLocationController";
 import type { OverwriteOrganizationController } from "./world/OverwriteOrganizationController";
+import type { GetSyncStateController } from "./sync/GetSyncStateController";
 
 type Handler<T> = T extends {
     handle: (...args: infer P) => Promise<infer R>;
@@ -116,6 +117,9 @@ export interface ControllerInstanceMap {
         loadProjectList: LoadProjectListController;
         openProject: OpenProjectController;
         reorderProjectItems: ReorderProjectItemsController;
+    };
+    sync: {
+        getSyncState: GetSyncStateController;
     };
     world: {
         createCharacter: CreateCharacterController;
@@ -204,6 +208,9 @@ export const controllerChannels: ControllerChannelMap = {
         loadProjectList: "project:loadProjectList",
         openProject: "project:openProject",
         reorderProjectItems: "project:reorderProjectItems",
+    },
+    sync: {
+        getSyncState: "sync:getSyncState",
     },
     world: {
         createCharacter: "world:createCharacter",
