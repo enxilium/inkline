@@ -21,7 +21,10 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
         try {
             await this.supabaseRepo.create(projectId, character);
         } catch (error) {
-            console.warn("Failed to create character in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to create character in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -60,8 +63,9 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
 
         // Persist any remote-only characters locally for offline access
         for (const character of merged) {
-            const isRemoteOnly = remote.some(r => r.id === character.id) && 
-                                 !local.some(l => l.id === character.id);
+            const isRemoteOnly =
+                remote.some((r) => r.id === character.id) &&
+                !local.some((l) => l.id === character.id);
             if (isRemoteOnly) {
                 await this.fsRepo.create(projectId, character);
             }
@@ -75,7 +79,10 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
         try {
             await this.supabaseRepo.update(character);
         } catch (error) {
-            console.warn("Failed to update character in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to update character in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -94,7 +101,10 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
             await this.supabaseRepo.delete(id);
             await deletionLog.remove(id);
         } catch (error) {
-            console.warn("Failed to delete character in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete character in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -121,7 +131,10 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
                 await deletionLog.remove(character.id);
             }
         } catch (error) {
-            console.warn("Failed to delete characters in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete characters in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -139,7 +152,10 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
     /**
      * Pick the most recently updated entity between local and remote.
      */
-    private pickMostRecent(local: Character | null, remote: Character | null): Character | null {
+    private pickMostRecent(
+        local: Character | null,
+        remote: Character | null
+    ): Character | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
         }
@@ -149,7 +165,10 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
     /**
      * Merge local and remote arrays, keeping the most recently updated version of each entity.
      */
-    private mergeByMostRecent(local: Character[], remote: Character[]): Character[] {
+    private mergeByMostRecent(
+        local: Character[],
+        remote: Character[]
+    ): Character[] {
         const map = new Map<string, Character>();
 
         for (const item of local) {
@@ -173,7 +192,9 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
         return this.getRemoteProjectId(characterId);
     }
 
-    private async getRemoteProjectId(characterId: string): Promise<string | null> {
+    private async getRemoteProjectId(
+        characterId: string
+    ): Promise<string | null> {
         try {
             const client = SupabaseService.getClient();
             const { data } = await client

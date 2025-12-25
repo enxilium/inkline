@@ -92,7 +92,10 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
             await this.supabaseRepo.deleteImage(id);
             await deletionLog.remove(id);
         } catch (error) {
-            console.warn("Failed to delete image in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete image in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -119,7 +122,10 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
                 await deletionLog.remove(img.id);
             }
         } catch (error) {
-            console.warn("Failed to delete images in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete images in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -232,7 +238,10 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         try {
             await this.supabaseRepo.savePlaylist(projectId, playlist);
         } catch (error) {
-            console.warn("Failed to save Playlist in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to save Playlist in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -251,7 +260,8 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
     async findPlaylistsByProjectId(projectId: string): Promise<Playlist[]> {
         let remote: Playlist[] = [];
         try {
-            remote = await this.supabaseRepo.findPlaylistsByProjectId(projectId);
+            remote =
+                await this.supabaseRepo.findPlaylistsByProjectId(projectId);
         } catch {
             // Offline
         }
@@ -284,7 +294,10 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
             await this.supabaseRepo.deletePlaylist(id);
             await deletionLog.remove(id);
         } catch (error) {
-            console.warn("Failed to delete Playlist in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete Playlist in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -309,7 +322,10 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
                 await deletionLog.remove(playlist.id);
             }
         } catch (error) {
-            console.warn("Failed to delete Playlists in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete Playlists in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -381,7 +397,9 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
     /**
      * Get projectId by scanning for the asset file location.
      */
-    private async getProjectIdFromFileLocation(assetId: string): Promise<string | null> {
+    private async getProjectIdFromFileLocation(
+        assetId: string
+    ): Promise<string | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
             const projectsDir = path.join("users", user, "projects");

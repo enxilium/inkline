@@ -22,12 +22,12 @@ import { SupabaseDeletionLogRepository } from "../db/SupabaseDeletionLogReposito
 
 /**
  * SynchronizationService handles bidirectional sync between local filesystem and Supabase.
- * 
+ *
  * Conflict Resolution Strategy: "Most Recent Wins"
  * - When syncing, the entity with the most recent updatedAt timestamp is used as the source of truth.
- * - This applies consistently to all entity types (chapters, characters, locations, organizations, 
+ * - This applies consistently to all entity types (chapters, characters, locations, organizations,
  *   scrap notes, and assets).
- * 
+ *
  * Deletion Handling:
  * - Deletions are tracked in a local deletion log when offline.
  * - On sync, if the remote entity was updated AFTER the deletion timestamp, the deletion is cancelled
@@ -61,7 +61,9 @@ export class SynchronizationService extends EventEmitter {
 
     startAutoSync(userId: string) {
         this.stopAutoSync();
-        console.log(`[SynchronizationService] Starting auto-sync for user ${userId}`);
+        console.log(
+            `[SynchronizationService] Starting auto-sync for user ${userId}`
+        );
 
         // Cleanup old deletion logs on app launch (30+ days old)
         void this.cleanupOldDeletionLogs(userId);
@@ -75,7 +77,9 @@ export class SynchronizationService extends EventEmitter {
 
             if (isOnline) {
                 if (this.wasOffline) {
-                    console.log("[SynchronizationService] Connection restored. Running re-connection sync.");
+                    console.log(
+                        "[SynchronizationService] Connection restored. Running re-connection sync."
+                    );
                     await this.syncAll(userId);
                     this.wasOffline = false;
                 }
@@ -121,7 +125,10 @@ export class SynchronizationService extends EventEmitter {
                 );
             }
         } catch (error) {
-            console.error("[SynchronizationService] Failed to cleanup old deletion logs", error);
+            console.error(
+                "[SynchronizationService] Failed to cleanup old deletion logs",
+                error
+            );
         }
     }
 
@@ -134,9 +141,13 @@ export class SynchronizationService extends EventEmitter {
             await this.processDeletionLog(userId);
 
             // Sync projects
-            const remoteProjects = await this.supabaseProjectRepo.findAllByUserId(userId);
-            const localProjects = await this.fsProjectRepo.findAllByUserId(userId);
-            const localProjectMap = new Map(localProjects.map((p) => [p.id, p]));
+            const remoteProjects =
+                await this.supabaseProjectRepo.findAllByUserId(userId);
+            const localProjects =
+                await this.fsProjectRepo.findAllByUserId(userId);
+            const localProjectMap = new Map(
+                localProjects.map((p) => [p.id, p])
+            );
 
             for (const remoteP of remoteProjects) {
                 const localP = localProjectMap.get(remoteP.id);
@@ -185,7 +196,8 @@ export class SynchronizationService extends EventEmitter {
     // ========================================================================
 
     private async syncChapters(projectId: string) {
-        const remote = await this.supabaseChapterRepo.findByProjectId(projectId);
+        const remote =
+            await this.supabaseChapterRepo.findByProjectId(projectId);
         const local = await this.fsChapterRepo.findByProjectId(projectId);
         const localMap = new Map(local.map((c) => [c.id, c]));
         const remoteMap = new Map(remote.map((c) => [c.id, c]));
@@ -215,7 +227,8 @@ export class SynchronizationService extends EventEmitter {
     }
 
     private async syncCharacters(projectId: string) {
-        const remote = await this.supabaseCharacterRepo.findByProjectId(projectId);
+        const remote =
+            await this.supabaseCharacterRepo.findByProjectId(projectId);
         const local = await this.fsCharacterRepo.findByProjectId(projectId);
         const localMap = new Map(local.map((c) => [c.id, c]));
         const remoteMap = new Map(remote.map((c) => [c.id, c]));
@@ -243,7 +256,8 @@ export class SynchronizationService extends EventEmitter {
     }
 
     private async syncLocations(projectId: string) {
-        const remote = await this.supabaseLocationRepo.findByProjectId(projectId);
+        const remote =
+            await this.supabaseLocationRepo.findByProjectId(projectId);
         const local = await this.fsLocationRepo.findByProjectId(projectId);
         const localMap = new Map(local.map((l) => [l.id, l]));
         const remoteMap = new Map(remote.map((l) => [l.id, l]));
@@ -271,7 +285,8 @@ export class SynchronizationService extends EventEmitter {
     }
 
     private async syncOrganizations(projectId: string) {
-        const remote = await this.supabaseOrganizationRepo.findByProjectId(projectId);
+        const remote =
+            await this.supabaseOrganizationRepo.findByProjectId(projectId);
         const local = await this.fsOrganizationRepo.findByProjectId(projectId);
         const localMap = new Map(local.map((o) => [o.id, o]));
         const remoteMap = new Map(remote.map((o) => [o.id, o]));
@@ -299,7 +314,8 @@ export class SynchronizationService extends EventEmitter {
     }
 
     private async syncScrapNotes(projectId: string) {
-        const remote = await this.supabaseScrapNoteRepo.findByProjectId(projectId);
+        const remote =
+            await this.supabaseScrapNoteRepo.findByProjectId(projectId);
         const local = await this.fsScrapNoteRepo.findByProjectId(projectId);
         const localMap = new Map(local.map((n) => [n.id, n]));
         const remoteMap = new Map(remote.map((n) => [n.id, n]));
@@ -333,7 +349,8 @@ export class SynchronizationService extends EventEmitter {
     }
 
     private async syncImages(projectId: string) {
-        const remote = await this.supabaseAssetRepo.findImagesByProjectId(projectId);
+        const remote =
+            await this.supabaseAssetRepo.findImagesByProjectId(projectId);
         const local = await this.fsAssetRepo.findImagesByProjectId(projectId);
         const localMap = new Map(local.map((i) => [i.id, i]));
         const remoteMap = new Map(remote.map((i) => [i.id, i]));
@@ -357,7 +374,8 @@ export class SynchronizationService extends EventEmitter {
     }
 
     private async syncBGMs(projectId: string) {
-        const remote = await this.supabaseAssetRepo.findBGMByProjectId(projectId);
+        const remote =
+            await this.supabaseAssetRepo.findBGMByProjectId(projectId);
         const local = await this.fsAssetRepo.findBGMByProjectId(projectId);
         const localMap = new Map(local.map((b) => [b.id, b]));
         const remoteMap = new Map(remote.map((b) => [b.id, b]));
@@ -381,8 +399,10 @@ export class SynchronizationService extends EventEmitter {
     }
 
     private async syncPlaylists(projectId: string) {
-        const remote = await this.supabaseAssetRepo.findPlaylistsByProjectId(projectId);
-        const local = await this.fsAssetRepo.findPlaylistsByProjectId(projectId);
+        const remote =
+            await this.supabaseAssetRepo.findPlaylistsByProjectId(projectId);
+        const local =
+            await this.fsAssetRepo.findPlaylistsByProjectId(projectId);
         const localMap = new Map(local.map((p) => [p.id, p]));
         const remoteMap = new Map(remote.map((p) => [p.id, p]));
 
@@ -390,7 +410,10 @@ export class SynchronizationService extends EventEmitter {
             if (await deletionLog.isDeleted(remotePlaylist.id)) continue;
 
             const localPlaylist = localMap.get(remotePlaylist.id);
-            if (!localPlaylist || remotePlaylist.updatedAt > localPlaylist.updatedAt) {
+            if (
+                !localPlaylist ||
+                remotePlaylist.updatedAt > localPlaylist.updatedAt
+            ) {
                 if (remotePlaylist.storagePath) {
                     await this.downloadAsset(remotePlaylist.storagePath);
                 }
@@ -403,7 +426,10 @@ export class SynchronizationService extends EventEmitter {
                 if (localPlaylist.storagePath) {
                     await this.uploadAsset(localPlaylist.storagePath);
                 }
-                await this.supabaseAssetRepo.savePlaylist(projectId, localPlaylist);
+                await this.supabaseAssetRepo.savePlaylist(
+                    projectId,
+                    localPlaylist
+                );
             }
         }
     }
@@ -417,11 +443,19 @@ export class SynchronizationService extends EventEmitter {
         const log = await deletionLog.getAll();
         for (const item of log) {
             try {
-                const remoteTimestamp = await this.getRemoteUpdatedAt(item.entityType, item.entityId);
+                const remoteTimestamp = await this.getRemoteUpdatedAt(
+                    item.entityType,
+                    item.entityId
+                );
 
                 // If remote was updated after local deletion, skip the deletion (remote wins)
-                if (remoteTimestamp && remoteTimestamp.getTime() > item.timestamp) {
-                    console.log(`[SynchronizationService] Skipping deletion of ${item.entityId}: remote is newer`);
+                if (
+                    remoteTimestamp &&
+                    remoteTimestamp.getTime() > item.timestamp
+                ) {
+                    console.log(
+                        `[SynchronizationService] Skipping deletion of ${item.entityId}: remote is newer`
+                    );
                     await deletionLog.remove(item.entityId);
                     continue;
                 }
@@ -439,12 +473,17 @@ export class SynchronizationService extends EventEmitter {
 
                 await deletionLog.remove(item.entityId);
             } catch (error) {
-                console.warn("[SynchronizationService] Failed to process pending deletion", item, error);
+                console.warn(
+                    "[SynchronizationService] Failed to process pending deletion",
+                    item,
+                    error
+                );
             }
         }
 
         // 2. Process Remote Deletions (Pull to Local)
-        const remoteDeletions = await this.supabaseDeletionLogRepo.findAllByUserId(userId);
+        const remoteDeletions =
+            await this.supabaseDeletionLogRepo.findAllByUserId(userId);
         for (const deletion of remoteDeletions) {
             try {
                 const deletedAt = new Date(deletion.deleted_at).getTime();
@@ -456,20 +495,32 @@ export class SynchronizationService extends EventEmitter {
                 if (localUpdatedAt) {
                     if (localUpdatedAt.getTime() > deletedAt) {
                         // Local is newer - resurrect by re-uploading (handled by normal sync)
-                        console.log(`[SynchronizationService] Resurrecting ${deletion.entity_id}: local is newer`);
+                        console.log(
+                            `[SynchronizationService] Resurrecting ${deletion.entity_id}: local is newer`
+                        );
                         await this.supabaseDeletionLogRepo.delete(deletion.id);
                     } else {
                         // Remote deletion is newer - delete locally
-                        await this.deleteLocalEntity(deletion.entity_type as EntityType, deletion.entity_id);
+                        await this.deleteLocalEntity(
+                            deletion.entity_type as EntityType,
+                            deletion.entity_id
+                        );
                     }
                 }
             } catch (error) {
-                console.warn("[SynchronizationService] Failed to process remote deletion", deletion, error);
+                console.warn(
+                    "[SynchronizationService] Failed to process remote deletion",
+                    deletion,
+                    error
+                );
             }
         }
     }
 
-    private async getRemoteUpdatedAt(type: EntityType, id: string): Promise<Date | null> {
+    private async getRemoteUpdatedAt(
+        type: EntityType,
+        id: string
+    ): Promise<Date | null> {
         try {
             let entity: { updatedAt: Date } | null = null;
 
@@ -506,7 +557,10 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    private async getLocalUpdatedAt(type: EntityType, id: string): Promise<Date | null> {
+    private async getLocalUpdatedAt(
+        type: EntityType,
+        id: string
+    ): Promise<Date | null> {
         try {
             let entity: { updatedAt: Date } | null = null;
 
@@ -543,7 +597,10 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    private async deleteRemoteEntity(type: EntityType, id: string): Promise<void> {
+    private async deleteRemoteEntity(
+        type: EntityType,
+        id: string
+    ): Promise<void> {
         switch (type) {
             case "chapter":
                 await this.supabaseChapterRepo.delete(id);
@@ -572,7 +629,10 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    private async deleteLocalEntity(type: EntityType, id: string): Promise<void> {
+    private async deleteLocalEntity(
+        type: EntityType,
+        id: string
+    ): Promise<void> {
         switch (type) {
             case "chapter":
                 await this.fsChapterRepo.delete(id);

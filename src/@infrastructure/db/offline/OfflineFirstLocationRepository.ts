@@ -21,7 +21,10 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
         try {
             await this.supabaseRepo.create(projectId, location);
         } catch (error) {
-            console.warn("Failed to create location in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to create location in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -60,8 +63,9 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
 
         // Persist any remote-only locations locally for offline access
         for (const location of merged) {
-            const isRemoteOnly = remote.some(r => r.id === location.id) && 
-                                 !local.some(l => l.id === location.id);
+            const isRemoteOnly =
+                remote.some((r) => r.id === location.id) &&
+                !local.some((l) => l.id === location.id);
             if (isRemoteOnly) {
                 await this.fsRepo.create(projectId, location);
             }
@@ -86,7 +90,10 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
         try {
             await this.supabaseRepo.update(location);
         } catch (error) {
-            console.warn("Failed to update location in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to update location in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -105,7 +112,10 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
             await this.supabaseRepo.delete(id);
             await deletionLog.remove(id);
         } catch (error) {
-            console.warn("Failed to delete location in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete location in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -132,7 +142,10 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
                 await deletionLog.remove(location.id);
             }
         } catch (error) {
-            console.warn("Failed to delete locations in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete locations in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -143,7 +156,10 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
     /**
      * Pick the most recently updated entity between local and remote.
      */
-    private pickMostRecent(local: Location | null, remote: Location | null): Location | null {
+    private pickMostRecent(
+        local: Location | null,
+        remote: Location | null
+    ): Location | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
         }
@@ -153,7 +169,10 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
     /**
      * Merge local and remote arrays, keeping the most recently updated version of each entity.
      */
-    private mergeByMostRecent(local: Location[], remote: Location[]): Location[] {
+    private mergeByMostRecent(
+        local: Location[],
+        remote: Location[]
+    ): Location[] {
         const map = new Map<string, Location>();
 
         for (const item of local) {
@@ -177,7 +196,9 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
         return this.getRemoteProjectId(locationId);
     }
 
-    private async getRemoteProjectId(locationId: string): Promise<string | null> {
+    private async getRemoteProjectId(
+        locationId: string
+    ): Promise<string | null> {
         try {
             const client = SupabaseService.getClient();
             const { data } = await client

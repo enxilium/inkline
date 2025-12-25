@@ -21,7 +21,10 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         try {
             await this.supabaseRepo.create(projectId, note);
         } catch (error) {
-            console.warn("Failed to create scrap note in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to create scrap note in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -60,8 +63,9 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
 
         // Persist any remote-only notes locally for offline access
         for (const note of merged) {
-            const isRemoteOnly = remote.some(r => r.id === note.id) && 
-                                 !local.some(l => l.id === note.id);
+            const isRemoteOnly =
+                remote.some((r) => r.id === note.id) &&
+                !local.some((l) => l.id === note.id);
             if (isRemoteOnly) {
                 await this.fsRepo.create(projectId, note);
             }
@@ -75,7 +79,10 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         try {
             await this.supabaseRepo.updateContent(noteId, content);
         } catch (error) {
-            console.warn("Failed to update scrap note content in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to update scrap note content in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -84,7 +91,10 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         try {
             await this.supabaseRepo.update(note);
         } catch (error) {
-            console.warn("Failed to update scrap note in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to update scrap note in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -103,7 +113,10 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
             await this.supabaseRepo.delete(id);
             await deletionLog.remove(id);
         } catch (error) {
-            console.warn("Failed to delete scrap note in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete scrap note in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -130,7 +143,10 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
                 await deletionLog.remove(note.id);
             }
         } catch (error) {
-            console.warn("Failed to delete scrap notes in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete scrap notes in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -141,7 +157,10 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
     /**
      * Pick the most recently updated entity between local and remote.
      */
-    private pickMostRecent(local: ScrapNote | null, remote: ScrapNote | null): ScrapNote | null {
+    private pickMostRecent(
+        local: ScrapNote | null,
+        remote: ScrapNote | null
+    ): ScrapNote | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
         }
@@ -151,7 +170,10 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
     /**
      * Merge local and remote arrays, keeping the most recently updated version of each entity.
      */
-    private mergeByMostRecent(local: ScrapNote[], remote: ScrapNote[]): ScrapNote[] {
+    private mergeByMostRecent(
+        local: ScrapNote[],
+        remote: ScrapNote[]
+    ): ScrapNote[] {
         const map = new Map<string, ScrapNote>();
 
         for (const item of local) {

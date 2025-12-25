@@ -21,7 +21,10 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
         try {
             await this.supabaseRepo.create(projectId, chapter);
         } catch (error) {
-            console.warn("Failed to create chapter in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to create chapter in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -60,8 +63,9 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
 
         // Persist any remote-only chapters locally for offline access
         for (const chapter of merged) {
-            const isRemoteOnly = remote.some(r => r.id === chapter.id) && 
-                                 !local.some(l => l.id === chapter.id);
+            const isRemoteOnly =
+                remote.some((r) => r.id === chapter.id) &&
+                !local.some((l) => l.id === chapter.id);
             if (isRemoteOnly) {
                 await this.fsRepo.create(projectId, chapter);
             }
@@ -75,7 +79,10 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
         try {
             await this.supabaseRepo.updateContent(chapterId, content);
         } catch (error) {
-            console.warn("Failed to update chapter content in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to update chapter content in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -84,7 +91,10 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
         try {
             await this.supabaseRepo.update(chapter);
         } catch (error) {
-            console.warn("Failed to update chapter in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to update chapter in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -103,7 +113,10 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
             await this.supabaseRepo.delete(id);
             await deletionLog.remove(id);
         } catch (error) {
-            console.warn("Failed to delete chapter in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete chapter in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -130,7 +143,10 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
                 await deletionLog.remove(chapter.id);
             }
         } catch (error) {
-            console.warn("Failed to delete chapters in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete chapters in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -141,7 +157,10 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
     /**
      * Pick the most recently updated entity between local and remote.
      */
-    private pickMostRecent(local: Chapter | null, remote: Chapter | null): Chapter | null {
+    private pickMostRecent(
+        local: Chapter | null,
+        remote: Chapter | null
+    ): Chapter | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
         }
@@ -193,7 +212,9 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
         return this.getRemoteProjectId(chapterId);
     }
 
-    private async getRemoteProjectId(chapterId: string): Promise<string | null> {
+    private async getRemoteProjectId(
+        chapterId: string
+    ): Promise<string | null> {
         try {
             const client = SupabaseService.getClient();
             const { data } = await client

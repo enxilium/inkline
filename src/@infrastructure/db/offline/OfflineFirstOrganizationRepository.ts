@@ -10,7 +10,9 @@ import { deletionLog } from "./DeletionLog";
  * Offline-first organization repository that uses local filesystem as primary storage
  * and syncs with Supabase when online. Uses "most recent wins" for conflict resolution.
  */
-export class OfflineFirstOrganizationRepository implements IOrganizationRepository {
+export class OfflineFirstOrganizationRepository
+    implements IOrganizationRepository
+{
     constructor(
         private supabaseRepo: SupabaseOrganizationRepository,
         private fsRepo: FileSystemOrganizationRepository
@@ -21,7 +23,10 @@ export class OfflineFirstOrganizationRepository implements IOrganizationReposito
         try {
             await this.supabaseRepo.create(projectId, organization);
         } catch (error) {
-            console.warn("Failed to create organization in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to create organization in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -60,8 +65,9 @@ export class OfflineFirstOrganizationRepository implements IOrganizationReposito
 
         // Persist any remote-only organizations locally for offline access
         for (const organization of merged) {
-            const isRemoteOnly = remote.some(r => r.id === organization.id) && 
-                                 !local.some(l => l.id === organization.id);
+            const isRemoteOnly =
+                remote.some((r) => r.id === organization.id) &&
+                !local.some((l) => l.id === organization.id);
             if (isRemoteOnly) {
                 await this.fsRepo.create(projectId, organization);
             }
@@ -98,7 +104,10 @@ export class OfflineFirstOrganizationRepository implements IOrganizationReposito
         try {
             await this.supabaseRepo.update(organization);
         } catch (error) {
-            console.warn("Failed to update organization in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to update organization in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -117,7 +126,10 @@ export class OfflineFirstOrganizationRepository implements IOrganizationReposito
             await this.supabaseRepo.delete(id);
             await deletionLog.remove(id);
         } catch (error) {
-            console.warn("Failed to delete organization in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete organization in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -144,7 +156,10 @@ export class OfflineFirstOrganizationRepository implements IOrganizationReposito
                 await deletionLog.remove(organization.id);
             }
         } catch (error) {
-            console.warn("Failed to delete organizations in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete organizations in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -155,7 +170,10 @@ export class OfflineFirstOrganizationRepository implements IOrganizationReposito
     /**
      * Pick the most recently updated entity between local and remote.
      */
-    private pickMostRecent(local: Organization | null, remote: Organization | null): Organization | null {
+    private pickMostRecent(
+        local: Organization | null,
+        remote: Organization | null
+    ): Organization | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
         }
@@ -165,7 +183,10 @@ export class OfflineFirstOrganizationRepository implements IOrganizationReposito
     /**
      * Merge local and remote arrays, keeping the most recently updated version of each entity.
      */
-    private mergeByMostRecent(local: Organization[], remote: Organization[]): Organization[] {
+    private mergeByMostRecent(
+        local: Organization[],
+        remote: Organization[]
+    ): Organization[] {
         const map = new Map<string, Organization>();
 
         for (const item of local) {

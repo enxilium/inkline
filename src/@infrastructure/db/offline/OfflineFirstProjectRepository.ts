@@ -6,7 +6,7 @@ import { FileSystemProjectRepository } from "../filesystem/FileSystemProjectRepo
 /**
  * Offline-first project repository that uses local filesystem as primary storage
  * and syncs with Supabase when online. Uses "most recent wins" for conflict resolution.
- * 
+ *
  * Note: Projects don't use the deletion log because project deletion is a high-level
  * operation that cascades to all child entities, which are individually logged.
  */
@@ -21,7 +21,10 @@ export class OfflineFirstProjectRepository implements IProjectRepository {
         try {
             await this.supabaseRepo.create(ownerId, project);
         } catch (error) {
-            console.warn("Failed to create project in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to create project in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -60,8 +63,9 @@ export class OfflineFirstProjectRepository implements IProjectRepository {
 
         // Persist any remote-only projects locally for offline access
         for (const project of merged) {
-            const isRemoteOnly = remote.some(r => r.id === project.id) && 
-                                 !local.some(l => l.id === project.id);
+            const isRemoteOnly =
+                remote.some((r) => r.id === project.id) &&
+                !local.some((l) => l.id === project.id);
             if (isRemoteOnly) {
                 await this.fsRepo.create(userId, project);
             }
@@ -75,7 +79,10 @@ export class OfflineFirstProjectRepository implements IProjectRepository {
         try {
             await this.supabaseRepo.update(project);
         } catch (error) {
-            console.warn("Failed to update project in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to update project in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -86,7 +93,10 @@ export class OfflineFirstProjectRepository implements IProjectRepository {
         try {
             await this.supabaseRepo.delete(id);
         } catch (error) {
-            console.warn("Failed to delete project in Supabase (Offline?)", error);
+            console.warn(
+                "Failed to delete project in Supabase (Offline?)",
+                error
+            );
         }
     }
 
@@ -97,7 +107,10 @@ export class OfflineFirstProjectRepository implements IProjectRepository {
     /**
      * Pick the most recently updated entity between local and remote.
      */
-    private pickMostRecent(local: Project | null, remote: Project | null): Project | null {
+    private pickMostRecent(
+        local: Project | null,
+        remote: Project | null
+    ): Project | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
         }
