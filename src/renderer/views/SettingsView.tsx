@@ -14,6 +14,7 @@ export const SettingsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
     const updateAccountPassword = useAppStore(
         (state) => state.updateAccountPassword
     );
+    const logout = useAppStore((state) => state.logout);
 
     const [activeSection, setActiveSection] =
         useState<SettingsSection>("theme");
@@ -514,6 +515,37 @@ export const SettingsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                                             {accountStatus}
                                         </p>
                                     ) : null}
+                                </div>
+
+                                <div
+                                    className="settings-section"
+                                    style={{
+                                        marginTop: "2rem",
+                                        paddingTop: "1.5rem",
+                                        borderTop: "1px solid var(--border)",
+                                    }}
+                                >
+                                    <h3
+                                        style={{
+                                            margin: "0 0 0.5rem 0",
+                                            fontSize: "1rem",
+                                        }}
+                                    >
+                                        Session
+                                    </h3>
+                                    <p
+                                        className="panel-subtitle"
+                                        style={{ marginBottom: "1rem" }}
+                                    >
+                                        Sign out of your account on this device.
+                                    </p>
+                                    <Button
+                                        onClick={logout}
+                                        variant="secondary"
+                                        disabled={!user}
+                                    >
+                                        Log Out
+                                    </Button>
                                 </div>
                             </>
                         ) : null}

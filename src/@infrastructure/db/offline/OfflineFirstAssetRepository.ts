@@ -426,6 +426,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
 
     /**
      * Resolve a local file URL for an asset if the file exists locally.
+     * Uses the custom inkline-asset:// protocol for secure local file access.
      */
     private async resolveLocalUrl(asset: Image | BGM): Promise<void> {
         if (!asset.storagePath) return;
@@ -438,7 +439,9 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
 
         try {
             await fs.access(localPath);
-            asset.url = `file://${localPath.replace(/\\/g, "/")}`;
+            // Use custom protocol: inkline-asset://local/assets/{storagePath}
+            // The "local" host is a placeholder, the pathname contains the actual path
+            asset.url = `inkline-asset://local/assets/${asset.storagePath.replace(/\\/g, "/")}`;
         } catch {
             // Keep remote URL
         }
