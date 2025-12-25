@@ -1,25 +1,4 @@
 import React from "react";
-import {
-    DndContext,
-    closestCenter,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-    DragEndEvent,
-} from "@dnd-kit/core";
-import {
-    arrayMove,
-    SortableContext,
-    sortableKeyboardCoordinates,
-    verticalListSortingStrategy,
-    useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import {
-    restrictToVerticalAxis,
-    restrictToParentElement,
-} from "@dnd-kit/modifiers";
 
 import type {
     WorkspaceChapter,
@@ -37,7 +16,6 @@ import {
     BinderScrapNoteIcon,
     ChevronLeftIcon,
     ChevronRightIcon,
-    GripVerticalIcon,
     MapIcon,
     MessageSquareFilledIcon,
     PersonIcon,
@@ -101,32 +79,48 @@ const normalizeLabel = (value: string, fallback: string): string => {
     return trimmed ? trimmed : fallback;
 };
 
-const SortableBinderItem = ({
+const DraggableBinderItem = ({
     item,
     isActive,
+    isDragging,
+    dropPosition,
     onSelect,
     onDelete,
+    onDragStart,
+    onDragOver,
+    onDrop,
+    onDragEnd,
 }: {
     item: BinderItem;
     isActive: boolean;
+    isDragging?: boolean;
+    dropPosition?: "top" | "bottom" | "none";
     onSelect: () => void;
     onDelete: () => void;
+    onDragStart: (e: React.DragEvent) => void;
+    onDragOver: (e: React.DragEvent) => void;
+    onDrop: (e: React.DragEvent) => void;
+    onDragEnd: (e: React.DragEvent) => void;
 }) => {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({ id: item.id });
-
-    const setDraggedDocument = useAppStore((state) => state.setDraggedDocument);
     const renameDocument = useAppStore((state) => state.renameDocument);
+    const renamingDocument = useAppStore((state) => state.renamingDocument);
+    const setRenamingDocument = useAppStore(
+        (state) => state.setRenamingDocument
+    );
 
     const [isRenaming, setIsRenaming] = React.useState(false);
     const [renameValue, setRenameValue] = React.useState(item.label);
     const inputRef = React.useRef<HTMLInputElement>(null);
+
+    React.useEffect(() => {
+        if (
+            renamingDocument?.id === item.id &&
+            renamingDocument?.kind === item.kind
+        ) {
+            setIsRenaming(true);
+            setRenamingDocument(null);
+        }
+    }, [renamingDocument, item.id, item.kind, setRenamingDocument]);
 
     React.useEffect(() => {
         if (isRenaming && inputRef.current) {
@@ -153,54 +147,23 @@ const SortableBinderItem = ({
         }
     };
 
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        zIndex: isDragging ? 1 : undefined,
-        opacity: isDragging ? 0.5 : 1,
-        display: "flex",
-        alignItems: "center",
-    };
-
-    const handleDragStart = (e: React.DragEvent) => {
-        // Use a custom payload so this drag is treated as a tiling action,
-        // not as plain text that can be dropped into an editor.
-        e.dataTransfer.setData(
-            "application/x-inkline-document-ref",
-            JSON.stringify({
-                id: item.id,
-                kind: item.kind,
-                title: item.label,
-            })
-        );
-        // Keep a text/plain entry to satisfy some drag-and-drop consumers,
-        // but avoid putting the document title here.
-        e.dataTransfer.setData("text/plain", "");
-        e.dataTransfer.effectAllowed = "copy";
-
-        // Set global state for WorkspaceLayout to read
-        setDraggedDocument({
-            id: item.id,
-            kind: item.kind,
-            title: item.label,
-        });
-    };
-
-    const handleDragEnd = () => {
-        setDraggedDocument(null);
-    };
-
     return (
-        <li ref={setNodeRef} style={style}>
-            <button
-                type="button"
-                className="binder-item-drag-handle"
-                {...attributes}
-                {...listeners}
-                aria-label="Reorder"
-            >
-                <GripVerticalIcon size={14} />
-            </button>
+        <li
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+            className={isActive ? "is-active" : ""}
+            style={{
+                opacity: isDragging ? 0.4 : 1,
+                borderTop:
+                    dropPosition === "top"
+                        ? "2px solid var(--accent)"
+                        : "2px solid transparent",
+                borderBottom:
+                    dropPosition === "bottom"
+                        ? "2px solid var(--accent)"
+                        : "2px solid transparent",
+            }}
+        >
             {isRenaming ? (
                 <div
                     className="binder-item binder-item-renaming"
@@ -235,14 +198,22 @@ const SortableBinderItem = ({
                     type="button"
                     className={"binder-item" + (isActive ? " is-active" : "")}
                     onClick={onSelect}
+                    onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.ui.showContextMenu("binder_chapter", {
+                            id: item.id,
+                            kind: item.kind,
+                        });
+                    }}
                     onDoubleClick={(e) => {
                         e.stopPropagation();
                         setIsRenaming(true);
                         setRenameValue(item.label);
                     }}
                     draggable={true}
-                    onDragStart={handleDragStart}
-                    onDragEnd={handleDragEnd}
+                    onDragStart={onDragStart}
+                    onDragEnd={onDragEnd}
                     data-kind={item.kind}
                     style={{ flex: 1, textAlign: "left" }}
                 >
@@ -307,17 +278,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     const pendingEditsByChapterId = useAppStore(
         (state) => state.pendingEditsByChapterId
     );
-
-    const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: {
-                distance: 8,
-            },
-        }),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        })
-    );
+    const setDraggedDocument = useAppStore((state) => state.setDraggedDocument);
 
     const [uncontrolledActiveKind, setUncontrolledActiveKind] =
         React.useState<WorkspaceDocumentKind>(
@@ -326,25 +287,9 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
 
     const activeKind = controlledActiveKind ?? uncontrolledActiveKind;
 
-    const handleDragEnd = (event: DragEndEvent, section: BinderSection) => {
-        const { active, over } = event;
-
-        if (!over || active.id === over.id) {
-            return;
-        }
-
-        const oldIndex = section.items.findIndex((c) => c.id === active.id);
-        const newIndex = section.items.findIndex((c) => c.id === over.id);
-
-        if (oldIndex === -1 || newIndex === -1) {
-            return;
-        }
-
-        const newOrder = arrayMove(section.items, oldIndex, newIndex).map(
-            (c) => c.id
-        );
-        section.onReorder(newOrder);
-    };
+    // Native Drag & Drop State
+    const [draggedId, setDraggedId] = React.useState<string | null>(null);
+    const [dragOverId, setDragOverId] = React.useState<string | null>(null);
 
     const handleSelectKind = (kind: WorkspaceDocumentKind) => {
         if (onActiveKindChange) {
@@ -456,11 +401,75 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     const activeSection =
         sections.find((section) => section.kind === activeKind) ?? sections[0];
 
+    const handleDragStart = (e: React.DragEvent, item: BinderItem) => {
+        setDraggedId(item.id);
+        setDraggedDocument({
+            id: item.id,
+            kind: item.kind,
+            title: item.label,
+        });
+        e.dataTransfer.setData(
+            "application/x-inkline-document-ref",
+            JSON.stringify({
+                id: item.id,
+                kind: item.kind,
+                title: item.label,
+            })
+        );
+        e.dataTransfer.effectAllowed = "copyMove";
+    };
+
+    const handleDragOver = (e: React.DragEvent, item: BinderItem) => {
+        e.preventDefault(); // Allow drop
+        if (draggedId && draggedId !== item.id) {
+            setDragOverId(item.id);
+        }
+    };
+
+    const handleDrop = (e: React.DragEvent, targetItem: BinderItem) => {
+        e.preventDefault();
+        e.stopPropagation();
+
+        if (draggedId && draggedId !== targetItem.id) {
+            const oldIndex = activeSection.items.findIndex(
+                (i) => i.id === draggedId
+            );
+            const newIndex = activeSection.items.findIndex(
+                (i) => i.id === targetItem.id
+            );
+
+            if (oldIndex !== -1 && newIndex !== -1) {
+                const newItems = [...activeSection.items];
+                const [moved] = newItems.splice(oldIndex, 1);
+                newItems.splice(newIndex, 0, moved);
+                activeSection.onReorder(newItems.map((i) => i.id));
+            }
+        }
+
+        setDraggedId(null);
+        setDragOverId(null);
+        setDraggedDocument(null);
+    };
+
+    const handleDragEnd = () => {
+        setDraggedId(null);
+        setDragOverId(null);
+        setDraggedDocument(null);
+    };
+
+    const renderedItems = activeSection.items;
+
     const toggleIcon =
         (isBinderOpen ?? true) ? <ChevronLeftIcon /> : <ChevronRightIcon />;
 
     return (
-        <aside className="binder-panel">
+        <aside
+            className="binder-panel"
+            onContextMenu={(e) => {
+                e.preventDefault();
+                window.ui.showContextMenu("binder_project");
+            }}
+        >
             <div className="binder-header">
                 <div className="panel-label-container">
                     <p className="panel-label">EXPLORER</p>
@@ -491,30 +500,61 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             </div>
 
             <div className="binder-sections binder-scroll-area">
-                {activeSection.items.length ? (
-                    <DndContext
-                        sensors={sensors}
-                        collisionDetection={closestCenter}
-                        onDragEnd={(e) => handleDragEnd(e, activeSection)}
-                        modifiers={[
-                            restrictToVerticalAxis,
-                            restrictToParentElement,
-                        ]}
-                    >
-                        <SortableContext
-                            items={activeSection.items.map((i) => i.id)}
-                            strategy={verticalListSortingStrategy}
-                        >
-                            <ul className="binder-list">
-                                {activeSection.items.map((item) => {
+                {renderedItems.length ? (
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                        <div
+                            style={{
+                                height: "10px",
+                                flexShrink: 0,
+                                marginBottom: "-10px",
+                                zIndex: 10,
+                                position: "relative",
+                            }}
+                            onDragOver={(e) => {
+                                e.preventDefault();
+                                if (
+                                    draggedId &&
+                                    renderedItems.length > 0 &&
+                                    draggedId !== renderedItems[0].id
+                                ) {
+                                    setDragOverId(renderedItems[0].id);
+                                }
+                            }}
+                            onDrop={(e) => {
+                                e.preventDefault();
+                                if (renderedItems.length > 0) {
+                                    handleDrop(e, renderedItems[0]);
+                                }
+                            }}
+                        />
+                        <ul className="binder-list">
+                            {(() => {
+                                const draggedIndex = renderedItems.findIndex(
+                                    (i) => i.id === draggedId
+                                );
+                                return renderedItems.map((item, index) => {
                                     const isActive =
                                         activeDocument?.kind === item.kind &&
                                         activeDocument.id === item.id;
+
+                                    let dropPosition:
+                                        | "top"
+                                        | "bottom"
+                                        | "none" = "none";
+                                    if (dragOverId === item.id && draggedId) {
+                                        if (draggedIndex > index)
+                                            dropPosition = "top";
+                                        if (draggedIndex < index)
+                                            dropPosition = "bottom";
+                                    }
+
                                     return (
-                                        <SortableBinderItem
+                                        <DraggableBinderItem
                                             key={item.id}
                                             item={item}
                                             isActive={isActive}
+                                            isDragging={draggedId === item.id}
+                                            dropPosition={dropPosition}
                                             onSelect={() =>
                                                 onSelect({
                                                     kind: item.kind,
@@ -532,12 +572,20 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                                                     );
                                                 }
                                             }}
+                                            onDragStart={(e) =>
+                                                handleDragStart(e, item)
+                                            }
+                                            onDragOver={(e) =>
+                                                handleDragOver(e, item)
+                                            }
+                                            onDrop={(e) => handleDrop(e, item)}
+                                            onDragEnd={handleDragEnd}
                                         />
                                     );
-                                })}
-                            </ul>
-                        </SortableContext>
-                    </DndContext>
+                                });
+                            })()}
+                        </ul>
+                    </div>
                 ) : (
                     <p className="binder-empty">Empty</p>
                 )}

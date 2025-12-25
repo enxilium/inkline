@@ -59,12 +59,7 @@ export class GenerateLocationImage {
             now
         );
 
-        await this.assetRepository.saveImage(
-            projectId,
-            "location",
-            locationId,
-            image
-        );
+        await this.assetRepository.saveImage(projectId, image);
         location.galleryImageIds.push(imageId);
         location.updatedAt = now;
         await this.locationRepository.update(location);

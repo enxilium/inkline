@@ -1,4 +1,4 @@
-import { GoogleGenAI, Content } from "@google/genai";
+import { GoogleGenAI, Content, ThinkingLevel } from "@google/genai";
 import {
     ChatHistoryOptions,
     IAITextService,
@@ -16,7 +16,7 @@ import {
     splitWordsForEditIndexing,
 } from "../../@core/application/utils/tiptapText";
 
-const EDIT_MODEL = "gemini-2.5-pro";
+const EDIT_MODEL = "gemini-3-flash-preview";
 
 export class GeminiAITextService implements IAITextService {
     private sessionStore: IUserSessionStore;
@@ -98,7 +98,7 @@ export class GeminiAITextService implements IAITextService {
 
         const client = await this.getModel();
         const result = await client.models.generateContentStream({
-            model: "gemini-2.5-flash",
+            model: "gemini-3-flash-preview",
             contents: prompt,
             config: {
                 systemInstruction: systemInstruction,
@@ -197,6 +197,9 @@ export class GeminiAITextService implements IAITextService {
             model: EDIT_MODEL,
             contents: prompt,
             config: {
+                thinkingConfig: {
+                    thinkingLevel: ThinkingLevel.HIGH,
+                },
                 systemInstruction: systemInstruction,
                 responseMimeType: "application/json",
                 responseSchema: {
@@ -408,6 +411,128 @@ export class GeminiAITextService implements IAITextService {
         return { comments: [], replacements: [] };
     }
 
+    async startChatWithTitle(
+        prompt: string,
+        context: NarrativeContext,
+        options?: ChatHistoryOptions
+    ): Promise<{ title: string; reply: string }> {
+        const client = await this.getModel();
+        const contextStr = this.formatContext(context);
+
+        let additionalContext = "";
+        if (options?.contextDocuments && options.contextDocuments.length > 0) {
+            additionalContext += "\n\n--- ATTACHED DOCUMENTS ---\n";
+            for (const doc of options.contextDocuments) {
+                let content = "";
+                try {
+                    switch (doc.type) {
+                        case "chapter": {
+                            const chapter =
+                                await this.chapterRepository.findById(doc.id);
+                            if (chapter)
+                                content = `Chapter: ${chapter.title}\n${chapter.content}`;
+                            break;
+                        }
+                        case "character": {
+                            const character =
+                                await this.characterRepository.findById(doc.id);
+                            if (character)
+                                content = `Character: ${character.name}\nDescription: ${
+                                    character.description
+                                }\nTraits: ${character.traits.join(
+                                    ", "
+                                )}\nGoals: ${character.goals.join(", ")}`;
+                            break;
+                        }
+                        case "location": {
+                            const location =
+                                await this.locationRepository.findById(doc.id);
+                            if (location)
+                                content = `Location: ${location.name}\nDescription: ${location.description}`;
+                            break;
+                        }
+                        case "organization": {
+                            const org =
+                                await this.organizationRepository.findById(
+                                    doc.id
+                                );
+                            if (org)
+                                content = `Organization: ${org.name}\nDescription: ${org.description}`;
+                            break;
+                        }
+                        case "scrapNote": {
+                            const scrap =
+                                await this.scrapNoteRepository.findById(doc.id);
+                            if (scrap)
+                                content = `Note: ${scrap.title}\n${scrap.content}`;
+                            break;
+                        }
+                        case "text": {
+                            if (doc.content) {
+                                content = `Excerpt (${doc.id}):\n${doc.content}`;
+                            }
+                            break;
+                        }
+                    }
+                } catch (e) {
+                    console.error(`Failed to fetch document ${doc.id}`, e);
+                }
+
+                if (content) {
+                    additionalContext += `\n[Document: ${doc.type} - ${doc.id}]\n${content}\n`;
+                }
+            }
+        }
+
+        const systemInstruction = `You are an expert creative writing assistant for a project.
+            Here is the context of the story so far:
+            ${contextStr}
+            ${additionalContext}
+
+            Your goal is to help the author by answering their questions, brainstorming ideas, or drafting content based on this context.
+
+            IMPORTANT: This is the first message in a new conversation.
+            You MUST return a JSON object containing:
+            1. "reply": Your normal helpful response to the user's prompt.
+            2. "title": A short, concise title (3-6 words) summarizing this conversation topic based on the prompt and your reply.`;
+
+        const result = await client.models.generateContent({
+            model: "gemini-2.5-flash",
+            contents: prompt,
+            config: {
+                systemInstruction: systemInstruction,
+                responseMimeType: "application/json",
+                responseSchema: {
+                    type: "OBJECT",
+                    properties: {
+                        reply: { type: "STRING" },
+                        title: { type: "STRING" },
+                    },
+                    required: ["reply", "title"],
+                },
+            },
+        });
+
+        try {
+            const text = result.text;
+            if (text) {
+                const parsed = JSON.parse(text) as {
+                    reply: string;
+                    title: string;
+                };
+                return parsed;
+            }
+        } catch (e) {
+            console.error("Failed to parse JSON response for startChat", e);
+        }
+
+        // Fallback if JSON parsing fails
+        return {
+            title: "New Conversation",
+            reply: result.text || "I'm sorry, I couldn't process that.",
+        };
+    }
+
     async *chat(
         prompt: string,
         context: NarrativeContext,
@@ -417,7 +542,11 @@ export class GeminiAITextService implements IAITextService {
 
         let history: Content[] = [];
         if (options?.history) {
-            history = options.history.map((h) => ({
+            // Filter out the last message if it matches the current prompt to avoid duplication
+            // because the caller (GeneralChat) appends the current prompt to history.
+            const historyToUse = options.history.slice(0, -1);
+
+            history = historyToUse.map((h) => ({
                 role: h.role === "user" ? "user" : "model",
                 parts: [{ text: h.content }],
             }));
@@ -469,6 +598,12 @@ export class GeminiAITextService implements IAITextService {
                                 await this.scrapNoteRepository.findById(doc.id);
                             if (scrap)
                                 content = `Note: ${scrap.title}\n${scrap.content}`;
+                            break;
+                        }
+                        case "text": {
+                            if (doc.content) {
+                                content = `Excerpt (${doc.id}):\n${doc.content}`;
+                            }
                             break;
                         }
                     }

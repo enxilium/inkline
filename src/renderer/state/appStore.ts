@@ -239,6 +239,15 @@ type AppStore = {
     >;
     pendingEditsById: Record<string, PendingChapterEdit>;
     archivedEditsById: Record<string, PendingChapterEdit>;
+
+    currentSelection: {
+        text: string;
+        range: string; // e.g. "Chapter 1 100-200"
+    } | null;
+    setCurrentSelection: (
+        selection: { text: string; range: string } | null
+    ) => void;
+
     addPendingEdits: (payload: {
         comments: {
             chapterId: string;
@@ -328,6 +337,9 @@ type AppStore = {
     setDraggedDocument: (
         doc: { id: string; kind: string; title: string } | null
     ) => void;
+    renamingDocument: { id: string; kind: string } | null;
+    setRenamingDocument: (doc: { id: string; kind: string } | null) => void;
+    closeProject: () => void;
     toggleBinder: () => void;
     toggleChat: () => void;
     flushActiveDocumentContent: () => Promise<void>;
@@ -337,6 +349,8 @@ type AppStore = {
     analyzeText: RendererApi["analysis"]["analyzeText"];
     editChapters: RendererApi["analysis"]["editChapters"];
     generalChat: RendererApi["analysis"]["generalChat"];
+    loadChatHistory: RendererApi["analysis"]["loadChatHistory"];
+    loadChatMessages: RendererApi["analysis"]["loadChatMessages"];
     saveChapterContent: RendererApi["logistics"]["saveChapterContent"];
     updateScrapNoteRemote: RendererApi["manuscript"]["updateScrapNote"];
     saveCharacterInfo: RendererApi["logistics"]["saveCharacterInfo"];
@@ -1652,8 +1666,16 @@ export const useAppStore = create<AppStore>((set, get) => {
                 },
             }));
         },
+        currentSelection: null,
+        setCurrentSelection: (selection) =>
+            set({ currentSelection: selection }),
         setDraggedDocument: (doc) => {
             set({ draggedDocument: doc });
+        },
+        renamingDocument: null,
+        setRenamingDocument: (doc) => set({ renamingDocument: doc }),
+        closeProject: () => {
+            set(resetWorkspaceState());
         },
         isBinderOpen: true,
         toggleBinder: () => {
@@ -1942,6 +1964,12 @@ export const useAppStore = create<AppStore>((set, get) => {
         },
         generalChat: async (request) => {
             return rendererApi.analysis.generalChat(request);
+        },
+        loadChatHistory: async (request) => {
+            return rendererApi.analysis.loadChatHistory(request);
+        },
+        loadChatMessages: async (request) => {
+            return rendererApi.analysis.loadChatMessages(request);
         },
         saveChapterContent: async (request) => {
             return rendererApi.logistics.saveChapterContent(request);

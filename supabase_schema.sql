@@ -447,3 +447,53 @@ begin
             for delete using ( auth.role() = 'authenticated' );
     end if;
 end $$;
+
+-- DELETION LOGS (For offline sync)
+create table if not exists public.deletion_logs (
+  id uuid default gen_random_uuid() primary key,
+  entity_id uuid not null,
+  entity_type text not null,
+  project_id uuid references public.projects(id) on delete cascade,
+  deleted_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  user_id uuid references auth.users(id) on delete cascade not null
+);
+alter table public.deletion_logs enable row level security;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'deletion_logs'
+          and policyname = 'Users can view their own deletion logs'
+    ) then
+        create policy "Users can view their own deletion logs" on public.deletion_logs
+          for select using (auth.uid() = user_id);
+    end if;
+end $$;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'deletion_logs'
+          and policyname = 'Users can insert their own deletion logs'
+    ) then
+        create policy "Users can insert their own deletion logs" on public.deletion_logs
+          for insert with check (auth.uid() = user_id);
+    end if;
+end $$;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'deletion_logs'
+          and policyname = 'Users can delete their own deletion logs'
+    ) then
+        create policy "Users can delete their own deletion logs" on public.deletion_logs
+          for delete using (auth.uid() = user_id);
+    end if;
+end $$;

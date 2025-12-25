@@ -63,12 +63,7 @@ export class GenerateLocationSong {
             now
         );
 
-        await this.assetRepository.saveBGM(
-            projectId,
-            "location",
-            locationId,
-            track
-        );
+        await this.assetRepository.saveBGM(projectId, track);
         location.bgmId = bgmId;
         location.updatedAt = now;
         await this.locationRepository.update(location);

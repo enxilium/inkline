@@ -1,5 +1,11 @@
 import "dotenv/config";
-import { app, BrowserWindow, ipcMain } from "electron";
+import {
+    app,
+    BrowserWindow,
+    ipcMain,
+    Menu,
+    MenuItemConstructorOptions,
+} from "electron";
 import { AppBuilder } from "./AppBuilder";
 import { resolveDependencies } from "./dependencies";
 import { ComfyAssetGenerationService } from "../@infrastructure/ai/ComfyAssetGenerationService";
@@ -19,6 +25,16 @@ if (require("electron-squirrel-startup")) {
 
 const dependencies = resolveDependencies();
 const appBuilder = new AppBuilder(dependencies);
+
+/*
+dependencies.syncService.on("update-available", (payload) => {
+    BrowserWindow.getAllWindows().forEach((win) => {
+        if (!win.isDestroyed()) {
+            win.webContents.send("manuscript:updateAvailable", payload);
+        }
+    });
+});
+*/
 
 let loadingWindow: BrowserWindow | null = null;
 
@@ -78,8 +94,68 @@ const createWindow = (): void => {
     mainWindow.show();
 };
 
+const setupContextMenu = (): void => {
+    ipcMain.on("ui:show-context-menu", (event, type, data) => {
+        const template: MenuItemConstructorOptions[] = [];
+
+        if (type === "editor") {
+            template.push(
+                { role: "undo" },
+                { role: "redo" },
+                { type: "separator" },
+                { role: "cut" },
+                { role: "copy" },
+                { role: "paste" },
+                { type: "separator" },
+                { role: "selectAll" }
+            );
+        } else if (type === "binder_chapter") {
+            template.push(
+                {
+                    label: "Rename",
+                    click: () => {
+                        event.sender.send("context-menu-command", {
+                            command: "rename",
+                            data,
+                        });
+                    },
+                },
+                {
+                    label: "Delete",
+                    click: () => {
+                        event.sender.send("context-menu-command", {
+                            command: "delete",
+                            data,
+                        });
+                    },
+                }
+            );
+        } else if (type === "binder_project") {
+            template.push({
+                label: "Close Project",
+                click: () => {
+                    event.sender.send("context-menu-command", {
+                        command: "close-project",
+                        data,
+                    });
+                },
+            });
+        }
+
+        if (template.length > 0) {
+            const menu = Menu.buildFromTemplate(template);
+            menu.popup({
+                window:
+                    BrowserWindow.fromWebContents(event.sender) || undefined,
+            });
+        }
+    });
+};
+
 const bootstrap = async (): Promise<void> => {
     createLoadingWindow();
+
+    setupContextMenu();
 
     await appBuilder.build();
 

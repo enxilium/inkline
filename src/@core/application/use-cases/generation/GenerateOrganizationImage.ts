@@ -60,12 +60,7 @@ export class GenerateOrganizationImage {
             now
         );
 
-        await this.assetRepository.saveImage(
-            projectId,
-            "organization",
-            organizationId,
-            image
-        );
+        await this.assetRepository.saveImage(projectId, image);
         organization.galleryImageIds.push(imageId);
         organization.updatedAt = now;
         await this.organizationRepository.update(organization);

@@ -58,6 +58,9 @@ export const App: React.FC = () => {
         pendingEditsById,
     } = useAppStore();
 
+    // Note: Conflicts are now auto-resolved using "most recent wins" strategy.
+    // The SynchronizationService handles this automatically without user intervention.
+
     const pendingEditsCount = React.useMemo(() => {
         return Object.keys(pendingEditsById).length;
     }, [pendingEditsById]);

@@ -15,8 +15,10 @@ export interface ChatHistoryOptions {
             | "character"
             | "location"
             | "organization"
-            | "scrapNote";
+            | "scrapNote"
+            | "text";
         id: string;
+        content?: string;
     }[];
 }
 
@@ -81,4 +83,10 @@ export interface IAITextService {
         context: NarrativeContext,
         options?: ChatHistoryOptions
     ): AsyncGenerator<string, void, unknown>;
+
+    startChatWithTitle(
+        prompt: string,
+        context: NarrativeContext,
+        options?: ChatHistoryOptions
+    ): Promise<{ title: string; reply: string }>;
 }

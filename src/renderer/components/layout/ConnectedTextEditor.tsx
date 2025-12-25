@@ -1,5 +1,5 @@
 import React from "react";
-import { useEditor } from "@tiptap/react";
+import { useEditor, Extension } from "@tiptap/react";
 import { StarterKit } from "@tiptap/starter-kit";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
@@ -18,10 +18,26 @@ import {
     sanitizeReplacementText,
     stripCommentMarksFromTiptapJSON,
 } from "../../tiptap/comments";
+import { countWords } from "../../utils/textStats";
 import { Button } from "../ui/Button";
 import { CheckIcon, CloseIcon } from "../ui/Icons";
 
 const AUTOSAVE_DELAY_MS = 1200;
+
+const TabIndentation = Extension.create({
+    name: "tabIndentation",
+
+    addKeyboardShortcuts() {
+        return {
+            Tab: () => {
+                if (this.editor.can().sinkListItem("listItem")) {
+                    return this.editor.commands.sinkListItem("listItem");
+                }
+                return this.editor.commands.insertContent("\t");
+            },
+        };
+    },
+});
 
 interface ConnectedTextEditorProps {
     documentId: string;
@@ -41,7 +57,9 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         updateScrapNoteLocally,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
+        lastSavedAt,
         setLastSavedAt,
+        setCurrentSelection,
         saveChapterContent,
         updateScrapNoteRemote,
     } = useAppStore();
@@ -119,6 +137,33 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
     // 3. Initialize Editor
     const editor = useEditor({
+        onSelectionUpdate: ({ editor }) => {
+            const { from, to, empty } = editor.state.selection;
+            if (empty) {
+                setCurrentSelection(null);
+                return;
+            }
+
+            const text = editor.state.doc.textBetween(from, to, " ");
+            if (!text.trim()) {
+                setCurrentSelection(null);
+                return;
+            }
+
+            const textBefore = editor.state.doc.textBetween(0, from, " ");
+            const wordsBefore = countWords(textBefore);
+            const wordsInSelection = countWords(text);
+
+            const start = wordsBefore + 1;
+            const end = wordsBefore + wordsInSelection;
+
+            const title = documentData?.title || "Untitled";
+
+            setCurrentSelection({
+                text,
+                range: `${title} ${start}-${end}`,
+            });
+        },
         extensions: [
             CommentExtension.configure({
                 onCommentActivated: (commentId: string) => {
@@ -145,6 +190,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 },
                 underline: {},
             }),
+            TabIndentation,
         ],
         content: "<p></p>", // Initial empty, will be populated by useEffect
         editorProps: {
@@ -259,10 +305,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     }, [editor, kind, documentId, pendingEditsByChapterId]);
 
     // 4. Sync Content (One-way: Store -> Editor)
-    // We only sync if the editor is empty or if we just mounted.
-    // We DO NOT sync on every store update to avoid cursor jumping,
-    // unless we implement a complex diffing mechanism.
-    // For now, we assume this component mounts when the tab opens.
+    // We only sync if the editor is empty, if we just mounted, OR if an external update occurred.
     React.useEffect(() => {
         if (!editor || !documentData) return;
 
@@ -271,28 +314,36 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         const targetContent =
             contentStr || JSON.stringify({ type: "doc", content: [] });
 
-        try {
-            const json = JSON.parse(targetContent);
-            // Only set if significantly different (e.g. initial load)
-            if (JSON.stringify(json) !== currentJSON) {
-                // Check if editor is empty to avoid overwriting user work if store updates from elsewhere
-                // For a robust system, we might need a "version" field.
-                // For now, we trust the mount.
-                if (
-                    editor.isEmpty ||
-                    currentJSON ===
-                        '{"type":"doc","content":[{"type":"paragraph"}]}'
-                ) {
+        const docTime = new Date(documentData.updatedAt).getTime();
+        const lastSave = lastSavedAt || 0;
+        // If the document is newer than our last save, treat as external update
+        // We use a small buffer to avoid race conditions with local autosave
+        const isExternalUpdate = docTime > lastSave + 50;
+        const isInitialLoad =
+            editor.isEmpty ||
+            currentJSON === '{"type":"doc","content":[{"type":"paragraph"}]}';
+
+        if (isExternalUpdate || isInitialLoad) {
+            try {
+                const json = JSON.parse(targetContent);
+                // Only set if significantly different
+                if (JSON.stringify(json) !== currentJSON) {
                     editor.commands.setContent(json, { emitUpdate: false });
+                    if (isExternalUpdate) {
+                        setLastSavedAt(docTime);
+                    }
+                }
+            } catch (e) {
+                const html = contentStr || "<p></p>";
+                if (editor.getHTML() !== html) {
+                    editor.commands.setContent(html, { emitUpdate: false });
+                    if (isExternalUpdate) {
+                        setLastSavedAt(docTime);
+                    }
                 }
             }
-        } catch (e) {
-            const html = contentStr || "<p></p>";
-            if (editor.getHTML() !== html) {
-                editor.commands.setContent(html, { emitUpdate: false });
-            }
         }
-    }, [editor, documentId]); // Only run on mount/id change, not on data change to avoid loops
+    }, [editor, documentId, documentData?.updatedAt]); // Run on external updates too
 
     // 5. Autosave Logic
     const flushAutosave = React.useCallback(async () => {
@@ -458,10 +509,24 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
         try {
             const coords = editor.view.coordsAtPos(editor.state.selection.from);
+            const scrollContainer = editor.view.dom.closest(".editor-body");
+
+            if (!scrollContainer) {
+                return null;
+            }
+
+            const containerRect = scrollContainer.getBoundingClientRect();
             const width = 320;
-            const left = Math.min(coords.left, window.innerWidth - width - 16);
-            const top = Math.min(coords.bottom + 8, window.innerHeight - 120);
-            return { left, top, width };
+
+            // Calculate position relative to the editor body
+            const top = coords.bottom - containerRect.top + 8;
+            const left = coords.left - containerRect.left;
+
+            // Ensure it doesn't overflow the right edge of the container
+            const maxLeft = scrollContainer.scrollWidth - width - 16;
+            const adjustedLeft = Math.min(left, maxLeft);
+
+            return { left: adjustedLeft, top, width };
         } catch {
             return null;
         }
@@ -696,88 +761,88 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 editor={editor}
                 autosaveLabel={autosaveLabel}
                 autosaveClass={autosaveClass}
-            />
-
-            {kind === "chapter" && activeEdit && bubblePosition ? (
-                <div
-                    className="chapter-edit-bubble"
-                    style={{
-                        position: "fixed",
-                        top: bubblePosition.top,
-                        left: bubblePosition.left,
-                        width: bubblePosition.width,
-                    }}
-                >
-                    {activeEdit.kind === "comment" ? (
-                        <>
-                            <div className="chapter-edit-bubble-text">
-                                {activeEdit.comment}
-                            </div>
-                            <div className="chapter-edit-bubble-actions">
-                                <Button
-                                    variant="ghost"
-                                    onClick={() =>
-                                        dismissComment(activeEdit.id)
-                                    }
-                                >
-                                    Dismiss
-                                </Button>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            <div className="chapter-edit-bubble-replace">
-                                Replace{" "}
-                                <span className="chapter-edit-bubble-quote">
-                                    {activeEdit.originalText}
-                                </span>{" "}
-                                with{" "}
-                                <span className="chapter-edit-bubble-quote">
-                                    {sanitizeReplacementText(
-                                        activeEdit.replacementText
-                                    ) || activeEdit.replacementText}
-                                </span>
-                            </div>
-
-                            {activeEdit.comment ? (
-                                <div className="chapter-edit-bubble-comment">
-                                    <div className="chapter-edit-bubble-comment-label">
-                                        Comment (optional)
-                                    </div>
-                                    <div className="chapter-edit-bubble-comment-text">
-                                        {activeEdit.comment}
-                                    </div>
+            >
+                {kind === "chapter" && activeEdit && bubblePosition ? (
+                    <div
+                        className="chapter-edit-bubble"
+                        style={{
+                            position: "absolute",
+                            top: bubblePosition.top,
+                            left: bubblePosition.left,
+                            width: bubblePosition.width,
+                        }}
+                    >
+                        {activeEdit.kind === "comment" ? (
+                            <>
+                                <div className="chapter-edit-bubble-text">
+                                    {activeEdit.comment}
                                 </div>
-                            ) : null}
-                            <div className="chapter-edit-bubble-actions">
-                                <Button
-                                    variant="primary"
-                                    size="sm"
-                                    onClick={() =>
-                                        acceptReplacement(
-                                            activeEdit.id,
+                                <div className="chapter-edit-bubble-actions">
+                                    <Button
+                                        variant="ghost"
+                                        onClick={() =>
+                                            dismissComment(activeEdit.id)
+                                        }
+                                    >
+                                        Dismiss
+                                    </Button>
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="chapter-edit-bubble-replace">
+                                    Replace{" "}
+                                    <span className="chapter-edit-bubble-quote">
+                                        {activeEdit.originalText}
+                                    </span>{" "}
+                                    with{" "}
+                                    <span className="chapter-edit-bubble-quote">
+                                        {sanitizeReplacementText(
                                             activeEdit.replacementText
-                                        )
-                                    }
-                                >
-                                    <CheckIcon size={16} />
-                                    Accept
-                                </Button>
-                                <Button
-                                    variant="secondary"
-                                    size="sm"
-                                    onClick={() =>
-                                        dismissComment(activeEdit.id)
-                                    }
-                                >
-                                    <CloseIcon size={16} />
-                                    Reject
-                                </Button>
-                            </div>
-                        </>
-                    )}
-                </div>
-            ) : null}
+                                        ) || activeEdit.replacementText}
+                                    </span>
+                                </div>
+
+                                {activeEdit.comment ? (
+                                    <div className="chapter-edit-bubble-comment">
+                                        <div className="chapter-edit-bubble-comment-label">
+                                            Comment (optional)
+                                        </div>
+                                        <div className="chapter-edit-bubble-comment-text">
+                                            {activeEdit.comment}
+                                        </div>
+                                    </div>
+                                ) : null}
+                                <div className="chapter-edit-bubble-actions">
+                                    <Button
+                                        variant="primary"
+                                        size="sm"
+                                        onClick={() =>
+                                            acceptReplacement(
+                                                activeEdit.id,
+                                                activeEdit.replacementText
+                                            )
+                                        }
+                                    >
+                                        <CheckIcon size={16} />
+                                        Accept
+                                    </Button>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={() =>
+                                            dismissComment(activeEdit.id)
+                                        }
+                                    >
+                                        <CloseIcon size={16} />
+                                        Reject
+                                    </Button>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                ) : null}
+            </TextEditor>
         </div>
     );
 };

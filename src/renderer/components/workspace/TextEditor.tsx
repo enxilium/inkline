@@ -23,6 +23,7 @@ interface TextEditorProps {
     editor: Editor | null;
     autosaveLabel?: string;
     autosaveClass?: string;
+    children?: React.ReactNode;
 }
 
 const fontOptions = [
@@ -45,7 +46,7 @@ const fontOptions = [
     { label: "IBM Plex Mono", value: "'IBM Plex Mono', monospace" },
 ];
 
-export const TextEditor: React.FC<TextEditorProps> = ({ editor }) => {
+export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
     const DEFAULT_FALLBACK_COLOR = "#f6f7fb";
     const [themeTextColor, setThemeTextColor] = React.useState(
         DEFAULT_FALLBACK_COLOR
@@ -247,10 +248,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor }) => {
             .run();
     };
 
-    const clearFormatting = () => {
-        editor?.chain().focus().unsetAllMarks().clearNodes().run();
-    };
-
     return (
         <div className="text-editor-panel">
             {editor ? (
@@ -433,10 +430,6 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor }) => {
                                         .run()
                                 }
                             />
-                            <ToolbarButton
-                                label="Clear"
-                                onClick={clearFormatting}
-                            />
                         </div>
                         <div className="editor-surface">
                             {isFindOpen ? (
@@ -604,7 +597,13 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor }) => {
                             ) : null}
 
                             <div className="editor-scroll">
-                                <div className="editor-body">
+                                <div
+                                    className="editor-body"
+                                    onContextMenu={(e) => {
+                                        e.preventDefault();
+                                        window.ui.showContextMenu("editor");
+                                    }}
+                                >
                                     <EditorContent
                                         editor={editor}
                                         onDropCapture={(event) => {
@@ -613,6 +612,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor }) => {
                                             event.preventDefault();
                                         }}
                                     />
+                                    {children}
                                 </div>
                             </div>
                         </div>

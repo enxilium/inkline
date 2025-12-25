@@ -49,6 +49,26 @@ const createRendererApi = (): RendererApi => {
     return bindings as RendererApi;
 };
 
+const ui = {
+    showContextMenu: (type: string, data?: any) =>
+        ipcRenderer.send("ui:show-context-menu", type, data),
+    onContextMenuCommand: (
+        listener: (payload: { command: string; data: any }) => void
+    ) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            payload: { command: string; data: any }
+        ) => {
+            listener(payload);
+        };
+        ipcRenderer.on("context-menu-command", handler);
+        return () =>
+            ipcRenderer.removeListener("context-menu-command", handler);
+    },
+};
+
+contextBridge.exposeInMainWorld("ui", ui);
+
 const api = createRendererApi();
 
 contextBridge.exposeInMainWorld("api", api);
@@ -74,6 +94,8 @@ const createAuthEvents = () => {
 const authEvents = createAuthEvents();
 
 contextBridge.exposeInMainWorld("authEvents", authEvents);
+
+// Note: syncEvents was removed as conflicts are now auto-resolved using "most recent wins" strategy.
 
 type GenerationProgressListener = (payload: {
     type: "audio" | "image";
@@ -116,6 +138,7 @@ contextBridge.exposeInMainWorld("windowControls", windowControls);
 declare global {
     interface Window {
         api: typeof api;
+        ui: typeof ui;
         authEvents: typeof authEvents;
         generationEvents: typeof generationEvents;
         windowControls: typeof windowControls;
