@@ -334,6 +334,21 @@ export class SynchronizationService extends EventEmitter {
         // Projects table is already filtered by user_id in the subscription,
         // but child entities need client-side filtering
         if (entityType !== "project" && !this.userProjectIds.has(projectId)) {
+            // If the cache isn't ready yet (startup / initial sync), don't drop events.
+            if (this.userProjectIds.size === 0) {
+                this.eventQueue.push({
+                    entityType,
+                    entityId,
+                    projectId,
+                    eventType: payload.eventType as
+                        | "INSERT"
+                        | "UPDATE"
+                        | "DELETE",
+                    timestamp: Date.now(),
+                });
+                return;
+            }
+
             // This change is for another user's project - ignore it
             return;
         }

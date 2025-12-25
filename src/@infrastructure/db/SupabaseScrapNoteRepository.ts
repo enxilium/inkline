@@ -73,7 +73,7 @@ export class SupabaseScrapNoteRepository implements IScrapNoteRepository {
                 title: scrapNote.title,
                 content: scrapNote.content,
                 is_pinned: scrapNote.isPinned,
-                updated_at: scrapNote.updatedAt.toISOString(),
+                updated_at: new Date().toISOString(),
             })
             .eq("id", scrapNote.id);
 

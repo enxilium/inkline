@@ -122,7 +122,7 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                 bgm_id: character.bgmId,
                 playlist_id: character.playlistId,
                 gallery_image_ids: character.galleryImageIds,
-                updated_at: character.updatedAt.toISOString(),
+                updated_at: new Date().toISOString(),
             })
             .eq("id", character.id);
 

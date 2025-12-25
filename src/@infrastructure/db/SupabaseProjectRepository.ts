@@ -88,7 +88,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
             .update({
                 title: project.title,
                 cover_image_id: project.coverImageId,
-                updated_at: project.updatedAt.toISOString(),
+                updated_at: new Date().toISOString(),
             })
             .eq("id", project.id);
 

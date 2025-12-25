@@ -112,7 +112,7 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
                 gallery_image_ids: organization.galleryImageIds,
                 playlist_id: organization.playlistId,
                 bgm_id: organization.bgmId,
-                updated_at: organization.updatedAt.toISOString(),
+                updated_at: new Date().toISOString(),
             })
             .eq("id", organization.id);
 

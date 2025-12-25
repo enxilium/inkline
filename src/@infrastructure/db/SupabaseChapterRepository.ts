@@ -106,7 +106,7 @@ export class SupabaseChapterRepository implements IChapterRepository {
                 title: chapter.title,
                 content: parseChapterContent(chapter.content),
                 order_index: chapter.order,
-                updated_at: chapter.updatedAt.toISOString(),
+                updated_at: new Date().toISOString(),
             })
             .eq("id", chapter.id);
 
