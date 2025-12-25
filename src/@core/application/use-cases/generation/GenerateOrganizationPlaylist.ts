@@ -57,12 +57,7 @@ export class GenerateOrganizationPlaylist {
             now
         );
 
-        await this.assetRepository.savePlaylist(
-            projectId,
-            "organization",
-            organizationId,
-            playlist
-        );
+        await this.assetRepository.savePlaylist(projectId, playlist);
         organization.playlistId = playlist.id;
         organization.updatedAt = now;
         await this.organizationRepository.update(organization);

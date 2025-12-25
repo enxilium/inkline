@@ -1,6 +1,8 @@
 import type { AnalyzeTextController } from "./analysis/AnalyzeTextController";
 import type { EditChaptersController } from "./analysis/EditChaptersController";
 import type { GeneralChatController } from "./analysis/GeneralChatController";
+import type { LoadChatHistoryController } from "./analysis/LoadChatHistoryController";
+import type { LoadChatMessagesController } from "./analysis/LoadChatMessagesController";
 import type { DeleteAssetController } from "./asset/DeleteAssetController";
 import type { ImportAssetController } from "./asset/ImportAssetController";
 import type { LoginUserController } from "./auth/LoginUserController";
@@ -30,6 +32,8 @@ import type { CreateScrapNoteController } from "./manuscript/CreateScrapNoteCont
 import type { DeleteChapterController } from "./manuscript/DeleteChapterController";
 import type { DeleteScrapNoteController } from "./manuscript/DeleteScrapNoteController";
 import type { MoveChapterController } from "./manuscript/MoveChapterController";
+import type { OverwriteChapterController } from "./manuscript/OverwriteChapterController";
+import type { OverwriteScrapNoteController } from "./manuscript/OverwriteScrapNoteController";
 import type { RenameChapterController } from "./manuscript/RenameChapterController";
 import type { UpdateScrapNoteController } from "./manuscript/UpdateScrapNoteController";
 import type { CreateProjectController } from "./project/CreateProjectController";
@@ -44,6 +48,9 @@ import type { CreateOrganizationController } from "./world/CreateOrganizationCon
 import type { DeleteCharacterController } from "./world/DeleteCharacterController";
 import type { DeleteLocationController } from "./world/DeleteLocationController";
 import type { DeleteOrganizationController } from "./world/DeleteOrganizationController";
+import type { OverwriteCharacterController } from "./world/OverwriteCharacterController";
+import type { OverwriteLocationController } from "./world/OverwriteLocationController";
+import type { OverwriteOrganizationController } from "./world/OverwriteOrganizationController";
 
 type Handler<T> = T extends {
     handle: (...args: infer P) => Promise<infer R>;
@@ -56,6 +63,8 @@ export interface ControllerInstanceMap {
         analyzeText: AnalyzeTextController;
         editChapters: EditChaptersController;
         generalChat: GeneralChatController;
+        loadChatHistory: LoadChatHistoryController;
+        loadChatMessages: LoadChatMessagesController;
     };
     asset: {
         deleteAsset: DeleteAssetController;
@@ -95,6 +104,8 @@ export interface ControllerInstanceMap {
         deleteChapter: DeleteChapterController;
         deleteScrapNote: DeleteScrapNoteController;
         moveChapter: MoveChapterController;
+        overwriteChapter: OverwriteChapterController;
+        overwriteScrapNote: OverwriteScrapNoteController;
         renameChapter: RenameChapterController;
         updateScrapNote: UpdateScrapNoteController;
     };
@@ -113,6 +124,9 @@ export interface ControllerInstanceMap {
         deleteCharacter: DeleteCharacterController;
         deleteLocation: DeleteLocationController;
         deleteOrganization: DeleteOrganizationController;
+        overwriteCharacter: OverwriteCharacterController;
+        overwriteLocation: OverwriteLocationController;
+        overwriteOrganization: OverwriteOrganizationController;
     };
 }
 
@@ -137,6 +151,8 @@ export const controllerChannels: ControllerChannelMap = {
         analyzeText: "analysis:analyzeText",
         editChapters: "analysis:editChapters",
         generalChat: "analysis:generalChat",
+        loadChatHistory: "analysis:loadChatHistory",
+        loadChatMessages: "analysis:loadChatMessages",
     },
     asset: {
         deleteAsset: "asset:deleteAsset",
@@ -176,6 +192,8 @@ export const controllerChannels: ControllerChannelMap = {
         deleteChapter: "manuscript:deleteChapter",
         deleteScrapNote: "manuscript:deleteScrapNote",
         moveChapter: "manuscript:moveChapter",
+        overwriteChapter: "manuscript:overwriteChapter",
+        overwriteScrapNote: "manuscript:overwriteScrapNote",
         renameChapter: "manuscript:renameChapter",
         updateScrapNote: "manuscript:updateScrapNote",
     },
@@ -194,5 +212,8 @@ export const controllerChannels: ControllerChannelMap = {
         deleteCharacter: "world:deleteCharacter",
         deleteLocation: "world:deleteLocation",
         deleteOrganization: "world:deleteOrganization",
+        overwriteCharacter: "world:overwriteCharacter",
+        overwriteLocation: "world:overwriteLocation",
+        overwriteOrganization: "world:overwriteOrganization",
     },
 } as const;

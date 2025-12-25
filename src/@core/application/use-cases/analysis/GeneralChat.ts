@@ -20,8 +20,10 @@ export interface GeneralChatRequest {
             | "character"
             | "location"
             | "organization"
-            | "scrapNote";
+            | "scrapNote"
+            | "text";
         id: string;
+        content?: string;
     }[];
 }
 
@@ -70,6 +72,43 @@ export class GeneralChat {
             new Date()
         );
         await this.chatConversationRepository.appendMessage(userMessage);
+
+        // Check if this is the first message (or if we should generate a title)
+        // We assume if existingMessages is empty, it's a new chat.
+        if (existingMessages.length === 0) {
+            const { title, reply } =
+                await this.aiTextService.startChatWithTitle(prompt, context, {
+                    conversationId: conversation.id,
+                    contextDocuments: request.contextDocuments,
+                });
+
+            // Update title
+            await this.chatConversationRepository.updateTitle(
+                conversation.id,
+                title
+            );
+
+            // Save assistant message
+            const assistantMessage = new ChatMessage(
+                conversation.id,
+                "assistant",
+                reply,
+                new Date()
+            );
+            await this.chatConversationRepository.appendMessage(
+                assistantMessage
+            );
+
+            // Create a generator that yields the single reply chunk
+            const singleChunkStream = (async function* () {
+                yield reply;
+            })();
+
+            return {
+                stream: singleChunkStream,
+                conversationId: conversation.id,
+            };
+        }
 
         const stream = this.aiTextService.chat(prompt, context, {
             conversationId: conversation.id,

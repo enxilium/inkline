@@ -17,19 +17,79 @@ import { ComfyAssetGenerationService } from "../@infrastructure/ai/ComfyAssetGen
 import { PlaylistGenerationService } from "../@infrastructure/ai/PlaylistGenerationService";
 import { ExportService } from "../@infrastructure/ai/ExportService";
 
+import { FileSystemProjectRepository } from "../@infrastructure/db/filesystem/FileSystemProjectRepository";
+import { OfflineFirstProjectRepository } from "../@infrastructure/db/offline/OfflineFirstProjectRepository";
+import { FileSystemChapterRepository } from "../@infrastructure/db/filesystem/FileSystemChapterRepository";
+import { OfflineFirstChapterRepository } from "../@infrastructure/db/offline/OfflineFirstChapterRepository";
+import { FileSystemCharacterRepository } from "../@infrastructure/db/filesystem/FileSystemCharacterRepository";
+import { OfflineFirstCharacterRepository } from "../@infrastructure/db/offline/OfflineFirstCharacterRepository";
+import { FileSystemLocationRepository } from "../@infrastructure/db/filesystem/FileSystemLocationRepository";
+import { OfflineFirstLocationRepository } from "../@infrastructure/db/offline/OfflineFirstLocationRepository";
+import { FileSystemOrganizationRepository } from "../@infrastructure/db/filesystem/FileSystemOrganizationRepository";
+import { OfflineFirstOrganizationRepository } from "../@infrastructure/db/offline/OfflineFirstOrganizationRepository";
+import { FileSystemScrapNoteRepository } from "../@infrastructure/db/filesystem/FileSystemScrapNoteRepository";
+import { OfflineFirstScrapNoteRepository } from "../@infrastructure/db/offline/OfflineFirstScrapNoteRepository";
+import { FileSystemAssetRepository } from "../@infrastructure/db/filesystem/FileSystemAssetRepository";
+import { OfflineFirstAssetRepository } from "../@infrastructure/db/offline/OfflineFirstAssetRepository";
+import { SynchronizationService } from "../@infrastructure/services/SynchronizationService";
+import { SupabaseDeletionLogRepository } from "../@infrastructure/db/SupabaseDeletionLogRepository";
+
 export function resolveDependencies(): AppBuilderDependencies {
-    const projectRepository = new SupabaseProjectRepository();
-    const chapterRepository = new SupabaseChapterRepository();
+    const supabaseProjectRepo = new SupabaseProjectRepository();
+    const fsProjectRepo = new FileSystemProjectRepository();
+    const projectRepository = new OfflineFirstProjectRepository(
+        supabaseProjectRepo,
+        fsProjectRepo
+    );
+
+    const supabaseChapterRepo = new SupabaseChapterRepository();
+    const fsChapterRepo = new FileSystemChapterRepository();
+    const chapterRepository = new OfflineFirstChapterRepository(
+        supabaseChapterRepo,
+        fsChapterRepo
+    );
+
+    const supabaseCharacterRepo = new SupabaseCharacterRepository();
+    const fsCharacterRepo = new FileSystemCharacterRepository();
+    const characterRepository = new OfflineFirstCharacterRepository(
+        supabaseCharacterRepo,
+        fsCharacterRepo
+    );
+
+    const supabaseLocationRepo = new SupabaseLocationRepository();
+    const fsLocationRepo = new FileSystemLocationRepository();
+    const locationRepository = new OfflineFirstLocationRepository(
+        supabaseLocationRepo,
+        fsLocationRepo
+    );
+
+    const supabaseOrganizationRepo = new SupabaseOrganizationRepository();
+    const fsOrganizationRepo = new FileSystemOrganizationRepository();
+    const organizationRepository = new OfflineFirstOrganizationRepository(
+        supabaseOrganizationRepo,
+        fsOrganizationRepo
+    );
+
+    const supabaseScrapNoteRepo = new SupabaseScrapNoteRepository();
+    const fsScrapNoteRepo = new FileSystemScrapNoteRepository();
+    const scrapNoteRepository = new OfflineFirstScrapNoteRepository(
+        supabaseScrapNoteRepo,
+        fsScrapNoteRepo
+    );
+
+    const supabaseAssetRepo = new SupabaseAssetRepository();
+    const fsAssetRepo = new FileSystemAssetRepository();
+    const assetRepository = new OfflineFirstAssetRepository(
+        supabaseAssetRepo,
+        fsAssetRepo
+    );
+
     const userRepository = new SupabaseUserRepository();
-    const scrapNoteRepository = new SupabaseScrapNoteRepository();
-    const characterRepository = new SupabaseCharacterRepository();
-    const locationRepository = new SupabaseLocationRepository();
-    const organizationRepository = new SupabaseOrganizationRepository();
     const chatConversationRepository = new SupabaseChatConversationRepository();
-    const assetRepository = new SupabaseAssetRepository();
     const authService = new SupabaseAuthService();
     const storageService = new SupabaseStorageService();
     const sessionStore = new FilesystemUserSessionStore();
+
     const aiTextService = new GeminiAITextService(
         sessionStore,
         chapterRepository,
@@ -48,6 +108,7 @@ export function resolveDependencies(): AppBuilderDependencies {
     );
     const audioGenerationService = comfyAssetGenerationService;
     const imageGenerationService = comfyAssetGenerationService;
+
     const playlistGenerationService = new PlaylistGenerationService(
         sessionStore,
         locationRepository
@@ -55,6 +116,26 @@ export function resolveDependencies(): AppBuilderDependencies {
     const exportService = new ExportService(
         projectRepository,
         chapterRepository
+    );
+
+    const supabaseDeletionLogRepo = new SupabaseDeletionLogRepository();
+
+    const syncService = new SynchronizationService(
+        supabaseProjectRepo,
+        fsProjectRepo,
+        supabaseChapterRepo,
+        fsChapterRepo,
+        supabaseCharacterRepo,
+        fsCharacterRepo,
+        supabaseLocationRepo,
+        fsLocationRepo,
+        supabaseOrganizationRepo,
+        fsOrganizationRepo,
+        supabaseScrapNoteRepo,
+        fsScrapNoteRepo,
+        supabaseAssetRepo,
+        fsAssetRepo,
+        supabaseDeletionLogRepo
     );
 
     return {
@@ -79,5 +160,6 @@ export function resolveDependencies(): AppBuilderDependencies {
             storage: storageService,
             sessionStore,
         },
+        syncService: syncService,
     };
 }

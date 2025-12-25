@@ -62,12 +62,7 @@ export class GenerateCharacterImage {
             now
         );
 
-        await this.assetRepository.saveImage(
-            projectId,
-            "character",
-            characterId,
-            image
-        );
+        await this.assetRepository.saveImage(projectId, image);
         character.galleryImageIds.push(imageId);
         character.updatedAt = now;
         await this.characterRepository.update(character);

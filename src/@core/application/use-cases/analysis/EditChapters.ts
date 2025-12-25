@@ -13,11 +13,30 @@ export interface EditChaptersRequest {
 }
 
 export interface EditChaptersResponse {
+    /**
+     * General editorial comments.
+     * - If chapter-level: omit wordNumberStart/wordNumberEnd/originalText.
+     * - If range-level: word indices are inclusive and 1-based.
+     */
     comments: {
         chapterId: string;
         comment: string;
+        wordNumberStart?: number;
+        wordNumberEnd?: number;
+        originalText?: string;
+    }[];
+
+    /**
+     * Suggested replacements.
+     * Word indices are inclusive and 1-based.
+     */
+    replacements: {
+        chapterId: string;
         wordNumberStart: number;
         wordNumberEnd: number;
+        originalText: string;
+        replacementText: string;
+        comment?: string;
     }[];
 }
 
@@ -46,12 +65,15 @@ export class EditChapters {
         await this.ensureProjectExists(normalizedProjectId);
 
         const context = await this.buildContext(normalizedProjectId);
-        const comments = await this.aiTextService.editManuscript(
+        const result = await this.aiTextService.editManuscript(
             chapterIds,
             context
         );
 
-        return { comments };
+        return {
+            comments: result.comments,
+            replacements: result.replacements,
+        };
     }
 
     private async buildContext(projectId: string): Promise<NarrativeContext> {

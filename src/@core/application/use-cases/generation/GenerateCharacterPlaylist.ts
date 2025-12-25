@@ -57,12 +57,7 @@ export class GenerateCharacterPlaylist {
             now
         );
 
-        await this.assetRepository.savePlaylist(
-            projectId,
-            "character",
-            characterId,
-            playlist
-        );
+        await this.assetRepository.savePlaylist(projectId, playlist);
 
         character.playlistId = playlist.id;
         character.updatedAt = now;

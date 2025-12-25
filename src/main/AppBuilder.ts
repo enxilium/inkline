@@ -1,4 +1,4 @@
-import { ipcMain, IpcMainInvokeEvent } from "electron";
+import { ipcMain, IpcMainInvokeEvent, BrowserWindow } from "electron";
 import {
     controllerChannels,
     type ControllerInstanceMap,
@@ -39,6 +39,8 @@ import { CreateScrapNote } from "../@core/application/use-cases/manuscript/Creat
 import { DeleteChapter } from "../@core/application/use-cases/manuscript/DeleteChapter";
 import { DeleteScrapNote } from "../@core/application/use-cases/manuscript/DeleteScrapNote";
 import { MoveChapter } from "../@core/application/use-cases/manuscript/MoveChapter";
+import { OverwriteChapter } from "../@core/application/use-cases/manuscript/OverwriteChapter";
+import { OverwriteScrapNote } from "../@core/application/use-cases/manuscript/OverwriteScrapNote";
 import { RenameChapter } from "../@core/application/use-cases/manuscript/RenameChapter";
 import { UpdateScrapNote } from "../@core/application/use-cases/manuscript/UpdateScrapNote";
 import { CreateProject } from "../@core/application/use-cases/project/CreateProject";
@@ -53,6 +55,13 @@ import { CreateOrganization } from "../@core/application/use-cases/world/CreateO
 import { DeleteCharacter } from "../@core/application/use-cases/world/DeleteCharacter";
 import { DeleteLocation } from "../@core/application/use-cases/world/DeleteLocation";
 import { DeleteOrganization } from "../@core/application/use-cases/world/DeleteOrganization";
+import { OverwriteCharacter } from "../@core/application/use-cases/world/OverwriteCharacter";
+import { OverwriteLocation } from "../@core/application/use-cases/world/OverwriteLocation";
+import { OverwriteOrganization } from "../@core/application/use-cases/world/OverwriteOrganization";
+import { LoadChatHistory } from "../@core/application/use-cases/analysis/LoadChatHistory";
+import { LoadChatMessages } from "../@core/application/use-cases/analysis/LoadChatMessages";
+import { LoadChatHistoryController } from "../@interface-adapters/controllers/analysis/LoadChatHistoryController";
+import { LoadChatMessagesController } from "../@interface-adapters/controllers/analysis/LoadChatMessagesController";
 import { AnalyzeTextController } from "../@interface-adapters/controllers/analysis/AnalyzeTextController";
 import { EditChaptersController } from "../@interface-adapters/controllers/analysis/EditChaptersController";
 import { GeneralChatController } from "../@interface-adapters/controllers/analysis/GeneralChatController";
@@ -85,6 +94,8 @@ import { CreateScrapNoteController } from "../@interface-adapters/controllers/ma
 import { DeleteChapterController } from "../@interface-adapters/controllers/manuscript/DeleteChapterController";
 import { DeleteScrapNoteController } from "../@interface-adapters/controllers/manuscript/DeleteScrapNoteController";
 import { MoveChapterController } from "../@interface-adapters/controllers/manuscript/MoveChapterController";
+import { OverwriteChapterController } from "../@interface-adapters/controllers/manuscript/OverwriteChapterController";
+import { OverwriteScrapNoteController } from "../@interface-adapters/controllers/manuscript/OverwriteScrapNoteController";
 import { RenameChapterController } from "../@interface-adapters/controllers/manuscript/RenameChapterController";
 import { UpdateScrapNoteController } from "../@interface-adapters/controllers/manuscript/UpdateScrapNoteController";
 import { CreateProjectController } from "../@interface-adapters/controllers/project/CreateProjectController";
@@ -99,6 +110,9 @@ import { CreateOrganizationController } from "../@interface-adapters/controllers
 import { DeleteCharacterController } from "../@interface-adapters/controllers/world/DeleteCharacterController";
 import { DeleteLocationController } from "../@interface-adapters/controllers/world/DeleteLocationController";
 import { DeleteOrganizationController } from "../@interface-adapters/controllers/world/DeleteOrganizationController";
+import { OverwriteCharacterController } from "../@interface-adapters/controllers/world/OverwriteCharacterController";
+import { OverwriteLocationController } from "../@interface-adapters/controllers/world/OverwriteLocationController";
+import { OverwriteOrganizationController } from "../@interface-adapters/controllers/world/OverwriteOrganizationController";
 import type { IAssetRepository } from "../@core/domain/repositories/IAssetRepository";
 import type { IChapterRepository } from "../@core/domain/repositories/IChapterRepository";
 import type { ICharacterRepository } from "../@core/domain/repositories/ICharacterRepository";
@@ -141,9 +155,12 @@ export type ServiceDependencies = {
     sessionStore: IUserSessionStore;
 };
 
+import { SynchronizationService } from "../@infrastructure/services/SynchronizationService";
+
 export interface AppBuilderDependencies {
     repositories: RepositoryDependencies;
     services: ServiceDependencies;
+    syncService: SynchronizationService;
 }
 
 type UseCaseMap = {
@@ -151,6 +168,8 @@ type UseCaseMap = {
         analyzeText: AnalyzeText;
         editChapters: EditChapters;
         generalChat: GeneralChat;
+        loadChatHistory: LoadChatHistory;
+        loadChatMessages: LoadChatMessages;
     };
     asset: {
         deleteAsset: DeleteAsset;
@@ -190,6 +209,8 @@ type UseCaseMap = {
         deleteChapter: DeleteChapter;
         deleteScrapNote: DeleteScrapNote;
         moveChapter: MoveChapter;
+        overwriteChapter: OverwriteChapter;
+        overwriteScrapNote: OverwriteScrapNote;
         renameChapter: RenameChapter;
         updateScrapNote: UpdateScrapNote;
     };
@@ -208,6 +229,9 @@ type UseCaseMap = {
         deleteCharacter: DeleteCharacter;
         deleteLocation: DeleteLocation;
         deleteOrganization: DeleteOrganization;
+        overwriteCharacter: OverwriteCharacter;
+        overwriteLocation: OverwriteLocation;
+        overwriteOrganization: OverwriteOrganization;
     };
 };
 
@@ -239,6 +263,18 @@ export class AppBuilder {
         const useCases = this.createUseCases();
         this.controllers = this.createControllers(useCases);
         this.registerIpcHandlers();
+
+        this.authStateGateway.on("auth-changed", (user) => {
+            if (user) {
+                this.dependencies.syncService.startAutoSync(user.id);
+            } else {
+                this.dependencies.syncService.stopAutoSync();
+            }
+        });
+
+        // Note: Conflicts are now auto-resolved using "most recent wins" strategy.
+        // No need to notify the renderer about conflicts.
+
         await this.initializeAuthState(useCases.auth.loadStoredSession);
     }
 
@@ -272,6 +308,8 @@ export class AppBuilder {
                     repo.chatConversation,
                     repo.project
                 ),
+                loadChatHistory: new LoadChatHistory(repo.chatConversation),
+                loadChatMessages: new LoadChatMessages(repo.chatConversation),
             },
             asset: {
                 deleteAsset: new DeleteAsset(
@@ -404,6 +442,8 @@ export class AppBuilder {
                     repo.project
                 ),
                 moveChapter: new MoveChapter(repo.project, repo.chapter),
+                overwriteChapter: new OverwriteChapter(repo.chapter),
+                overwriteScrapNote: new OverwriteScrapNote(repo.scrapNote),
                 renameChapter: new RenameChapter(repo.chapter),
                 updateScrapNote: new UpdateScrapNote(repo.scrapNote),
             },
@@ -467,6 +507,20 @@ export class AppBuilder {
                     repo.asset,
                     svc.storage
                 ),
+                overwriteCharacter: new OverwriteCharacter(
+                    repo.character,
+                    repo.location,
+                    repo.organization
+                ),
+                overwriteLocation: new OverwriteLocation(
+                    repo.location,
+                    repo.character,
+                    repo.organization
+                ),
+                overwriteOrganization: new OverwriteOrganization(
+                    repo.organization,
+                    repo.location
+                ),
             },
         };
     }
@@ -482,6 +536,12 @@ export class AppBuilder {
                 ),
                 generalChat: new GeneralChatController(
                     useCases.analysis.generalChat
+                ),
+                loadChatHistory: new LoadChatHistoryController(
+                    useCases.analysis.loadChatHistory
+                ),
+                loadChatMessages: new LoadChatMessagesController(
+                    useCases.analysis.loadChatMessages
                 ),
             },
             asset: {
@@ -594,6 +654,12 @@ export class AppBuilder {
                 updateScrapNote: new UpdateScrapNoteController(
                     useCases.manuscript.updateScrapNote
                 ),
+                overwriteChapter: new OverwriteChapterController(
+                    useCases.manuscript.overwriteChapter
+                ),
+                overwriteScrapNote: new OverwriteScrapNoteController(
+                    useCases.manuscript.overwriteScrapNote
+                ),
             },
             project: {
                 createProject: new CreateProjectController(
@@ -633,6 +699,15 @@ export class AppBuilder {
                 ),
                 deleteOrganization: new DeleteOrganizationController(
                     useCases.world.deleteOrganization
+                ),
+                overwriteCharacter: new OverwriteCharacterController(
+                    useCases.world.overwriteCharacter
+                ),
+                overwriteLocation: new OverwriteLocationController(
+                    useCases.world.overwriteLocation
+                ),
+                overwriteOrganization: new OverwriteOrganizationController(
+                    useCases.world.overwriteOrganization
                 ),
             },
         };

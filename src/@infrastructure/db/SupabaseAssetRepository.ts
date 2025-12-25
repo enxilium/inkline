@@ -1,15 +1,8 @@
 import { IAssetRepository } from "../../@core/domain/repositories/IAssetRepository";
-import {
-    Image,
-    ImageSubjectType,
-} from "../../@core/domain/entities/story/world/Image";
-import {
-    BGM,
-    BGMSubjectType,
-} from "../../@core/domain/entities/story/world/BGM";
+import { Image } from "../../@core/domain/entities/story/world/Image";
+import { BGM } from "../../@core/domain/entities/story/world/BGM";
 import {
     Playlist,
-    PlaylistSubjectType,
     PlaylistTrack,
 } from "../../@core/domain/entities/story/world/Playlist";
 import { SupabaseService } from "./SupabaseService";
@@ -21,8 +14,6 @@ type AssetRow = {
     id: string;
     project_id: string;
     type: AssetType;
-    subject_type: string | null;
-    subject_id: string | null;
     url: string;
     storage_path: string;
     metadata: Record<string, unknown> | null;
@@ -131,24 +122,14 @@ const mapRowToPlaylist = (row: AssetRow): Playlist => {
 };
 
 export class SupabaseAssetRepository implements IAssetRepository {
-    async saveImage(
-        projectId: string,
-        subjectType: ImageSubjectType,
-        subjectId: string,
-        image: Image
-    ): Promise<void> {
+    async saveImage(projectId: string, image: Image): Promise<void> {
         await this.upsertAsset({
             id: image.id,
             project_id: projectId,
             type: "image",
-            subject_type: subjectType,
-            subject_id: subjectId,
             url: image.url,
             storage_path: image.storagePath,
-            metadata: {
-                subjectType,
-                subjectId,
-            },
+            metadata: {},
             created_at: image.createdAt.toISOString(),
             updated_at: image.updatedAt.toISOString(),
         });
@@ -180,18 +161,11 @@ export class SupabaseAssetRepository implements IAssetRepository {
         await this.deleteAssetsByProject(projectId, "image");
     }
 
-    async saveBGM(
-        projectId: string,
-        subjectType: BGMSubjectType,
-        subjectId: string,
-        bgm: BGM
-    ): Promise<void> {
+    async saveBGM(projectId: string, bgm: BGM): Promise<void> {
         await this.upsertAsset({
             id: bgm.id,
             project_id: projectId,
             type: "bgm",
-            subject_type: subjectType,
-            subject_id: subjectId,
             url: bgm.url,
             storage_path: bgm.storagePath,
             metadata: {
@@ -229,18 +203,11 @@ export class SupabaseAssetRepository implements IAssetRepository {
         await this.deleteAssetsByProject(projectId, "bgm");
     }
 
-    async savePlaylist(
-        projectId: string,
-        subjectType: PlaylistSubjectType | null,
-        subjectId: string | null,
-        playlist: Playlist
-    ): Promise<void> {
+    async savePlaylist(projectId: string, playlist: Playlist): Promise<void> {
         await this.upsertAsset({
             id: playlist.id,
             project_id: projectId,
             type: "playlist",
-            subject_type: subjectType,
-            subject_id: subjectId,
             url: playlist.url,
             storage_path: playlist.storagePath,
             metadata: {
@@ -283,8 +250,6 @@ export class SupabaseAssetRepository implements IAssetRepository {
         id: string;
         project_id: string;
         type: AssetType;
-        subject_type: string | null;
-        subject_id: string | null;
         url: string;
         storage_path: string;
         metadata: Record<string, unknown>;

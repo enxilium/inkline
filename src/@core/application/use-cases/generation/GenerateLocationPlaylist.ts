@@ -57,12 +57,7 @@ export class GenerateLocationPlaylist {
             now
         );
 
-        await this.assetRepository.savePlaylist(
-            projectId,
-            "location",
-            locationId,
-            playlist
-        );
+        await this.assetRepository.savePlaylist(projectId, playlist);
 
         location.playlistId = playlist.id;
         location.updatedAt = now;

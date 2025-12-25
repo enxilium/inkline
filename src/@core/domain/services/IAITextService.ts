@@ -15,8 +15,10 @@ export interface ChatHistoryOptions {
             | "character"
             | "location"
             | "organization"
-            | "scrapNote";
+            | "scrapNote"
+            | "text";
         id: string;
+        content?: string;
     }[];
 }
 
@@ -42,14 +44,33 @@ export interface IAITextService {
     editManuscript(
         chapterIds: string[],
         context: NarrativeContext
-    ): Promise<
-        {
+    ): Promise<{
+        /**
+         * General editorial comments.
+         * - If chapter-level: omit wordNumberStart/wordNumberEnd/originalText.
+         * - If range-level: word indices are inclusive and 1-based.
+         */
+        comments: {
             chapterId: string;
             comment: string;
+            wordNumberStart?: number;
+            wordNumberEnd?: number;
+            originalText?: string;
+        }[];
+
+        /**
+         * Suggested replacements.
+         * Word indices are inclusive and 1-based.
+         */
+        replacements: {
+            chapterId: string;
             wordNumberStart: number;
             wordNumberEnd: number;
-        }[]
-    >;
+            originalText: string;
+            replacementText: string;
+            comment?: string;
+        }[];
+    }>;
 
     /**
      * Begins or continues a chat conversation with the AI about the story.
@@ -62,4 +83,10 @@ export interface IAITextService {
         context: NarrativeContext,
         options?: ChatHistoryOptions
     ): AsyncGenerator<string, void, unknown>;
+
+    startChatWithTitle(
+        prompt: string,
+        context: NarrativeContext,
+        options?: ChatHistoryOptions
+    ): Promise<{ title: string; reply: string }>;
 }

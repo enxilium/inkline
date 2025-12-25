@@ -63,12 +63,7 @@ export class GenerateCharacterSong {
             now
         );
 
-        await this.assetRepository.saveBGM(
-            projectId,
-            "character",
-            characterId,
-            track
-        );
+        await this.assetRepository.saveBGM(projectId, track);
         character.bgmId = bgmId;
         character.updatedAt = now;
         await this.characterRepository.update(character);

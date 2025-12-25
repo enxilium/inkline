@@ -135,6 +135,16 @@ export class SupabaseChatConversationRepository
         if (updateError) throw new Error(updateError.message);
     }
 
+    async updateTitle(conversationId: string, title: string): Promise<void> {
+        const client = SupabaseService.getClient();
+        const { error } = await client
+            .from("chat_conversations")
+            .update({ title, updated_at: new Date().toISOString() })
+            .eq("id", conversationId);
+
+        if (error) throw new Error(error.message);
+    }
+
     private async fetchConversationRow(
         id: string
     ): Promise<ChatConversationRow | null> {

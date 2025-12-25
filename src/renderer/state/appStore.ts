@@ -167,6 +167,34 @@ const indexAssets = (bundle: WorkspaceAssetBundle): WorkspaceAssets => {
     };
 };
 
+type PendingChapterEditBase = {
+    id: string;
+    chapterId: string;
+    kind: "comment" | "replacement";
+    createdAt: number;
+};
+
+export type PendingChapterCommentEdit = PendingChapterEditBase & {
+    kind: "comment";
+    comment: string;
+    wordNumberStart?: number;
+    wordNumberEnd?: number;
+    originalText?: string;
+};
+
+export type PendingChapterReplacementEdit = PendingChapterEditBase & {
+    kind: "replacement";
+    wordNumberStart: number;
+    wordNumberEnd: number;
+    originalText: string;
+    replacementText: string;
+    comment?: string;
+};
+
+export type PendingChapterEdit =
+    | PendingChapterCommentEdit
+    | PendingChapterReplacementEdit;
+
 type AppStore = {
     stage: AppStage;
     authMode: AuthMode;
@@ -200,6 +228,49 @@ type AppStore = {
     draggedDocument: { id: string; kind: string; title: string } | null;
     isBinderOpen: boolean;
     isChatOpen: boolean;
+
+    // Pending chapter edits (in-memory only)
+    pendingEditsByChapterId: Record<
+        string,
+        {
+            comments: PendingChapterCommentEdit[];
+            replacements: PendingChapterReplacementEdit[];
+        }
+    >;
+    pendingEditsById: Record<string, PendingChapterEdit>;
+    archivedEditsById: Record<string, PendingChapterEdit>;
+
+    currentSelection: {
+        text: string;
+        range: string; // e.g. "Chapter 1 100-200"
+    } | null;
+    setCurrentSelection: (
+        selection: { text: string; range: string } | null
+    ) => void;
+
+    addPendingEdits: (payload: {
+        comments: {
+            chapterId: string;
+            comment: string;
+            wordNumberStart?: number;
+            wordNumberEnd?: number;
+            originalText?: string;
+        }[];
+        replacements: {
+            chapterId: string;
+            wordNumberStart: number;
+            wordNumberEnd: number;
+            originalText: string;
+            replacementText: string;
+            comment?: string;
+        }[];
+    }) => void;
+    hasPendingEdits: () => boolean;
+    hasPendingEditsForChapter: (chapterId: string) => boolean;
+    removePendingEdit: (editId: string) => void;
+    archivePendingEdit: (editId: string) => void;
+    restoreArchivedEdit: (editId: string) => void;
+    clearPendingEditsForChapter: (chapterId: string) => void;
     openSettings: () => void;
     bootstrapSession: () => Promise<void>;
     setAuthField: (field: keyof typeof initialAuthForm, value: string) => void;
@@ -266,6 +337,9 @@ type AppStore = {
     setDraggedDocument: (
         doc: { id: string; kind: string; title: string } | null
     ) => void;
+    renamingDocument: { id: string; kind: string } | null;
+    setRenamingDocument: (doc: { id: string; kind: string } | null) => void;
+    closeProject: () => void;
     toggleBinder: () => void;
     toggleChat: () => void;
     flushActiveDocumentContent: () => Promise<void>;
@@ -273,7 +347,10 @@ type AppStore = {
     // IPC wrappers: keep renderer calls centralized here.
     exportManuscript: RendererApi["project"]["exportManuscript"];
     analyzeText: RendererApi["analysis"]["analyzeText"];
+    editChapters: RendererApi["analysis"]["editChapters"];
     generalChat: RendererApi["analysis"]["generalChat"];
+    loadChatHistory: RendererApi["analysis"]["loadChatHistory"];
+    loadChatMessages: RendererApi["analysis"]["loadChatMessages"];
     saveChapterContent: RendererApi["logistics"]["saveChapterContent"];
     updateScrapNoteRemote: RendererApi["manuscript"]["updateScrapNote"];
     saveCharacterInfo: RendererApi["logistics"]["saveCharacterInfo"];
@@ -316,6 +393,9 @@ export const useAppStore = create<AppStore>((set, get) => {
         | "autosaveError"
         | "cloudSyncError"
         | "lastSavedAt"
+        | "pendingEditsByChapterId"
+        | "pendingEditsById"
+        | "archivedEditsById"
     > => ({
         projectId: "",
         activeProjectName: "",
@@ -332,6 +412,9 @@ export const useAppStore = create<AppStore>((set, get) => {
         autosaveError: null,
         cloudSyncError: null,
         lastSavedAt: null,
+        pendingEditsByChapterId: {},
+        pendingEditsById: {},
+        archivedEditsById: {},
     });
 
     const applyUnauthenticatedState = () => {
@@ -346,6 +429,17 @@ export const useAppStore = create<AppStore>((set, get) => {
             openingProjectId: null,
             currentUserId: "",
         });
+    };
+
+    const confirmDiscardPendingEdits = (): boolean => {
+        const pendingCount = Object.keys(get().pendingEditsById).length;
+        if (pendingCount === 0) {
+            return true;
+        }
+
+        return window.confirm(
+            "You have pending chapter edits that are not saved and will be lost. Continue?"
+        );
     };
 
     const syncAuthState = async (user: RendererUser | null) => {
@@ -559,6 +653,9 @@ export const useAppStore = create<AppStore>((set, get) => {
             }
         },
         openProject: async (project) => {
+            if (!confirmDiscardPendingEdits()) {
+                return;
+            }
             set({ projectSelectionError: null, openingProjectId: project.id });
             try {
                 await loadProjectWorkspace(project.id);
@@ -576,6 +673,10 @@ export const useAppStore = create<AppStore>((set, get) => {
         reloadActiveProject: async () => {
             const projectId = get().projectId.trim();
             if (!projectId) {
+                return;
+            }
+
+            if (!confirmDiscardPendingEdits()) {
                 return;
             }
             await loadProjectWorkspace(projectId);
@@ -623,6 +724,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return;
             }
 
+            if (!confirmDiscardPendingEdits()) {
+                return;
+            }
+
             try {
                 await get().flushActiveDocumentContent();
             } catch (error) {
@@ -654,6 +759,9 @@ export const useAppStore = create<AppStore>((set, get) => {
             await get().loadProjects(user.id);
         },
         logout: async () => {
+            if (!confirmDiscardPendingEdits()) {
+                return;
+            }
             try {
                 await rendererApi.auth.logoutUser();
             } catch (_error) {
@@ -1558,8 +1666,16 @@ export const useAppStore = create<AppStore>((set, get) => {
                 },
             }));
         },
+        currentSelection: null,
+        setCurrentSelection: (selection) =>
+            set({ currentSelection: selection }),
         setDraggedDocument: (doc) => {
             set({ draggedDocument: doc });
+        },
+        renamingDocument: null,
+        setRenamingDocument: (doc) => set({ renamingDocument: doc }),
+        closeProject: () => {
+            set(resetWorkspaceState());
         },
         isBinderOpen: true,
         toggleBinder: () => {
@@ -1570,14 +1686,290 @@ export const useAppStore = create<AppStore>((set, get) => {
             set((state) => ({ isChatOpen: !state.isChatOpen }));
         },
 
+        pendingEditsByChapterId: {},
+        pendingEditsById: {},
+        archivedEditsById: {},
+        addPendingEdits: (payload) => {
+            const createdAt = Date.now();
+            const pendingById: Record<string, PendingChapterEdit> = {};
+
+            const comments: PendingChapterCommentEdit[] = (
+                payload.comments ?? []
+            )
+                .map((item) => ({
+                    id: generateOptimisticId(),
+                    chapterId: item.chapterId,
+                    kind: "comment" as const,
+                    comment: item.comment,
+                    wordNumberStart: item.wordNumberStart,
+                    wordNumberEnd: item.wordNumberEnd,
+                    originalText: item.originalText,
+                    createdAt,
+                }))
+                .filter((item) => item.chapterId && item.comment?.trim());
+
+            const replacements: PendingChapterReplacementEdit[] = (
+                payload.replacements ?? []
+            )
+                .map((item) => ({
+                    id: generateOptimisticId(),
+                    chapterId: item.chapterId,
+                    kind: "replacement" as const,
+                    wordNumberStart: item.wordNumberStart,
+                    wordNumberEnd: item.wordNumberEnd,
+                    originalText: item.originalText,
+                    replacementText: item.replacementText,
+                    comment: item.comment,
+                    createdAt,
+                }))
+                .filter(
+                    (item) =>
+                        item.chapterId &&
+                        Number.isFinite(item.wordNumberStart) &&
+                        Number.isFinite(item.wordNumberEnd) &&
+                        item.wordNumberStart > 0 &&
+                        item.wordNumberEnd >= item.wordNumberStart &&
+                        item.originalText?.trim() &&
+                        item.replacementText?.trim()
+                );
+
+            for (const item of [...comments, ...replacements]) {
+                pendingById[item.id] = item;
+            }
+
+            set((state) => {
+                const nextByChapter = { ...state.pendingEditsByChapterId };
+
+                for (const item of comments) {
+                    const current = nextByChapter[item.chapterId] ?? {
+                        comments: [],
+                        replacements: [],
+                    };
+                    nextByChapter[item.chapterId] = {
+                        ...current,
+                        comments: [...current.comments, item],
+                    };
+                }
+
+                for (const item of replacements) {
+                    const current = nextByChapter[item.chapterId] ?? {
+                        comments: [],
+                        replacements: [],
+                    };
+                    nextByChapter[item.chapterId] = {
+                        ...current,
+                        replacements: [...current.replacements, item],
+                    };
+                }
+
+                return {
+                    pendingEditsByChapterId: nextByChapter,
+                    pendingEditsById: {
+                        ...state.pendingEditsById,
+                        ...pendingById,
+                    },
+                };
+            });
+        },
+        hasPendingEdits: () => {
+            const pending = get().pendingEditsByChapterId;
+            return Object.keys(pending).some((chapterId) => {
+                const bucket = pending[chapterId];
+                return (
+                    (bucket?.comments?.length ?? 0) > 0 ||
+                    (bucket?.replacements?.length ?? 0) > 0
+                );
+            });
+        },
+        hasPendingEditsForChapter: (chapterId) => {
+            const bucket = get().pendingEditsByChapterId[chapterId];
+            return (
+                (bucket?.comments?.length ?? 0) > 0 ||
+                (bucket?.replacements?.length ?? 0) > 0
+            );
+        },
+        removePendingEdit: (editId) => {
+            set((state) => {
+                const edit = state.pendingEditsById[editId];
+                if (!edit) {
+                    return state;
+                }
+
+                const nextById = { ...state.pendingEditsById };
+                delete nextById[editId];
+
+                const chapterBucket =
+                    state.pendingEditsByChapterId[edit.chapterId];
+                if (!chapterBucket) {
+                    return { pendingEditsById: nextById };
+                }
+
+                const nextBucket = {
+                    comments:
+                        edit.kind === "comment"
+                            ? chapterBucket.comments.filter(
+                                  (c) => c.id !== editId
+                              )
+                            : chapterBucket.comments,
+                    replacements:
+                        edit.kind === "replacement"
+                            ? chapterBucket.replacements.filter(
+                                  (r) => r.id !== editId
+                              )
+                            : chapterBucket.replacements,
+                };
+
+                const nextByChapter = { ...state.pendingEditsByChapterId };
+                if (
+                    nextBucket.comments.length === 0 &&
+                    nextBucket.replacements.length === 0
+                ) {
+                    delete nextByChapter[edit.chapterId];
+                } else {
+                    nextByChapter[edit.chapterId] = nextBucket;
+                }
+
+                return {
+                    pendingEditsById: nextById,
+                    pendingEditsByChapterId: nextByChapter,
+                };
+            });
+        },
+        archivePendingEdit: (editId) => {
+            set((state) => {
+                const edit = state.pendingEditsById[editId];
+                if (!edit) {
+                    return state;
+                }
+
+                const nextById = { ...state.pendingEditsById };
+                delete nextById[editId];
+
+                const chapterBucket =
+                    state.pendingEditsByChapterId[edit.chapterId];
+                const nextByChapter = { ...state.pendingEditsByChapterId };
+
+                if (chapterBucket) {
+                    const nextBucket = {
+                        comments:
+                            edit.kind === "comment"
+                                ? chapterBucket.comments.filter(
+                                      (c) => c.id !== editId
+                                  )
+                                : chapterBucket.comments,
+                        replacements:
+                            edit.kind === "replacement"
+                                ? chapterBucket.replacements.filter(
+                                      (r) => r.id !== editId
+                                  )
+                                : chapterBucket.replacements,
+                    };
+
+                    if (
+                        nextBucket.comments.length === 0 &&
+                        nextBucket.replacements.length === 0
+                    ) {
+                        delete nextByChapter[edit.chapterId];
+                    } else {
+                        nextByChapter[edit.chapterId] = nextBucket;
+                    }
+                }
+
+                return {
+                    pendingEditsById: nextById,
+                    pendingEditsByChapterId: nextByChapter,
+                    archivedEditsById: {
+                        ...state.archivedEditsById,
+                        [editId]: edit,
+                    },
+                };
+            });
+        },
+        restoreArchivedEdit: (editId) => {
+            set((state) => {
+                const edit = state.archivedEditsById[editId];
+                if (!edit) {
+                    return state;
+                }
+
+                const nextArchived = { ...state.archivedEditsById };
+                delete nextArchived[editId];
+
+                const nextByChapter = { ...state.pendingEditsByChapterId };
+                const bucket = nextByChapter[edit.chapterId] ?? {
+                    comments: [],
+                    replacements: [],
+                };
+
+                nextByChapter[edit.chapterId] =
+                    edit.kind === "comment"
+                        ? {
+                              ...bucket,
+                              comments: [
+                                  ...bucket.comments,
+                                  edit as PendingChapterCommentEdit,
+                              ],
+                          }
+                        : {
+                              ...bucket,
+                              replacements: [
+                                  ...bucket.replacements,
+                                  edit as PendingChapterReplacementEdit,
+                              ],
+                          };
+
+                return {
+                    archivedEditsById: nextArchived,
+                    pendingEditsById: {
+                        ...state.pendingEditsById,
+                        [editId]: edit,
+                    },
+                    pendingEditsByChapterId: nextByChapter,
+                };
+            });
+        },
+        clearPendingEditsForChapter: (chapterId) => {
+            set((state) => {
+                const bucket = state.pendingEditsByChapterId[chapterId];
+                if (!bucket) {
+                    return state;
+                }
+
+                const nextById = { ...state.pendingEditsById };
+                for (const item of [
+                    ...bucket.comments,
+                    ...bucket.replacements,
+                ]) {
+                    delete nextById[item.id];
+                }
+
+                const nextByChapter = { ...state.pendingEditsByChapterId };
+                delete nextByChapter[chapterId];
+
+                return {
+                    pendingEditsByChapterId: nextByChapter,
+                    pendingEditsById: nextById,
+                };
+            });
+        },
+
         exportManuscript: async (request) => {
             return rendererApi.project.exportManuscript(request);
         },
         analyzeText: async (request) => {
             return rendererApi.analysis.analyzeText(request);
         },
+        editChapters: async (request) => {
+            return rendererApi.analysis.editChapters(request);
+        },
         generalChat: async (request) => {
             return rendererApi.analysis.generalChat(request);
+        },
+        loadChatHistory: async (request) => {
+            return rendererApi.analysis.loadChatHistory(request);
+        },
+        loadChatMessages: async (request) => {
+            return rendererApi.analysis.loadChatMessages(request);
         },
         saveChapterContent: async (request) => {
             return rendererApi.logistics.saveChapterContent(request);

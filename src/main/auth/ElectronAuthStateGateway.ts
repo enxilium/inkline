@@ -1,4 +1,5 @@
 import { BrowserWindow } from "electron";
+import { EventEmitter } from "events";
 import type { User } from "../../@core/domain/entities/user/User";
 import {
     AUTH_STATE_CHANGED_CHANNEL,
@@ -7,13 +8,17 @@ import {
     mapUserToSerializable,
 } from "../../@interface-adapters/controllers/auth/AuthStateGateway";
 
-export class ElectronAuthStateGateway implements AuthStateGateway {
+export class ElectronAuthStateGateway
+    extends EventEmitter
+    implements AuthStateGateway
+{
     private snapshot: AuthStatePayload = { user: null };
 
     setUser(user: User | null): void {
         this.snapshot = {
             user: user ? mapUserToSerializable(user) : null,
         };
+        this.emit("auth-changed", user);
         this.broadcast();
     }
 

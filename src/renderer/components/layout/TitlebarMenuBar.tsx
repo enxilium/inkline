@@ -7,22 +7,31 @@ import {
     DialogHeader,
     DialogTitle,
 } from "../ui/Dialog";
-import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
 import { Button } from "../ui/Button";
 import { useAppStore } from "../../state/appStore";
 import { getTextStats } from "../../utils/textStats";
+import { EditChapterRangeDialog } from "../dialogs/EditChapterRangeDialog";
 
 type MenuKey = "file" | "edit" | null;
 
 export const TitlebarMenuBar: React.FC = () => {
-    const { projectId, exportManuscript, returnToProjects, chapters } =
-        useAppStore();
+    const {
+        projectId,
+        exportManuscript,
+        returnToProjects,
+        chapters,
+        editChapters,
+        addPendingEdits,
+        hasPendingEditsForChapter,
+        setActiveDocument,
+    } = useAppStore();
     const [openMenu, setOpenMenu] = React.useState<MenuKey>(null);
     const [isRangeDialogOpen, setIsRangeDialogOpen] = React.useState(false);
     const [isProjectStatsOpen, setIsProjectStatsOpen] = React.useState(false);
     const [rangeStart, setRangeStart] = React.useState("");
     const [rangeEnd, setRangeEnd] = React.useState("");
+    const [isApplyingEdits, setIsApplyingEdits] = React.useState(false);
 
     const manuscriptWordCount = React.useMemo(() => {
         return chapters.reduce((sum, chapter) => {
@@ -196,62 +205,81 @@ export const TitlebarMenuBar: React.FC = () => {
                 </div>
             </div>
 
-            <Dialog
+            <EditChapterRangeDialog
                 open={isRangeDialogOpen}
-                onOpenChange={setIsRangeDialogOpen}
-            >
-                <DialogContent className="titlebar-range-dialog">
-                    <DialogHeader>
-                        <DialogTitle>Edit Chapter Range</DialogTitle>
-                        <DialogDescription>
-                            Choose a start and end chapter.
-                        </DialogDescription>
-                    </DialogHeader>
+                startValue={rangeStart}
+                endValue={rangeEnd}
+                onStartChange={setRangeStart}
+                onEndChange={setRangeEnd}
+                onCancel={() => setIsRangeDialogOpen(false)}
+                isSubmitting={isApplyingEdits}
+                onApply={() => {
+                    const start = Number.parseInt(rangeStart.trim(), 10);
+                    const end = rangeEnd.trim()
+                        ? Number.parseInt(rangeEnd.trim(), 10)
+                        : start;
 
-                    <div className="dialog-form">
-                        <div className="dialog-field">
-                            <Label htmlFor="chapter-range-start">Start</Label>
-                            <Input
-                                id="chapter-range-start"
-                                value={rangeStart}
-                                onChange={(e) => setRangeStart(e.target.value)}
-                                placeholder="e.g. 1"
-                            />
-                        </div>
-                        <div className="dialog-field">
-                            <Label htmlFor="chapter-range-end">End</Label>
-                            <Input
-                                id="chapter-range-end"
-                                value={rangeEnd}
-                                onChange={(e) => setRangeEnd(e.target.value)}
-                                placeholder="e.g. 10"
-                            />
-                        </div>
+                    if (!Number.isFinite(start) || start <= 0) {
+                        alert("Please enter a valid start chapter number.");
+                        return;
+                    }
+                    if (!Number.isFinite(end) || end <= 0) {
+                        alert("Please enter a valid end chapter number.");
+                        return;
+                    }
 
-                        <div className="dialog-actions">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={() => setIsRangeDialogOpen(false)}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="secondary"
-                                onClick={() => {
-                                    // UI only for now.
-                                    void rangeStart;
-                                    void rangeEnd;
-                                    setIsRangeDialogOpen(false);
-                                }}
-                            >
-                                Apply
-                            </Button>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
+                    const sorted = chapters
+                        .slice()
+                        .sort((a, b) => a.order - b.order);
+
+                    const low = Math.min(start, end);
+                    const high = Math.max(start, end);
+                    const selected = sorted.slice(low - 1, high);
+
+                    if (selected.length === 0) {
+                        alert("No chapters found in that range.");
+                        return;
+                    }
+
+                    const chapterIds = selected.map((c) => c.id);
+                    const blocked = chapterIds.find((id) =>
+                        hasPendingEditsForChapter(id)
+                    );
+                    if (blocked) {
+                        alert(
+                            "One or more chapters already have pending edits. Resolve or dismiss them before editing that range again."
+                        );
+                        return;
+                    }
+
+                    setIsApplyingEdits(true);
+                    editChapters({ projectId, chapterIds })
+                        .then((result) => {
+                            addPendingEdits(result);
+
+                            // Open as tabs (like user opening documents) and focus the first.
+                            for (const id of chapterIds) {
+                                setActiveDocument({ kind: "chapter", id });
+                            }
+                            setActiveDocument({
+                                kind: "chapter",
+                                id: chapterIds[0],
+                            });
+
+                            setIsRangeDialogOpen(false);
+                        })
+                        .catch((error) => {
+                            alert(
+                                "Edit failed: " +
+                                    ((error as Error)?.message ??
+                                        "Unknown error")
+                            );
+                        })
+                        .finally(() => {
+                            setIsApplyingEdits(false);
+                        });
+                }}
+            />
 
             <Dialog
                 open={isProjectStatsOpen}

@@ -67,12 +67,7 @@ export class GenerateOrganizationSong {
             now
         );
 
-        await this.assetRepository.saveBGM(
-            projectId,
-            "organization",
-            organizationId,
-            track
-        );
+        await this.assetRepository.saveBGM(projectId, track);
         organization.bgmId = track.id;
         organization.updatedAt = now;
         await this.organizationRepository.update(organization);

@@ -48,6 +48,7 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     onOpenProject,
     onDeleteProject,
     onUploadCover,
+    projectCovers,
 }) => {
     const INTRO_DRAW_MS = 1500;
     const INTRO_FLY_MS = 900;
@@ -291,7 +292,10 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setOpenMenuProjectId(null);
-                                                    onAddCover(project.id);
+                                                    // onAddCover(project.id);
+                                                    window.alert(
+                                                        "Rename not implemented yet."
+                                                    );
                                                 }}
                                             >
                                                 Rename Project
@@ -329,19 +333,27 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                     <div
                                         className={
                                             "project-card-cover" +
-                                            (project.coverImageId
+                                            (project.coverImageId &&
+                                            projectCovers[project.coverImageId]
                                                 ? " has-image"
                                                 : "")
                                         }
                                         style={
-                                            project.coverImageId
+                                            project.coverImageId &&
+                                            projectCovers[project.coverImageId]
                                                 ? {
-                                                      backgroundImage: `url("${project.coverImageId}")`,
+                                                      backgroundImage: `url("${
+                                                          projectCovers[
+                                                              project
+                                                                  .coverImageId
+                                                          ].url
+                                                      }")`,
                                                   }
                                                 : undefined
                                         }
                                     >
-                                        {!project.coverImageId ? (
+                                        {!project.coverImageId ||
+                                        !projectCovers[project.coverImageId] ? (
                                             <span className="project-card-cover-placeholder"></span>
                                         ) : null}
                                     </div>

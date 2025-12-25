@@ -1,5 +1,12 @@
 import React from "react";
-import { Layout, Model, TabNode, IJsonModel, Actions, DockLocation } from "flexlayout-react";
+import {
+    Layout,
+    Model,
+    TabNode,
+    IJsonModel,
+    Actions,
+    DockLocation,
+} from "flexlayout-react";
 
 import { useAppStore } from "../../state/appStore";
 import { ConnectedTextEditor } from "./ConnectedTextEditor";
@@ -29,8 +36,16 @@ const defaultLayout: IJsonModel = {
 };
 
 export const WorkspaceLayout: React.FC = () => {
-    const { activeDocument, setActiveDocument, chapters, scrapNotes, characters, locations, organizations } = useAppStore();
-    
+    const {
+        activeDocument,
+        setActiveDocument,
+        chapters,
+        scrapNotes,
+        characters,
+        locations,
+        organizations,
+    } = useAppStore();
+
     // Initialize model once
     const [model] = React.useState(() => Model.fromJson(defaultLayout));
 
@@ -55,7 +70,11 @@ export const WorkspaceLayout: React.FC = () => {
             }
         }
 
-        return <div className="empty-editor">Please add a document to begin editing.</div>;
+        return (
+            <div className="empty-editor">
+                Please add a document to begin editing.
+            </div>
+        );
     };
 
     // Sync: Store Data -> Layout Tab Names
@@ -68,19 +87,31 @@ export const WorkspaceLayout: React.FC = () => {
                     if (config && config.id && config.kind) {
                         let newName = "";
                         if (config.kind === "chapter") {
-                            newName = chapters.find(c => c.id === config.id)?.title || "Chapter";
+                            newName =
+                                chapters.find((c) => c.id === config.id)
+                                    ?.title || "Chapter";
                         } else if (config.kind === "scrapNote") {
-                            newName = scrapNotes.find(n => n.id === config.id)?.title || "Note";
+                            newName =
+                                scrapNotes.find((n) => n.id === config.id)
+                                    ?.title || "Note";
                         } else if (config.kind === "character") {
-                            newName = characters.find(c => c.id === config.id)?.name || "Character";
+                            newName =
+                                characters.find((c) => c.id === config.id)
+                                    ?.name || "Character";
                         } else if (config.kind === "location") {
-                            newName = locations.find(l => l.id === config.id)?.name || "Location";
+                            newName =
+                                locations.find((l) => l.id === config.id)
+                                    ?.name || "Location";
                         } else if (config.kind === "organization") {
-                            newName = organizations.find(o => o.id === config.id)?.name || "Organization";
+                            newName =
+                                organizations.find((o) => o.id === config.id)
+                                    ?.name || "Organization";
                         }
 
                         if (newName && tabNode.getName() !== newName) {
-                            model.doAction(Actions.renameTab(tabNode.getId(), newName));
+                            model.doAction(
+                                Actions.renameTab(tabNode.getId(), newName)
+                            );
                         }
                     }
                 }
@@ -102,15 +133,25 @@ export const WorkspaceLayout: React.FC = () => {
             // If not open, add it
             let name = "Untitled";
             if (activeDocument.kind === "chapter") {
-                name = chapters.find(c => c.id === activeDocument.id)?.title || "Chapter";
+                name =
+                    chapters.find((c) => c.id === activeDocument.id)?.title ||
+                    "Chapter";
             } else if (activeDocument.kind === "scrapNote") {
-                name = scrapNotes.find(n => n.id === activeDocument.id)?.title || "Note";
+                name =
+                    scrapNotes.find((n) => n.id === activeDocument.id)?.title ||
+                    "Note";
             } else if (activeDocument.kind === "character") {
-                name = characters.find(c => c.id === activeDocument.id)?.name || "Character";
+                name =
+                    characters.find((c) => c.id === activeDocument.id)?.name ||
+                    "Character";
             } else if (activeDocument.kind === "location") {
-                name = locations.find(l => l.id === activeDocument.id)?.name || "Location";
+                name =
+                    locations.find((l) => l.id === activeDocument.id)?.name ||
+                    "Location";
             } else if (activeDocument.kind === "organization") {
-                name = organizations.find(o => o.id === activeDocument.id)?.name || "Organization";
+                name =
+                    organizations.find((o) => o.id === activeDocument.id)
+                        ?.name || "Organization";
             }
 
             let targetNodeId = "main-tabset";
@@ -124,7 +165,7 @@ export const WorkspaceLayout: React.FC = () => {
             if (activeTabset) {
                 targetNodeId = activeTabset.getId();
                 bestTargetFound = true;
-            } 
+            }
             // 2. Try Main Tabset (if it still exists)
             else if (mainTabset) {
                 targetNodeId = "main-tabset";
@@ -157,7 +198,10 @@ export const WorkspaceLayout: React.FC = () => {
                         component: "editor",
                         name,
                         id: nodeId,
-                        config: { id: activeDocument.id, kind: activeDocument.kind },
+                        config: {
+                            id: activeDocument.id,
+                            kind: activeDocument.kind,
+                        },
                     },
                     targetNodeId,
                     location,
@@ -165,7 +209,15 @@ export const WorkspaceLayout: React.FC = () => {
                 )
             );
         }
-    }, [activeDocument, model, chapters, scrapNotes, characters, locations, organizations]);
+    }, [
+        activeDocument,
+        model,
+        chapters,
+        scrapNotes,
+        characters,
+        locations,
+        organizations,
+    ]);
 
     // Sync: Layout -> Store
     const onModelChange = (model: Model) => {
@@ -176,8 +228,12 @@ export const WorkspaceLayout: React.FC = () => {
                 // Only update store if it's different to avoid loops
                 // We check if the store's active document is different
                 const current = useAppStore.getState().activeDocument;
-                if (!current || current.id !== config.id || current.kind !== config.kind) {
-                     setActiveDocument({ id: config.id, kind: config.kind });
+                if (
+                    !current ||
+                    current.id !== config.id ||
+                    current.kind !== config.kind
+                ) {
+                    setActiveDocument({ id: config.id, kind: config.kind });
                 }
             }
         }
@@ -200,7 +256,7 @@ export const WorkspaceLayout: React.FC = () => {
                     name: draggedDoc.title,
                     id: nodeId,
                     config: { id: draggedDoc.id, kind: draggedDoc.kind },
-                }
+                },
             };
         }
         return undefined;

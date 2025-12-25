@@ -13,5 +13,6 @@ export interface IChatConversationRepository {
     getConversationsByProjectId(projectId: string): Promise<ChatConversation[]>;
     getMessages(conversationId: string): Promise<ChatMessage[]>;
     appendMessage(message: ChatMessage): Promise<void>;
+    updateTitle(conversationId: string, title: string): Promise<void>;
     deleteByProjectId(projectId: string): Promise<void>;
 }

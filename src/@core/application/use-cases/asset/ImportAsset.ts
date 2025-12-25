@@ -131,12 +131,7 @@ export class ImportAsset {
             now
         );
 
-        await this.assetRepository.saveImage(
-            projectId,
-            payload.subjectType,
-            subjectId,
-            image
-        );
+        await this.assetRepository.saveImage(projectId, image);
         await this.attachImageToSubject(
             projectId,
             payload.subjectType,
@@ -223,12 +218,7 @@ export class ImportAsset {
             now
         );
 
-        await this.assetRepository.saveBGM(
-            projectId,
-            payload.subjectType,
-            payload.subjectId,
-            track
-        );
+        await this.assetRepository.saveBGM(projectId, track);
         await this.applyBgmToSubject(subject, track, now);
 
         await this.deleteBgmAsset(subject.projectId, previousTrack);
@@ -260,12 +250,7 @@ export class ImportAsset {
             now
         );
 
-        await this.assetRepository.savePlaylist(
-            projectId,
-            subject?.type ?? null,
-            subject ? subject.entity.id : null,
-            playlist
-        );
+        await this.assetRepository.savePlaylist(projectId, playlist);
 
         if (subject?.type === "character") {
             subject.entity.playlistId = playlist.id;
