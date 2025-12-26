@@ -255,7 +255,9 @@ export class SynchronizationService extends EventEmitter {
                     `[SynchronizationService] Realtime subscription status: ${status}`
                 );
                 if (status === "SUBSCRIBED") {
+                    const wasOfflineBefore = this.wasOffline;
                     this.isOnline = true;
+                    this.wasOffline = false;
                     this.reconnectAttempts = 0; // Reset on successful connection
                     this.syncStateGateway?.setStatus("online");
 
@@ -264,8 +266,17 @@ export class SynchronizationService extends EventEmitter {
                         clearTimeout(this.reconnectTimeout);
                         this.reconnectTimeout = null;
                     }
+
+                    // If we were offline before, trigger a reconnect sync to detect conflicts
+                    if (wasOfflineBefore) {
+                        console.log(
+                            "[SynchronizationService] Realtime reconnected after offline. Running reconnect sync."
+                        );
+                        void this.syncAll(userId, "reconnect");
+                    }
                 } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
                     this.isOnline = false;
+                    this.wasOffline = true;
                     this.syncStateGateway?.setStatus("offline");
                     this.scheduleReconnect(userId);
                 }
