@@ -4,6 +4,7 @@ import {
     LocationEditor,
     type LocationEditorValues,
 } from "../workspace/LocationEditor";
+import type { AutosaveStatus } from "../../types";
 
 interface ConnectedLocationEditorProps {
     locationId: string;
@@ -22,6 +23,7 @@ export const ConnectedLocationEditor: React.FC<
         projectId,
         locations,
         assets,
+        activeDocument,
         updateLocationLocally,
         reloadActiveProject,
         saveLocationInfo,
@@ -29,7 +31,21 @@ export const ConnectedLocationEditor: React.FC<
         generateLocationSong,
         generateLocationPlaylist,
         importAsset,
+        setAutosaveStatus: setGlobalAutosaveStatus,
+        setAutosaveError: setGlobalAutosaveError,
     } = useAppStore();
+
+    const [autosaveStatus, setAutosaveStatus] =
+        React.useState<AutosaveStatus>("idle");
+
+    const isActiveEditor =
+        activeDocument?.kind === "location" && activeDocument.id === locationId;
+
+    React.useEffect(() => {
+        if (isActiveEditor) {
+            setGlobalAutosaveStatus(autosaveStatus);
+        }
+    }, [isActiveEditor, autosaveStatus, setGlobalAutosaveStatus]);
 
     const location = React.useMemo(
         () => locations.find((l) => l.id === locationId),
@@ -61,6 +77,8 @@ export const ConnectedLocationEditor: React.FC<
         async (values: LocationEditorValues) => {
             if (!location || !projectId) return;
 
+            setAutosaveStatus("saving");
+
             const payload = {
                 name: values.name,
                 description: values.description,
@@ -81,7 +99,15 @@ export const ConnectedLocationEditor: React.FC<
                     locationId: location.id,
                     payload,
                 });
+                setAutosaveStatus("saved");
+                setTimeout(() => {
+                    setAutosaveStatus((prev) =>
+                        prev === "saved" ? "idle" : prev
+                    );
+                }, 2000);
             } catch (error) {
+                setAutosaveStatus("error");
+                setGlobalAutosaveError("Failed to save location");
                 updateLocationLocally(location.id, originalLocation);
                 await reloadActiveProject();
                 throw error;
@@ -93,6 +119,7 @@ export const ConnectedLocationEditor: React.FC<
             updateLocationLocally,
             reloadActiveProject,
             saveLocationInfo,
+            setGlobalAutosaveError,
         ]
     );
 

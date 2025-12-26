@@ -4,6 +4,7 @@ import {
     OrganizationEditor,
     type OrganizationEditorValues,
 } from "../workspace/OrganizationEditor";
+import type { AutosaveStatus } from "../../types";
 
 interface ConnectedOrganizationEditorProps {
     organizationId: string;
@@ -17,6 +18,7 @@ export const ConnectedOrganizationEditor: React.FC<
         organizations,
         locations,
         assets,
+        activeDocument,
         updateOrganizationLocally,
         reloadActiveProject,
         saveOrganizationInfo,
@@ -24,7 +26,22 @@ export const ConnectedOrganizationEditor: React.FC<
         generateOrganizationSong,
         generateOrganizationPlaylist,
         importAsset,
+        setAutosaveStatus: setGlobalAutosaveStatus,
+        setAutosaveError: setGlobalAutosaveError,
     } = useAppStore();
+
+    const [autosaveStatus, setAutosaveStatus] =
+        React.useState<AutosaveStatus>("idle");
+
+    const isActiveEditor =
+        activeDocument?.kind === "organization" &&
+        activeDocument.id === organizationId;
+
+    React.useEffect(() => {
+        if (isActiveEditor) {
+            setGlobalAutosaveStatus(autosaveStatus);
+        }
+    }, [isActiveEditor, autosaveStatus, setGlobalAutosaveStatus]);
 
     const organization = React.useMemo(
         () => organizations.find((o) => o.id === organizationId),
@@ -59,6 +76,8 @@ export const ConnectedOrganizationEditor: React.FC<
         async (values: OrganizationEditorValues) => {
             if (!organization || !projectId) return;
 
+            setAutosaveStatus("saving");
+
             const payload = {
                 name: values.name,
                 description: values.description,
@@ -78,7 +97,15 @@ export const ConnectedOrganizationEditor: React.FC<
                     organizationId: organization.id,
                     payload,
                 });
+                setAutosaveStatus("saved");
+                setTimeout(() => {
+                    setAutosaveStatus((prev) =>
+                        prev === "saved" ? "idle" : prev
+                    );
+                }, 2000);
             } catch (error) {
+                setAutosaveStatus("error");
+                setGlobalAutosaveError("Failed to save organization");
                 updateOrganizationLocally(
                     organization.id,
                     originalOrganization
@@ -93,6 +120,7 @@ export const ConnectedOrganizationEditor: React.FC<
             updateOrganizationLocally,
             reloadActiveProject,
             saveOrganizationInfo,
+            setGlobalAutosaveError,
         ]
     );
 

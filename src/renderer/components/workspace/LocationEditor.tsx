@@ -60,8 +60,10 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const songInputRef = React.useRef<HTMLInputElement>(null);
     const playlistInputRef = React.useRef<HTMLInputElement>(null);
+    const isUserChange = React.useRef(false);
 
     React.useEffect(() => {
+        isUserChange.current = false;
         setValues(defaultValues(location));
         setError(null);
     }, [location]);
@@ -91,7 +93,11 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
         });
     }, [gallerySources]);
 
-    const handleChange = (field: keyof LocationEditorValues, value: string | string[]) => {
+    const handleChange = (
+        field: keyof LocationEditorValues,
+        value: string | string[]
+    ) => {
+        isUserChange.current = true;
         setValues((prev) => ({
             ...prev,
             [field]: value,
@@ -113,9 +119,27 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
         }
     };
 
-    const handleBlur = () => {
-        handleSubmit();
-    };
+    const autosaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    React.useEffect(() => {
+        if (!isUserChange.current) {
+            return;
+        }
+
+        if (autosaveTimerRef.current) {
+            clearTimeout(autosaveTimerRef.current);
+        }
+
+        autosaveTimerRef.current = setTimeout(() => {
+            handleSubmit();
+        }, 1000);
+
+        return () => {
+            if (autosaveTimerRef.current) {
+                clearTimeout(autosaveTimerRef.current);
+            }
+        };
+    }, [values]);
 
     const triggerFilePick = () => {
         fileInputRef.current?.click();
@@ -249,7 +273,11 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                         <h2>{values.name || "Untitled Location"}</h2>
                     </div>
                     <div className="entity-actions">
-                        <Button type="submit" variant="primary" disabled={isSaving}>
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            disabled={isSaving}
+                        >
                             {isSaving ? "Saving…" : "Save location"}
                         </Button>
                     </div>
@@ -265,7 +293,6 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                 onChange={(event) =>
                                     handleChange("name", event.target.value)
                                 }
-                                onBlur={handleBlur}
                             />
                         </div>
                         <div className="entity-field">
@@ -279,9 +306,11 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                 placeholder="Overall vibe, landscape, architecture"
                                 value={values.description}
                                 onChange={(event) =>
-                                    handleChange("description", event.target.value)
+                                    handleChange(
+                                        "description",
+                                        event.target.value
+                                    )
                                 }
-                                onBlur={handleBlur}
                             />
                         </div>
                         <div className="entity-field">
@@ -295,7 +324,6 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                 onChange={(event) =>
                                     handleChange("culture", event.target.value)
                                 }
-                                onBlur={handleBlur}
                             />
                         </div>
                         <div className="entity-field">
@@ -309,11 +337,12 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                 onChange={(event) =>
                                     handleChange("history", event.target.value)
                                 }
-                                onBlur={handleBlur}
                             />
                         </div>
                         <div className="entity-field">
-                            <Label htmlFor="location-conflicts">Conflicts</Label>
+                            <Label htmlFor="location-conflicts">
+                                Conflicts
+                            </Label>
                             <textarea
                                 id="location-conflicts"
                                 className="text-area"
@@ -321,9 +350,11 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                 placeholder="Enter one conflict per line"
                                 value={values.conflicts}
                                 onChange={(event) =>
-                                    handleChange("conflicts", event.target.value)
+                                    handleChange(
+                                        "conflicts",
+                                        event.target.value
+                                    )
                                 }
-                                onBlur={handleBlur}
                             />
                         </div>
                         <div className="entity-field">
@@ -331,7 +362,6 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                             <TagsInput
                                 value={values.tags}
                                 onChange={(tags) => handleChange("tags", tags)}
-                                onBlur={handleBlur}
                                 placeholder="Add a tag..."
                             />
                         </div>
@@ -346,8 +376,8 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                 style={
                                     portraitUrl
                                         ? {
-                                            backgroundImage: `url("${portraitUrl}")`,
-                                        }
+                                              backgroundImage: `url("${portraitUrl}")`,
+                                          }
                                         : undefined
                                 }
                             >
@@ -515,7 +545,9 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                         </div>
                     </div>
                 </div>
-                {error ? <span className="card-hint is-error">{error}</span> : null}
+                {error ? (
+                    <span className="card-hint is-error">{error}</span>
+                ) : null}
             </form>
         </div>
     );

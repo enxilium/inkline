@@ -62,8 +62,10 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const songInputRef = React.useRef<HTMLInputElement>(null);
     const playlistInputRef = React.useRef<HTMLInputElement>(null);
+    const isUserChange = React.useRef(false);
 
     React.useEffect(() => {
+        isUserChange.current = false;
         setValues(defaultValues(organization));
         setError(null);
     }, [organization]);
@@ -97,6 +99,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
         field: keyof OrganizationEditorValues,
         value: string | string[]
     ) => {
+        isUserChange.current = true;
         setValues((prev) => ({
             ...prev,
             [field]: value,
@@ -119,9 +122,27 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
         }
     };
 
-    const handleBlur = () => {
-        handleSubmit();
-    };
+    const autosaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    React.useEffect(() => {
+        if (!isUserChange.current) {
+            return;
+        }
+
+        if (autosaveTimerRef.current) {
+            clearTimeout(autosaveTimerRef.current);
+        }
+
+        autosaveTimerRef.current = setTimeout(() => {
+            handleSubmit();
+        }, 1000);
+
+        return () => {
+            if (autosaveTimerRef.current) {
+                clearTimeout(autosaveTimerRef.current);
+            }
+        };
+    }, [values]);
 
     const triggerFilePick = () => fileInputRef.current?.click();
 
@@ -252,7 +273,11 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                         <h2>{values.name || "Untitled Organization"}</h2>
                     </div>
                     <div className="entity-actions">
-                        <Button type="submit" variant="primary" disabled={isSaving}>
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            disabled={isSaving}
+                        >
                             {isSaving ? "Saving…" : "Save organization"}
                         </Button>
                     </div>
@@ -267,7 +292,6 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                 onChange={(event) =>
                                     handleChange("name", event.target.value)
                                 }
-                                onBlur={handleBlur}
                                 placeholder="House Astra"
                             />
                         </div>
@@ -281,14 +305,18 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                 rows={4}
                                 value={values.description}
                                 onChange={(event) =>
-                                    handleChange("description", event.target.value)
+                                    handleChange(
+                                        "description",
+                                        event.target.value
+                                    )
                                 }
-                                onBlur={handleBlur}
                                 placeholder="Purpose, history, notable feats"
                             />
                         </div>
                         <div className="entity-field">
-                            <Label htmlFor="organization-mission">Mission</Label>
+                            <Label htmlFor="organization-mission">
+                                Mission
+                            </Label>
                             <textarea
                                 id="organization-mission"
                                 className="text-area"
@@ -297,7 +325,6 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                 onChange={(event) =>
                                     handleChange("mission", event.target.value)
                                 }
-                                onBlur={handleBlur}
                                 placeholder="Core goals"
                             />
                         </div>
@@ -306,7 +333,6 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                             <TagsInput
                                 value={values.tags}
                                 onChange={(tags) => handleChange("tags", tags)}
-                                onBlur={handleBlur}
                                 placeholder="Enter one tag per line"
                             />
                         </div>
@@ -325,10 +351,12 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                     ).map((option) => option.value);
                                     handleChange("locationIds", selected);
                                 }}
-                                onBlur={handleBlur}
                             >
                                 {locations.map((location) => (
-                                    <option key={location.id} value={location.id}>
+                                    <option
+                                        key={location.id}
+                                        value={location.id}
+                                    >
                                         {location.name || "Untitled location"}
                                     </option>
                                 ))}
@@ -348,8 +376,8 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                 style={
                                     portraitUrl
                                         ? {
-                                            backgroundImage: `url("${portraitUrl}")`,
-                                        }
+                                              backgroundImage: `url("${portraitUrl}")`,
+                                          }
                                         : undefined
                                 }
                             >
@@ -515,7 +543,9 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                         </div>
                     </div>
                 </div>
-                {error ? <span className="card-hint is-error">{error}</span> : null}
+                {error ? (
+                    <span className="card-hint is-error">{error}</span>
+                ) : null}
             </form>
         </div>
     );
