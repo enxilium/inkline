@@ -114,11 +114,15 @@ export class FileSystemChapterRepository implements IChapterRepository {
         return chapters.sort((a, b) => a.order - b.order);
     }
 
-    async updateContent(chapterId: string, content: string): Promise<void> {
+    async updateContent(
+        chapterId: string,
+        content: string,
+        updatedAt?: Date
+    ): Promise<void> {
         const chapter = await this.findById(chapterId);
         if (chapter) {
             chapter.content = content;
-            chapter.updatedAt = new Date();
+            chapter.updatedAt = updatedAt || new Date();
             await this.update(chapter);
         }
     }

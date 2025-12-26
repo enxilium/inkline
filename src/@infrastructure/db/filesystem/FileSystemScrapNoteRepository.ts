@@ -83,11 +83,15 @@ export class FileSystemScrapNoteRepository implements IScrapNoteRepository {
         return notes;
     }
 
-    async updateContent(noteId: string, content: string): Promise<void> {
+    async updateContent(
+        noteId: string,
+        content: string,
+        updatedAt?: Date
+    ): Promise<void> {
         const note = await this.findById(noteId);
         if (note) {
             note.content = content;
-            note.updatedAt = new Date();
+            note.updatedAt = updatedAt || new Date();
             await this.update(note);
         }
     }

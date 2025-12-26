@@ -2,6 +2,7 @@ import React from "react";
 import { createPortal } from "react-dom";
 
 import { Titlebar } from "./components/layout/Titlebar";
+import { GenerationProgressToast } from "./components/ui/GenerationProgressToast";
 import { useAppStore } from "./state/appStore";
 import type { ProjectSummary } from "./types";
 import { AuthView } from "./views/AuthView";
@@ -371,6 +372,7 @@ export const App: React.FC = () => {
             */}
 
             <div className="app-shell">{renderStage()}</div>
+            <GenerationProgressToast />
         </div>
     );
 };

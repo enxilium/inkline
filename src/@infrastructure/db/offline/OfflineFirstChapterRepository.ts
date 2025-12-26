@@ -74,12 +74,24 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
         return merged.sort((a, b) => a.order - b.order);
     }
 
-    async updateContent(chapterId: string, content: string): Promise<void> {
-        await this.fsRepo.updateContent(chapterId, content);
+    async updateContent(
+        chapterId: string,
+        content: string,
+        updatedAt?: Date
+    ): Promise<void> {
+        const timestamp = updatedAt || new Date();
+        await this.fsRepo.updateContent(chapterId, content, timestamp);
         try {
             const local = await this.fsRepo.findById(chapterId);
             if (local) {
-                await this.supabaseRepo.update(local);
+                // We can either call update() or updateContent().
+                // updateContent is more efficient if we just changed content.
+                // But we need to ensure Supabase gets the same timestamp.
+                await this.supabaseRepo.updateContent(
+                    chapterId,
+                    content,
+                    timestamp
+                );
             }
         } catch (error) {
             console.warn(

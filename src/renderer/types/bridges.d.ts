@@ -24,6 +24,14 @@ declare global {
                 listener: (payload: AuthStatePayload) => void
             ): () => IpcRenderer;
         };
+        generationEvents: {
+            onProgress(
+                listener: (payload: {
+                    type: "audio" | "image";
+                    progress: number;
+                }) => void
+            ): () => IpcRenderer;
+        };
         // Note: syncEvents was removed as conflicts are now auto-resolved using "most recent wins" strategy.
     }
 }

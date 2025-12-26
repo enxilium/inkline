@@ -972,7 +972,7 @@ export class SynchronizationService extends EventEmitter {
         type: EntityType,
         id: string,
         projectId: string,
-        forceUpdateTimestamp: boolean = false
+        forceUpdateTimestamp = false
     ): Promise<unknown | null> {
         switch (type) {
             case "chapter": {

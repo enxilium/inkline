@@ -74,12 +74,21 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         return merged;
     }
 
-    async updateContent(noteId: string, content: string): Promise<void> {
-        await this.fsRepo.updateContent(noteId, content);
+    async updateContent(
+        noteId: string,
+        content: string,
+        updatedAt?: Date
+    ): Promise<void> {
+        const timestamp = updatedAt || new Date();
+        await this.fsRepo.updateContent(noteId, content, timestamp);
         try {
             const local = await this.fsRepo.findById(noteId);
             if (local) {
-                await this.supabaseRepo.update(local);
+                await this.supabaseRepo.updateContent(
+                    noteId,
+                    content,
+                    timestamp
+                );
             }
         } catch (error) {
             console.warn(

@@ -80,13 +80,17 @@ export class SupabaseScrapNoteRepository implements IScrapNoteRepository {
         if (error) throw new Error(error.message);
     }
 
-    async updateContent(scrapNoteId: string, content: string): Promise<void> {
+    async updateContent(
+        scrapNoteId: string,
+        content: string,
+        updatedAt?: Date
+    ): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("scrap_notes")
             .update({
                 content: content,
-                updated_at: new Date().toISOString(),
+                updated_at: (updatedAt || new Date()).toISOString(),
             })
             .eq("id", scrapNoteId);
 

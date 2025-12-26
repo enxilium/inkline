@@ -256,8 +256,6 @@ export class SupabaseAssetRepository implements IAssetRepository {
         created_at: string;
         updated_at: string;
     }): Promise<void> {
-        // Ensure every upsert bumps updated_at so other devices detect the change.
-        payload.updated_at = new Date().toISOString();
         const client = SupabaseService.getClient();
         const { error } = await client
             .from("assets")
