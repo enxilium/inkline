@@ -79,6 +79,12 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         content: string,
         updatedAt?: Date
     ): Promise<void> {
+        // Check if content actually changed to avoid phantom updates
+        const current = await this.fsRepo.findById(noteId);
+        if (current && current.content === content) {
+            return;
+        }
+
         const timestamp = updatedAt || new Date();
         await this.fsRepo.updateContent(noteId, content, timestamp);
         try {
