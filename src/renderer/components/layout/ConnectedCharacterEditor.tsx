@@ -4,6 +4,7 @@ import {
     CharacterEditor,
     type CharacterEditorValues,
 } from "../workspace/CharacterEditor";
+import type { AutosaveStatus } from "../../types";
 
 interface ConnectedCharacterEditorProps {
     characterId: string;
@@ -24,6 +25,7 @@ export const ConnectedCharacterEditor: React.FC<
         locations,
         organizations,
         assets,
+        activeDocument,
         updateCharacterLocally,
         reloadActiveProject,
         saveCharacterInfo,
@@ -31,7 +33,22 @@ export const ConnectedCharacterEditor: React.FC<
         generateCharacterSong,
         generateCharacterPlaylist,
         importAsset,
+        setAutosaveStatus: setGlobalAutosaveStatus,
+        setAutosaveError: setGlobalAutosaveError,
     } = useAppStore();
+
+    const [autosaveStatus, setAutosaveStatus] =
+        React.useState<AutosaveStatus>("idle");
+
+    const isActiveEditor =
+        activeDocument?.kind === "character" &&
+        activeDocument.id === characterId;
+
+    React.useEffect(() => {
+        if (isActiveEditor) {
+            setGlobalAutosaveStatus(autosaveStatus);
+        }
+    }, [isActiveEditor, autosaveStatus, setGlobalAutosaveStatus]);
 
     const character = React.useMemo(
         () => characters.find((c) => c.id === characterId),
@@ -64,6 +81,8 @@ export const ConnectedCharacterEditor: React.FC<
         async (values: CharacterEditorValues) => {
             if (!character || !projectId) return;
 
+            setAutosaveStatus("saving");
+
             const payload = {
                 name: values.name,
                 race: values.race,
@@ -90,7 +109,15 @@ export const ConnectedCharacterEditor: React.FC<
                     characterId: character.id,
                     payload,
                 });
+                setAutosaveStatus("saved");
+                setTimeout(() => {
+                    setAutosaveStatus((prev) =>
+                        prev === "saved" ? "idle" : prev
+                    );
+                }, 2000);
             } catch (error) {
+                setAutosaveStatus("error");
+                setGlobalAutosaveError("Failed to save character");
                 updateCharacterLocally(character.id, originalCharacter);
                 await reloadActiveProject();
                 throw error;
@@ -102,6 +129,7 @@ export const ConnectedCharacterEditor: React.FC<
             updateCharacterLocally,
             reloadActiveProject,
             saveCharacterInfo,
+            setGlobalAutosaveError,
         ]
     );
 

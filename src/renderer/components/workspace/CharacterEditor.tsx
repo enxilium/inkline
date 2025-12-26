@@ -80,8 +80,10 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const songInputRef = React.useRef<HTMLInputElement>(null);
     const playlistInputRef = React.useRef<HTMLInputElement>(null);
+    const isUserChange = React.useRef(false);
 
     React.useEffect(() => {
+        isUserChange.current = false;
         setValues(defaultValues(character));
         setError(null);
     }, [character]);
@@ -115,6 +117,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         field: keyof CharacterEditorValues,
         value: string | string[]
     ) => {
+        isUserChange.current = true;
         setValues((prev) => ({
             ...prev,
             [field]: value,
@@ -136,9 +139,27 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         }
     };
 
-    const handleBlur = () => {
-        handleSubmit();
-    };
+    const autosaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    React.useEffect(() => {
+        if (!isUserChange.current) {
+            return;
+        }
+
+        if (autosaveTimerRef.current) {
+            clearTimeout(autosaveTimerRef.current);
+        }
+
+        autosaveTimerRef.current = setTimeout(() => {
+            handleSubmit();
+        }, 1000);
+
+        return () => {
+            if (autosaveTimerRef.current) {
+                clearTimeout(autosaveTimerRef.current);
+            }
+        };
+    }, [values]);
 
     const triggerFilePick = () => {
         fileInputRef.current?.click();
@@ -277,7 +298,11 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                         <h2>{values.name || "Untitled Character"}</h2>
                     </div>
                     <div className="entity-actions">
-                        <Button type="submit" variant="primary" disabled={isSaving}>
+                        <Button
+                            type="submit"
+                            variant="primary"
+                            disabled={isSaving}
+                        >
                             {isSaving ? "Saving…" : "Save profile"}
                         </Button>
                     </div>
@@ -292,7 +317,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                 onChange={(event) =>
                                     handleChange("name", event.target.value)
                                 }
-                                onBlur={handleBlur}
                                 placeholder="Name"
                             />
                         </div>
@@ -305,7 +329,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                     onChange={(event) =>
                                         handleChange("race", event.target.value)
                                     }
-                                    onBlur={handleBlur}
                                     placeholder="Human"
                                 />
                             </div>
@@ -318,7 +341,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                     onChange={(event) =>
                                         handleChange("age", event.target.value)
                                     }
-                                    onBlur={handleBlur}
                                     placeholder="32"
                                     min="0"
                                 />
@@ -333,9 +355,11 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                 className="text-area"
                                 value={values.description}
                                 onChange={(event) =>
-                                    handleChange("description", event.target.value)
+                                    handleChange(
+                                        "description",
+                                        event.target.value
+                                    )
                                 }
-                                onBlur={handleBlur}
                                 rows={5}
                                 placeholder="Physical appearance, demeanor, etc."
                             />
@@ -349,7 +373,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                 onChange={(event) =>
                                     handleChange("traits", event.target.value)
                                 }
-                                onBlur={handleBlur}
                                 rows={3}
                                 placeholder={"Enter one trait per line"}
                             />
@@ -363,7 +386,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                 onChange={(event) =>
                                     handleChange("goals", event.target.value)
                                 }
-                                onBlur={handleBlur}
                                 rows={3}
                                 placeholder={"Enter one goal per line"}
                             />
@@ -377,7 +399,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                 onChange={(event) =>
                                     handleChange("secrets", event.target.value)
                                 }
-                                onBlur={handleBlur}
                                 rows={3}
                                 placeholder={"Enter one secret per line"}
                             />
@@ -387,7 +408,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                             <TagsInput
                                 value={values.tags}
                                 onChange={(tags) => handleChange("tags", tags)}
-                                onBlur={handleBlur}
                                 placeholder="Add a tag..."
                             />
                         </div>
@@ -402,8 +422,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                 style={
                                     portraitUrl
                                         ? {
-                                            backgroundImage: `url("${portraitUrl}")`,
-                                        }
+                                              backgroundImage: `url("${portraitUrl}")`,
+                                          }
                                         : undefined
                                 }
                             >
@@ -420,7 +440,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                     onClick={handleGenerate}
                                     disabled={assetBusy}
                                 >
-                                    {assetBusy ? "Working…" : "Generate portrait"}
+                                    {assetBusy
+                                        ? "Working…"
+                                        : "Generate portrait"}
                                 </Button>
                                 <Button
                                     type="button"
@@ -450,22 +472,22 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                     }}
                                 >
                                     <p
-                                            style={{
-                                                margin: "0 0 0.5rem",
-                                                color: "var(--text-error)",
-                                            }}
-                                        >
-                                            Debug: Image not showing?
-                                        </p>
-                                        <a
-                                            href={portraitUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            style={{
-                                                color: "var(--accent)",
-                                                textDecoration: "underline",
-                                            }}
-                                        >
+                                        style={{
+                                            margin: "0 0 0.5rem",
+                                            color: "var(--text-error)",
+                                        }}
+                                    >
+                                        Debug: Image not showing?
+                                    </p>
+                                    <a
+                                        href={portraitUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                            color: "var(--accent)",
+                                            textDecoration: "underline",
+                                        }}
+                                    >
                                         Open Image in Browser
                                     </a>
                                 </div>
@@ -596,11 +618,13 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                         event.target.value
                                     )
                                 }
-                                onBlur={handleBlur}
                             >
                                 <option value="">Unassigned</option>
                                 {locations.map((location) => (
-                                    <option key={location.id} value={location.id}>
+                                    <option
+                                        key={location.id}
+                                        value={location.id}
+                                    >
                                         {location.name || "Untitled location"}
                                     </option>
                                 ))}
@@ -620,11 +644,13 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                         event.target.value
                                     )
                                 }
-                                onBlur={handleBlur}
                             >
                                 <option value="">Unassigned</option>
                                 {locations.map((location) => (
-                                    <option key={location.id} value={location.id}>
+                                    <option
+                                        key={location.id}
+                                        value={location.id}
+                                    >
                                         {location.name || "Untitled location"}
                                     </option>
                                 ))}
@@ -644,7 +670,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                         event.target.value
                                     )
                                 }
-                                onBlur={handleBlur}
                             >
                                 <option value="">Unassigned</option>
                                 {organizations.map((organization) => (
@@ -660,7 +685,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                         </div>
                     </div>
                 </div>
-                {error ? <span className="card-hint is-error">{error}</span> : null}
+                {error ? (
+                    <span className="card-hint is-error">{error}</span>
+                ) : null}
             </form>
         </div>
     );

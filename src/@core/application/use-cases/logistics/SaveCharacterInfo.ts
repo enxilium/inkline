@@ -41,36 +41,91 @@ export class SaveCharacterInfo {
         const previousCurrentLocationId = character.currentLocationId;
         const previousBackgroundLocationId = character.backgroundLocationId;
 
-        if (payload.name !== undefined) character.name = payload.name;
-        if (payload.race !== undefined) character.race = payload.race;
-        if (payload.age !== undefined) character.age = payload.age;
-        if (payload.description !== undefined)
+        let hasChanges = false;
+
+        if (payload.name !== undefined && character.name !== payload.name) {
+            character.name = payload.name;
+            hasChanges = true;
+        }
+        if (payload.race !== undefined && character.race !== payload.race) {
+            character.race = payload.race;
+            hasChanges = true;
+        }
+        if (payload.age !== undefined && character.age !== payload.age) {
+            character.age = payload.age;
+            hasChanges = true;
+        }
+        if (
+            payload.description !== undefined &&
+            character.description !== payload.description
+        ) {
             character.description = payload.description;
-        if (payload.traits !== undefined) character.traits = payload.traits;
-        if (payload.goals !== undefined) character.goals = payload.goals;
-        if (payload.secrets !== undefined) character.secrets = payload.secrets;
-        if (payload.tags !== undefined) character.tags = payload.tags;
+            hasChanges = true;
+        }
+        if (
+            payload.traits !== undefined &&
+            JSON.stringify(character.traits) !== JSON.stringify(payload.traits)
+        ) {
+            character.traits = payload.traits;
+            hasChanges = true;
+        }
+        if (
+            payload.goals !== undefined &&
+            JSON.stringify(character.goals) !== JSON.stringify(payload.goals)
+        ) {
+            character.goals = payload.goals;
+            hasChanges = true;
+        }
+        if (
+            payload.secrets !== undefined &&
+            JSON.stringify(character.secrets) !==
+                JSON.stringify(payload.secrets)
+        ) {
+            character.secrets = payload.secrets;
+            hasChanges = true;
+        }
+        if (
+            payload.tags !== undefined &&
+            JSON.stringify(character.tags) !== JSON.stringify(payload.tags)
+        ) {
+            character.tags = payload.tags;
+            hasChanges = true;
+        }
 
         if (payload.currentLocationId !== undefined) {
-            character.currentLocationId = await this.resolveLocationId(
+            const newLocationId = await this.resolveLocationId(
                 payload.currentLocationId
             );
+            if (character.currentLocationId !== newLocationId) {
+                character.currentLocationId = newLocationId;
+                hasChanges = true;
+            }
         }
 
         if (payload.backgroundLocationId !== undefined) {
-            character.backgroundLocationId = await this.resolveLocationId(
+            const newBackgroundId = await this.resolveLocationId(
                 payload.backgroundLocationId
             );
+            if (character.backgroundLocationId !== newBackgroundId) {
+                character.backgroundLocationId = newBackgroundId;
+                hasChanges = true;
+            }
         }
 
         if (payload.organizationId !== undefined) {
-            character.organizationId = await this.resolveOrganizationId(
+            const newOrgId = await this.resolveOrganizationId(
                 payload.organizationId
             );
+            if (character.organizationId !== newOrgId) {
+                character.organizationId = newOrgId;
+                hasChanges = true;
+            }
         }
 
-        character.updatedAt = new Date();
-        await this.characterRepository.update(character);
+        if (hasChanges) {
+            character.updatedAt = new Date();
+            await this.characterRepository.update(character);
+        }
 
         await this.syncLocationCaches(
             character.id,

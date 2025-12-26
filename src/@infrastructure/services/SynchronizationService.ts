@@ -93,6 +93,17 @@ export class SynchronizationService extends EventEmitter {
     private wasOffline = false;
     private currentUserId: string | null = null;
     private isOnline = false;
+    private lastSyncedAt: Date | null = null;
+
+    // Tracks whether we are in a reconnect-safe sync window.
+    // During reconnect, we avoid auto-pushing "local newer" to remote to prevent
+    // silent stomps (instead we emit conflicts).
+    private activeSyncMode: "normal" | "reconnect" = "normal";
+    private resetModeAfterQueue = false;
+
+    // If a reconnect occurs while a sync is already in progress, we must not
+    // drop the reconnect sync. Queue one and run it as soon as the current sync finishes.
+    private pendingReconnectSync = false;
 
     // Event queue for realtime events received during sync
     private eventQueue: QueuedRealtimeEvent[] = [];
@@ -119,7 +130,7 @@ export class SynchronizationService extends EventEmitter {
         void this.cleanupOldDeletionLogs(userId);
 
         // Initial sync - this also populates userProjectIds
-        void this.syncAll(userId);
+        void this.syncAll(userId, "normal");
 
         // Set up Supabase Realtime subscriptions for all entity tables
         this.setupRealtimeSubscriptions(userId);
@@ -149,7 +160,7 @@ export class SynchronizationService extends EventEmitter {
                     console.log(
                         "[SynchronizationService] Connection restored. Running re-connection sync."
                     );
-                    await this.syncAll(userId);
+                    await this.syncAll(userId, "reconnect");
                     this.wasOffline = false;
                 }
             } else {
@@ -244,7 +255,9 @@ export class SynchronizationService extends EventEmitter {
                     `[SynchronizationService] Realtime subscription status: ${status}`
                 );
                 if (status === "SUBSCRIBED") {
+                    const wasOfflineBefore = this.wasOffline;
                     this.isOnline = true;
+                    this.wasOffline = false;
                     this.reconnectAttempts = 0; // Reset on successful connection
                     this.syncStateGateway?.setStatus("online");
 
@@ -253,8 +266,17 @@ export class SynchronizationService extends EventEmitter {
                         clearTimeout(this.reconnectTimeout);
                         this.reconnectTimeout = null;
                     }
+
+                    // If we were offline before, trigger a reconnect sync to detect conflicts
+                    if (wasOfflineBefore) {
+                        console.log(
+                            "[SynchronizationService] Realtime reconnected after offline. Running reconnect sync."
+                        );
+                        void this.syncAll(userId, "reconnect");
+                    }
                 } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
                     this.isOnline = false;
+                    this.wasOffline = true;
                     this.syncStateGateway?.setStatus("offline");
                     this.scheduleReconnect(userId);
                 }
@@ -702,8 +724,25 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
 
-            // Local is newer: immediately overwrite cloud.
+            // Local is newer.
             if (localUpdatedAt > remoteUpdatedAt) {
+                // During reconnect-safe windows, do NOT auto-push; surface a conflict.
+                if (this.activeSyncMode === "reconnect") {
+                    const entityName = await this.getEntityName(
+                        entityType as EntityType,
+                        entityId
+                    );
+                    this.syncStateGateway?.notifyConflict({
+                        entityType,
+                        entityId,
+                        projectId,
+                        entityName: entityName || entityId,
+                        localUpdatedAt: localUpdatedAt.toISOString(),
+                        remoteUpdatedAt: remoteUpdatedAt.toISOString(),
+                    });
+                    return;
+                }
+
                 await this.pushLocalToRemoteAndReturn(
                     entityType as EntityType,
                     entityId,
@@ -1134,9 +1173,20 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    async syncAll(userId: string) {
-        if (this.isSyncing) return;
+    async syncAll(userId: string, mode: "normal" | "reconnect" = "normal") {
+        if (this.isSyncing) {
+            // If we're coming back online while already syncing, ensure we do a
+            // reconnect-safe sync right after the current sync finishes.
+            if (mode === "reconnect") {
+                this.pendingReconnectSync = true;
+            }
+            return;
+        }
         this.isSyncing = true;
+        this.activeSyncMode = mode;
+        if (mode === "reconnect") {
+            this.resetModeAfterQueue = true;
+        }
         this.syncStateGateway?.setStatus("syncing");
 
         try {
@@ -1162,32 +1212,62 @@ export class SynchronizationService extends EventEmitter {
             }
 
             for (const remoteP of remoteProjects) {
-                const localP = localProjectMap.get(remoteP.id);
-                if (localP) {
-                    // Most recent wins
-                    if (remoteP.updatedAt > localP.updatedAt) {
-                        await this.fsProjectRepo.update(remoteP);
-                    } else if (localP.updatedAt > remoteP.updatedAt) {
-                        await this.supabaseProjectRepo.update(localP);
+                try {
+                    const localP = localProjectMap.get(remoteP.id);
+                    if (localP) {
+                        // Most recent wins
+                        if (
+                            remoteP.updatedAt.getTime() >
+                            localP.updatedAt.getTime()
+                        ) {
+                            await this.fsProjectRepo.update(remoteP);
+                        } else if (
+                            localP.updatedAt.getTime() >
+                            remoteP.updatedAt.getTime()
+                        ) {
+                            if (mode === "reconnect") {
+                                this.syncStateGateway?.notifyConflict({
+                                    entityType: "project",
+                                    entityId: remoteP.id,
+                                    projectId: remoteP.id,
+                                    entityName:
+                                        localP.title ||
+                                        remoteP.title ||
+                                        remoteP.id,
+                                    localUpdatedAt:
+                                        localP.updatedAt.toISOString(),
+                                    remoteUpdatedAt:
+                                        remoteP.updatedAt.toISOString(),
+                                });
+                            } else {
+                                await this.supabaseProjectRepo.update(localP);
+                            }
+                        }
+                    } else {
+                        // Remote-only project, save locally
+                        await this.fsProjectRepo.create(userId, remoteP);
                     }
-                } else {
-                    // Remote-only project, save locally
-                    await this.fsProjectRepo.create(userId, remoteP);
-                }
 
-                await this.syncProjectChildren(remoteP.id);
+                    await this.syncProjectChildren(remoteP.id, mode);
+                } catch (err) {
+                    console.error(
+                        `[SynchronizationService] Failed to sync project ${remoteP.id}`,
+                        err
+                    );
+                }
             }
 
             // Upload local-only projects
             for (const localP of localProjects) {
                 if (!remoteProjects.find((p) => p.id === localP.id)) {
                     await this.supabaseProjectRepo.create(userId, localP);
-                    await this.syncProjectChildren(localP.id);
+                    await this.syncProjectChildren(localP.id, mode);
                 }
             }
 
             console.log("[SynchronizationService] Sync complete");
-            this.syncStateGateway?.setLastSyncedAt(new Date());
+            this.lastSyncedAt = new Date();
+            this.syncStateGateway?.setLastSyncedAt(this.lastSyncedAt);
             this.isOnline = true;
             this.syncStateGateway?.setStatus("online");
         } catch (error) {
@@ -1197,6 +1277,13 @@ export class SynchronizationService extends EventEmitter {
             this.isSyncing = false;
             // Process any events that were queued during sync
             void this.processEventQueue();
+
+            // If we were asked to run a reconnect sync while syncing,
+            // do it now (after the current sync finished).
+            if (this.pendingReconnectSync && this.currentUserId) {
+                this.pendingReconnectSync = false;
+                void this.syncAll(this.currentUserId, "reconnect");
+            }
         }
     }
 
@@ -1247,23 +1334,40 @@ export class SynchronizationService extends EventEmitter {
             );
         } finally {
             this.isProcessingQueue = false;
+
+            // After a reconnect-safe sync, once we drain queued events,
+            // return to normal mode.
+            if (this.resetModeAfterQueue) {
+                this.resetModeAfterQueue = false;
+                this.activeSyncMode = "normal";
+            }
         }
     }
 
-    private async syncProjectChildren(projectId: string) {
-        await this.syncChapters(projectId);
-        await this.syncCharacters(projectId);
-        await this.syncLocations(projectId);
-        await this.syncOrganizations(projectId);
-        await this.syncScrapNotes(projectId);
-        await this.syncAssets(projectId);
+    private async syncProjectChildren(
+        projectId: string,
+        mode: "normal" | "reconnect"
+    ) {
+        await this.syncChapters(projectId, mode);
+        await this.syncCharacters(projectId, mode);
+        await this.syncLocations(projectId, mode);
+        await this.syncOrganizations(projectId, mode);
+        await this.syncScrapNotes(projectId, mode);
+        await this.syncAssets(projectId, mode);
     }
 
     // ========================================================================
     // ENTITY SYNC METHODS - All use "most recent wins" strategy
+    //
+    // IMPORTANT: On reconnect we MUST NOT auto-push "local newer" over remote.
+    // That behavior can silently stomp remote changes if local timestamps drift
+    // or were bumped by a previous save-loop. Instead, emit a conflict.
     // ========================================================================
 
-    private async syncChapters(projectId: string) {
+    private async syncChapters(
+        projectId: string,
+        mode: "normal" | "reconnect"
+    ) {
         const remote =
             await this.supabaseChapterRepo.findByProjectId(projectId);
         const local = await this.fsChapterRepo.findByProjectId(projectId);
@@ -1276,10 +1380,24 @@ export class SynchronizationService extends EventEmitter {
 
             const localC = localMap.get(remoteC.id);
             if (localC) {
-                if (remoteC.updatedAt > localC.updatedAt) {
+                if (remoteC.updatedAt.getTime() > localC.updatedAt.getTime()) {
                     await this.fsChapterRepo.update(remoteC);
-                } else if (localC.updatedAt > remoteC.updatedAt) {
-                    await this.supabaseChapterRepo.update(localC);
+                } else if (
+                    localC.updatedAt.getTime() > remoteC.updatedAt.getTime()
+                ) {
+                    if (mode === "reconnect") {
+                        this.syncStateGateway?.notifyConflict({
+                            entityType: "chapter",
+                            entityId: remoteC.id,
+                            projectId,
+                            entityName:
+                                localC.title || remoteC.title || remoteC.id,
+                            localUpdatedAt: localC.updatedAt.toISOString(),
+                            remoteUpdatedAt: remoteC.updatedAt.toISOString(),
+                        });
+                    } else {
+                        await this.supabaseChapterRepo.update(localC);
+                    }
                 }
             } else {
                 await this.fsChapterRepo.create(projectId, remoteC);
@@ -1294,7 +1412,10 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    private async syncCharacters(projectId: string) {
+    private async syncCharacters(
+        projectId: string,
+        mode: "normal" | "reconnect"
+    ) {
         const remote =
             await this.supabaseCharacterRepo.findByProjectId(projectId);
         const local = await this.fsCharacterRepo.findByProjectId(projectId);
@@ -1306,10 +1427,24 @@ export class SynchronizationService extends EventEmitter {
 
             const localC = localMap.get(remoteC.id);
             if (localC) {
-                if (remoteC.updatedAt > localC.updatedAt) {
+                if (remoteC.updatedAt.getTime() > localC.updatedAt.getTime()) {
                     await this.fsCharacterRepo.update(remoteC);
-                } else if (localC.updatedAt > remoteC.updatedAt) {
-                    await this.supabaseCharacterRepo.update(localC);
+                } else if (
+                    localC.updatedAt.getTime() > remoteC.updatedAt.getTime()
+                ) {
+                    if (mode === "reconnect") {
+                        this.syncStateGateway?.notifyConflict({
+                            entityType: "character",
+                            entityId: remoteC.id,
+                            projectId,
+                            entityName:
+                                localC.name || remoteC.name || remoteC.id,
+                            localUpdatedAt: localC.updatedAt.toISOString(),
+                            remoteUpdatedAt: remoteC.updatedAt.toISOString(),
+                        });
+                    } else {
+                        await this.supabaseCharacterRepo.update(localC);
+                    }
                 }
             } else {
                 await this.fsCharacterRepo.create(projectId, remoteC);
@@ -1323,7 +1458,10 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    private async syncLocations(projectId: string) {
+    private async syncLocations(
+        projectId: string,
+        mode: "normal" | "reconnect"
+    ) {
         const remote =
             await this.supabaseLocationRepo.findByProjectId(projectId);
         const local = await this.fsLocationRepo.findByProjectId(projectId);
@@ -1335,10 +1473,24 @@ export class SynchronizationService extends EventEmitter {
 
             const localL = localMap.get(remoteL.id);
             if (localL) {
-                if (remoteL.updatedAt > localL.updatedAt) {
+                if (remoteL.updatedAt.getTime() > localL.updatedAt.getTime()) {
                     await this.fsLocationRepo.update(remoteL);
-                } else if (localL.updatedAt > remoteL.updatedAt) {
-                    await this.supabaseLocationRepo.update(localL);
+                } else if (
+                    localL.updatedAt.getTime() > remoteL.updatedAt.getTime()
+                ) {
+                    if (mode === "reconnect") {
+                        this.syncStateGateway?.notifyConflict({
+                            entityType: "location",
+                            entityId: remoteL.id,
+                            projectId,
+                            entityName:
+                                localL.name || remoteL.name || remoteL.id,
+                            localUpdatedAt: localL.updatedAt.toISOString(),
+                            remoteUpdatedAt: remoteL.updatedAt.toISOString(),
+                        });
+                    } else {
+                        await this.supabaseLocationRepo.update(localL);
+                    }
                 }
             } else {
                 await this.fsLocationRepo.create(projectId, remoteL);
@@ -1352,7 +1504,10 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    private async syncOrganizations(projectId: string) {
+    private async syncOrganizations(
+        projectId: string,
+        mode: "normal" | "reconnect"
+    ) {
         const remote =
             await this.supabaseOrganizationRepo.findByProjectId(projectId);
         const local = await this.fsOrganizationRepo.findByProjectId(projectId);
@@ -1364,10 +1519,24 @@ export class SynchronizationService extends EventEmitter {
 
             const localO = localMap.get(remoteO.id);
             if (localO) {
-                if (remoteO.updatedAt > localO.updatedAt) {
+                if (remoteO.updatedAt.getTime() > localO.updatedAt.getTime()) {
                     await this.fsOrganizationRepo.update(remoteO);
-                } else if (localO.updatedAt > remoteO.updatedAt) {
-                    await this.supabaseOrganizationRepo.update(localO);
+                } else if (
+                    localO.updatedAt.getTime() > remoteO.updatedAt.getTime()
+                ) {
+                    if (mode === "reconnect") {
+                        this.syncStateGateway?.notifyConflict({
+                            entityType: "organization",
+                            entityId: remoteO.id,
+                            projectId,
+                            entityName:
+                                localO.name || remoteO.name || remoteO.id,
+                            localUpdatedAt: localO.updatedAt.toISOString(),
+                            remoteUpdatedAt: remoteO.updatedAt.toISOString(),
+                        });
+                    } else {
+                        await this.supabaseOrganizationRepo.update(localO);
+                    }
                 }
             } else {
                 await this.fsOrganizationRepo.create(projectId, remoteO);
@@ -1381,7 +1550,10 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    private async syncScrapNotes(projectId: string) {
+    private async syncScrapNotes(
+        projectId: string,
+        mode: "normal" | "reconnect"
+    ) {
         const remote =
             await this.supabaseScrapNoteRepo.findByProjectId(projectId);
         const local = await this.fsScrapNoteRepo.findByProjectId(projectId);
@@ -1393,10 +1565,23 @@ export class SynchronizationService extends EventEmitter {
 
             const localN = localMap.get(remoteN.id);
             if (localN) {
-                if (remoteN.updatedAt > localN.updatedAt) {
+                if (remoteN.updatedAt.getTime() > localN.updatedAt.getTime()) {
                     await this.fsScrapNoteRepo.update(remoteN);
-                } else if (localN.updatedAt > remoteN.updatedAt) {
-                    await this.supabaseScrapNoteRepo.update(localN);
+                } else if (
+                    localN.updatedAt.getTime() > remoteN.updatedAt.getTime()
+                ) {
+                    if (mode === "reconnect") {
+                        this.syncStateGateway?.notifyConflict({
+                            entityType: "scrapNote",
+                            entityId: remoteN.id,
+                            projectId,
+                            entityName: (localN as any).title || remoteN.id,
+                            localUpdatedAt: localN.updatedAt.toISOString(),
+                            remoteUpdatedAt: remoteN.updatedAt.toISOString(),
+                        });
+                    } else {
+                        await this.supabaseScrapNoteRepo.update(localN);
+                    }
                 }
             } else {
                 await this.fsScrapNoteRepo.create(projectId, remoteN);
@@ -1410,13 +1595,13 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    private async syncAssets(projectId: string) {
-        await this.syncImages(projectId);
-        await this.syncBGMs(projectId);
-        await this.syncPlaylists(projectId);
+    private async syncAssets(projectId: string, mode: "normal" | "reconnect") {
+        await this.syncImages(projectId, mode);
+        await this.syncBGMs(projectId, mode);
+        await this.syncPlaylists(projectId, mode);
     }
 
-    private async syncImages(projectId: string) {
+    private async syncImages(projectId: string, mode: "normal" | "reconnect") {
         const remote =
             await this.supabaseAssetRepo.findImagesByProjectId(projectId);
         const local = await this.fsAssetRepo.findImagesByProjectId(projectId);
@@ -1427,9 +1612,33 @@ export class SynchronizationService extends EventEmitter {
             if (await deletionLog.isDeleted(remoteImg.id)) continue;
 
             const localImg = localMap.get(remoteImg.id);
-            if (!localImg || remoteImg.updatedAt > localImg.updatedAt) {
-                await this.downloadAsset(remoteImg.storagePath);
-                await this.fsAssetRepo.saveImage(projectId, remoteImg);
+            if (!localImg) {
+                const success = await this.downloadAsset(remoteImg.storagePath);
+                if (success) {
+                    await this.fsAssetRepo.saveImage(projectId, remoteImg);
+                }
+                continue;
+            }
+
+            if (remoteImg.updatedAt.getTime() > localImg.updatedAt.getTime()) {
+                const success = await this.downloadAsset(remoteImg.storagePath);
+                if (success) {
+                    await this.fsAssetRepo.saveImage(projectId, remoteImg);
+                }
+                continue;
+            }
+
+            if (localImg.updatedAt.getTime() > remoteImg.updatedAt.getTime()) {
+                if (mode === "reconnect") {
+                    this.syncStateGateway?.notifyConflict({
+                        entityType: "image",
+                        entityId: remoteImg.id,
+                        projectId,
+                        entityName: remoteImg.id,
+                        localUpdatedAt: localImg.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteImg.updatedAt.toISOString(),
+                    });
+                }
             }
         }
 
@@ -1441,7 +1650,7 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    private async syncBGMs(projectId: string) {
+    private async syncBGMs(projectId: string, mode: "normal" | "reconnect") {
         const remote =
             await this.supabaseAssetRepo.findBGMByProjectId(projectId);
         const local = await this.fsAssetRepo.findBGMByProjectId(projectId);
@@ -1452,9 +1661,33 @@ export class SynchronizationService extends EventEmitter {
             if (await deletionLog.isDeleted(remoteBGM.id)) continue;
 
             const localBGM = localMap.get(remoteBGM.id);
-            if (!localBGM || remoteBGM.updatedAt > localBGM.updatedAt) {
-                await this.downloadAsset(remoteBGM.storagePath);
-                await this.fsAssetRepo.saveBGM(projectId, remoteBGM);
+            if (!localBGM) {
+                const success = await this.downloadAsset(remoteBGM.storagePath);
+                if (success) {
+                    await this.fsAssetRepo.saveBGM(projectId, remoteBGM);
+                }
+                continue;
+            }
+
+            if (remoteBGM.updatedAt.getTime() > localBGM.updatedAt.getTime()) {
+                const success = await this.downloadAsset(remoteBGM.storagePath);
+                if (success) {
+                    await this.fsAssetRepo.saveBGM(projectId, remoteBGM);
+                }
+                continue;
+            }
+
+            if (localBGM.updatedAt.getTime() > remoteBGM.updatedAt.getTime()) {
+                if (mode === "reconnect") {
+                    this.syncStateGateway?.notifyConflict({
+                        entityType: "bgm",
+                        entityId: remoteBGM.id,
+                        projectId,
+                        entityName: remoteBGM.id,
+                        localUpdatedAt: localBGM.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteBGM.updatedAt.toISOString(),
+                    });
+                }
             }
         }
 
@@ -1466,7 +1699,10 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
-    private async syncPlaylists(projectId: string) {
+    private async syncPlaylists(
+        projectId: string,
+        mode: "normal" | "reconnect"
+    ) {
         const remote =
             await this.supabaseAssetRepo.findPlaylistsByProjectId(projectId);
         const local =
@@ -1478,14 +1714,63 @@ export class SynchronizationService extends EventEmitter {
             if (await deletionLog.isDeleted(remotePlaylist.id)) continue;
 
             const localPlaylist = localMap.get(remotePlaylist.id);
+            if (!localPlaylist) {
+                if (remotePlaylist.storagePath) {
+                    const success = await this.downloadAsset(
+                        remotePlaylist.storagePath
+                    );
+                    if (success) {
+                        await this.fsAssetRepo.savePlaylist(
+                            projectId,
+                            remotePlaylist
+                        );
+                    }
+                } else {
+                    await this.fsAssetRepo.savePlaylist(
+                        projectId,
+                        remotePlaylist
+                    );
+                }
+                continue;
+            }
+
             if (
-                !localPlaylist ||
-                remotePlaylist.updatedAt > localPlaylist.updatedAt
+                remotePlaylist.updatedAt.getTime() >
+                localPlaylist.updatedAt.getTime()
             ) {
                 if (remotePlaylist.storagePath) {
-                    await this.downloadAsset(remotePlaylist.storagePath);
+                    const success = await this.downloadAsset(
+                        remotePlaylist.storagePath
+                    );
+                    if (success) {
+                        await this.fsAssetRepo.savePlaylist(
+                            projectId,
+                            remotePlaylist
+                        );
+                    }
+                } else {
+                    await this.fsAssetRepo.savePlaylist(
+                        projectId,
+                        remotePlaylist
+                    );
                 }
-                await this.fsAssetRepo.savePlaylist(projectId, remotePlaylist);
+                continue;
+            }
+
+            if (
+                localPlaylist.updatedAt.getTime() >
+                remotePlaylist.updatedAt.getTime()
+            ) {
+                if (mode === "reconnect") {
+                    this.syncStateGateway?.notifyConflict({
+                        entityType: "playlist",
+                        entityId: remotePlaylist.id,
+                        projectId,
+                        entityName: remotePlaylist.name || remotePlaylist.id,
+                        localUpdatedAt: localPlaylist.updatedAt.toISOString(),
+                        remoteUpdatedAt: remotePlaylist.updatedAt.toISOString(),
+                    });
+                }
             }
         }
 
@@ -1849,8 +2134,8 @@ export class SynchronizationService extends EventEmitter {
             .upload(storagePath, buffer, { upsert: true });
     }
 
-    private async downloadAsset(storagePath: string): Promise<void> {
-        if (!storagePath) return;
+    private async downloadAsset(storagePath: string): Promise<boolean> {
+        if (!storagePath) return false;
 
         const localPath = path.join("assets", storagePath);
         const client = SupabaseService.getClient();
@@ -1862,6 +2147,8 @@ export class SynchronizationService extends EventEmitter {
         if (!error && data) {
             const buffer = await data.arrayBuffer();
             await fileSystemService.writeFile(localPath, Buffer.from(buffer));
+            return true;
         }
+        return false;
     }
 }

@@ -49,6 +49,10 @@ export class MoveChapter {
             throw new Error("Target index exceeds the number of chapters.");
         }
 
+        if (currentIndex === targetIndex) {
+            return { chapters };
+        }
+
         const [chapter] = chapters.splice(currentIndex, 1);
         chapters.splice(targetIndex, 0, chapter);
 

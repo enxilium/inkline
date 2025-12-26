@@ -24,6 +24,10 @@ export class RenameChapter {
             throw new Error("Chapter not found for this project.");
         }
 
+        if (chapter.title === title) {
+            return;
+        }
+
         chapter.title = title;
         chapter.updatedAt = new Date();
         await this.chapterRepository.update(chapter);

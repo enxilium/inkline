@@ -37,18 +37,31 @@ export class SaveManuscriptStructure {
         );
 
         const now = new Date();
+        let hasChanges = false;
+
         await Promise.all(
             normalizedOrder.map(async (chapterId, index) => {
                 const chapter = chapterMap.get(chapterId)!;
-                chapter.order = index;
-                chapter.updatedAt = now;
-                await this.chapterRepository.update(chapter);
+                if (chapter.order !== index) {
+                    chapter.order = index;
+                    chapter.updatedAt = now;
+                    await this.chapterRepository.update(chapter);
+                    hasChanges = true;
+                }
             })
         );
 
-        project.chapterIds = [...normalizedOrder];
-        project.updatedAt = now;
-        await this.projectRepository.update(project);
+        // Check if project structure actually changed
+        const currentProjectOrder = project.chapterIds || [];
+        const isProjectOrderChanged =
+            currentProjectOrder.length !== normalizedOrder.length ||
+            currentProjectOrder.some((id, i) => id !== normalizedOrder[i]);
+
+        if (hasChanges || isProjectOrderChanged) {
+            project.chapterIds = [...normalizedOrder];
+            project.updatedAt = now;
+            await this.projectRepository.update(project);
+        }
     }
 
     private validateChapterOrdering(

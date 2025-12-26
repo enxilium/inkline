@@ -31,24 +31,54 @@ export class SaveOrganizationInfo {
             throw new Error("Organization not found for this project.");
         }
 
-        if (payload.name !== undefined) organization.name = payload.name;
-        if (payload.description !== undefined)
+        let hasChanges = false;
+
+        if (payload.name !== undefined && organization.name !== payload.name) {
+            organization.name = payload.name;
+            hasChanges = true;
+        }
+        if (
+            payload.description !== undefined &&
+            organization.description !== payload.description
+        ) {
             organization.description = payload.description;
-        if (payload.mission !== undefined)
+            hasChanges = true;
+        }
+        if (
+            payload.mission !== undefined &&
+            organization.mission !== payload.mission
+        ) {
             organization.mission = payload.mission;
-        if (payload.tags !== undefined) organization.tags = payload.tags;
+            hasChanges = true;
+        }
+        if (
+            payload.tags !== undefined &&
+            JSON.stringify(organization.tags) !== JSON.stringify(payload.tags)
+        ) {
+            organization.tags = payload.tags;
+            hasChanges = true;
+        }
 
         const previousLocationIds = [...organization.locationIds];
         let nextLocationIds: string[] | null = null;
+
         if (payload.locationIds !== undefined) {
             nextLocationIds = await this.validateLocationIds(
                 payload.locationIds
             );
-            organization.locationIds = nextLocationIds;
+            if (
+                JSON.stringify(organization.locationIds) !==
+                JSON.stringify(nextLocationIds)
+            ) {
+                organization.locationIds = nextLocationIds;
+                hasChanges = true;
+            }
         }
 
-        organization.updatedAt = new Date();
-        await this.organizationRepository.update(organization);
+        if (hasChanges) {
+            organization.updatedAt = new Date();
+            await this.organizationRepository.update(organization);
+        }
 
         if (nextLocationIds !== null) {
             await this.syncLocationCaches(

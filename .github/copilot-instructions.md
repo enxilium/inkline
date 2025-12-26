@@ -156,3 +156,5 @@ src/
 6.  **Renderer**:
     - Add wrapper function to appStore. 
     - Call appStore wrapper function from a React component or Zustand action.
+
+At the end of every step, always run npx tsc to ensure type safety and correctness.

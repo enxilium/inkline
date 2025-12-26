@@ -41,13 +41,26 @@ export class SaveUserSettings {
             throw new Error("Editor font size must be greater than zero.");
         }
 
-        user.preferences = updatedPreferences;
-        user.updatedAt = new Date();
-        await this.userRepository.update(user);
+        // Check if anything actually changed
+        const hasChanges =
+            user.preferences.theme !== updatedPreferences.theme ||
+            user.preferences.editorFontSize !==
+                updatedPreferences.editorFontSize ||
+            user.preferences.editorFontFamily !==
+                updatedPreferences.editorFontFamily ||
+            user.preferences.defaultImageAiModel !==
+                updatedPreferences.defaultImageAiModel ||
+            user.preferences.geminiApiKey !== updatedPreferences.geminiApiKey;
 
-        const storedUser = await this.sessionStore.load();
-        if (storedUser?.id === user.id) {
-            await this.sessionStore.save(user);
+        if (hasChanges) {
+            user.preferences = updatedPreferences;
+            user.updatedAt = new Date();
+            await this.userRepository.update(user);
+
+            const storedUser = await this.sessionStore.load();
+            if (storedUser?.id === user.id) {
+                await this.sessionStore.save(user);
+            }
         }
     }
 }
