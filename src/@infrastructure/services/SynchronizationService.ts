@@ -940,18 +940,18 @@ export class SynchronizationService extends EventEmitter {
             );
         } else {
             // keep-local: push local version to remote
-            await this.pushLocalToRemoteAndReturn(
+            // Force update timestamp to ensure local version is treated as newer
+            // and to avoid "moving clock backwards" if remote was newer.
+            entity = await this.pushLocalToRemoteAndReturn(
                 entityType,
                 entityId,
-                projectId
+                projectId,
+                true // forceUpdateTimestamp
             );
 
-            // Refresh from remote to converge timestamps and avoid re-prompting.
-            entity = await this.syncSingleEntityAndReturn(
-                entityType,
-                entityId,
-                projectId
-            );
+            // We do NOT fetch from remote here anymore, because we just pushed our version
+            // and we want to avoid race conditions where we fetch a stale or conflicting version.
+            // We trust that pushLocalToRemoteAndReturn updated the local timestamp and pushed it.
         }
 
         // Notify the renderer with the resolved entity
@@ -971,12 +971,17 @@ export class SynchronizationService extends EventEmitter {
     private async pushLocalToRemoteAndReturn(
         type: EntityType,
         id: string,
-        projectId: string
+        projectId: string,
+        forceUpdateTimestamp: boolean = false
     ): Promise<unknown | null> {
         switch (type) {
             case "chapter": {
                 const chapter = await this.fsChapterRepo.findById(id);
                 if (chapter) {
+                    if (forceUpdateTimestamp) {
+                        chapter.updatedAt = new Date();
+                        await this.fsChapterRepo.update(chapter);
+                    }
                     await this.supabaseChapterRepo.update(chapter);
                     return chapter;
                 }
@@ -985,6 +990,10 @@ export class SynchronizationService extends EventEmitter {
             case "character": {
                 const character = await this.fsCharacterRepo.findById(id);
                 if (character) {
+                    if (forceUpdateTimestamp) {
+                        character.updatedAt = new Date();
+                        await this.fsCharacterRepo.update(character);
+                    }
                     await this.supabaseCharacterRepo.update(character);
                     return character;
                 }
@@ -993,6 +1002,10 @@ export class SynchronizationService extends EventEmitter {
             case "location": {
                 const location = await this.fsLocationRepo.findById(id);
                 if (location) {
+                    if (forceUpdateTimestamp) {
+                        location.updatedAt = new Date();
+                        await this.fsLocationRepo.update(location);
+                    }
                     await this.supabaseLocationRepo.update(location);
                     return location;
                 }
@@ -1001,6 +1014,10 @@ export class SynchronizationService extends EventEmitter {
             case "organization": {
                 const organization = await this.fsOrganizationRepo.findById(id);
                 if (organization) {
+                    if (forceUpdateTimestamp) {
+                        organization.updatedAt = new Date();
+                        await this.fsOrganizationRepo.update(organization);
+                    }
                     await this.supabaseOrganizationRepo.update(organization);
                     return organization;
                 }
@@ -1009,6 +1026,10 @@ export class SynchronizationService extends EventEmitter {
             case "scrapNote": {
                 const scrapNote = await this.fsScrapNoteRepo.findById(id);
                 if (scrapNote) {
+                    if (forceUpdateTimestamp) {
+                        scrapNote.updatedAt = new Date();
+                        await this.fsScrapNoteRepo.update(scrapNote);
+                    }
                     await this.supabaseScrapNoteRepo.update(scrapNote);
                     return scrapNote;
                 }
@@ -1017,6 +1038,10 @@ export class SynchronizationService extends EventEmitter {
             case "image": {
                 const image = await this.fsAssetRepo.findImageById(id);
                 if (image) {
+                    if (forceUpdateTimestamp) {
+                        image.updatedAt = new Date();
+                        await this.fsAssetRepo.saveImage(projectId, image);
+                    }
                     await this.uploadAsset(image.storagePath);
                     await this.supabaseAssetRepo.saveImage(projectId, image);
                     return image;
@@ -1026,6 +1051,10 @@ export class SynchronizationService extends EventEmitter {
             case "bgm": {
                 const bgm = await this.fsAssetRepo.findBGMById(id);
                 if (bgm) {
+                    if (forceUpdateTimestamp) {
+                        bgm.updatedAt = new Date();
+                        await this.fsAssetRepo.saveBGM(projectId, bgm);
+                    }
                     await this.uploadAsset(bgm.storagePath);
                     await this.supabaseAssetRepo.saveBGM(projectId, bgm);
                     return bgm;
@@ -1035,6 +1064,13 @@ export class SynchronizationService extends EventEmitter {
             case "playlist": {
                 const playlist = await this.fsAssetRepo.findPlaylistById(id);
                 if (playlist) {
+                    if (forceUpdateTimestamp) {
+                        playlist.updatedAt = new Date();
+                        await this.fsAssetRepo.savePlaylist(
+                            projectId,
+                            playlist
+                        );
+                    }
                     if (playlist.storagePath)
                         await this.uploadAsset(playlist.storagePath);
                     await this.supabaseAssetRepo.savePlaylist(
