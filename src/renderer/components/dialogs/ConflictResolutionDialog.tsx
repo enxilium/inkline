@@ -47,35 +47,39 @@ export const ConflictResolutionDialog: React.FC = () => {
     const { pendingConflict, resolveConflict } = useAppStore();
     const [isResolving, setIsResolving] = React.useState(false);
 
-    if (!pendingConflict) {
-        return null;
-    }
+    // Handler that does nothing - dialog can only be closed by resolving
+    // NOTE: Must be declared before any early returns to satisfy React hooks rules
+    const handleOpenChange = React.useCallback((open: boolean) => {
+        // Prevent closing without resolution
+        if (!open) return;
+    }, []);
 
-    const handleAcceptRemote = async () => {
+    const handleAcceptRemote = React.useCallback(async () => {
+        if (!pendingConflict) return;
         setIsResolving(true);
         try {
             await resolveConflict("accept-remote");
         } finally {
             setIsResolving(false);
         }
-    };
+    }, [pendingConflict, resolveConflict]);
 
-    const handleKeepLocal = async () => {
+    const handleKeepLocal = React.useCallback(async () => {
+        if (!pendingConflict) return;
         setIsResolving(true);
         try {
             await resolveConflict("keep-local");
         } finally {
             setIsResolving(false);
         }
-    };
+    }, [pendingConflict, resolveConflict]);
+
+    // Early return AFTER all hooks
+    if (!pendingConflict) {
+        return null;
+    }
 
     const entityTypeLabel = getEntityTypeLabel(pendingConflict.entityType);
-
-    // Handler that does nothing - dialog can only be closed by resolving
-    const handleOpenChange = React.useCallback((open: boolean) => {
-        // Prevent closing without resolution
-        if (!open) return;
-    }, []);
 
     return (
         <Dialog open={true} onOpenChange={handleOpenChange}>
