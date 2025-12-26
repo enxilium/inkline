@@ -80,6 +80,19 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
     async deleteImage(id: string): Promise<void> {
         const projectId = await this.getAssetProjectId(id);
 
+        // Best-effort: remove local downloaded binary if present
+        try {
+            const local = await this.fsRepo.findImageById(id);
+            if (local?.storagePath) {
+                const localPath = path.join("assets", local.storagePath);
+                if (await fileSystemService.exists(localPath)) {
+                    await fileSystemService.deleteFile(localPath);
+                }
+            }
+        } catch {
+            // ignore
+        }
+
         await this.fsRepo.deleteImage(id);
         await deletionLog.add({
             entityType: "image",
@@ -188,6 +201,19 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
     async deleteBGM(id: string): Promise<void> {
         const projectId = await this.getAssetProjectId(id);
 
+        // Best-effort: remove local downloaded binary if present
+        try {
+            const local = await this.fsRepo.findBGMById(id);
+            if (local?.storagePath) {
+                const localPath = path.join("assets", local.storagePath);
+                if (await fileSystemService.exists(localPath)) {
+                    await fileSystemService.deleteFile(localPath);
+                }
+            }
+        } catch {
+            // ignore
+        }
+
         await this.fsRepo.deleteBGM(id);
         await deletionLog.add({
             entityType: "bgm",
@@ -281,6 +307,20 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
 
     async deletePlaylist(id: string): Promise<void> {
         const projectId = await this.getAssetProjectId(id);
+
+        // Best-effort: remove local downloaded binary if present
+        // (Playlists may or may not have a storagePath depending on implementation.)
+        try {
+            const local = await this.fsRepo.findPlaylistById(id);
+            if (local?.storagePath) {
+                const localPath = path.join("assets", local.storagePath);
+                if (await fileSystemService.exists(localPath)) {
+                    await fileSystemService.deleteFile(localPath);
+                }
+            }
+        } catch {
+            // ignore
+        }
 
         await this.fsRepo.deletePlaylist(id);
         await deletionLog.add({

@@ -77,7 +77,10 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
     async updateContent(chapterId: string, content: string): Promise<void> {
         await this.fsRepo.updateContent(chapterId, content);
         try {
-            await this.supabaseRepo.updateContent(chapterId, content);
+            const local = await this.fsRepo.findById(chapterId);
+            if (local) {
+                await this.supabaseRepo.update(local);
+            }
         } catch (error) {
             console.warn(
                 "Failed to update chapter content in Supabase (Offline?)",

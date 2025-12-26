@@ -110,7 +110,7 @@ export class SupabaseLocationRepository implements ILocationRepository {
                 gallery_image_ids: location.galleryImageIds,
                 character_ids: location.characterIds,
                 organization_ids: location.organizationIds,
-                updated_at: new Date().toISOString(),
+                updated_at: location.updatedAt.toISOString(),
             })
             .eq("id", location.id);
 

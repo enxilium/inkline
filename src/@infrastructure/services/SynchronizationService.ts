@@ -50,7 +50,9 @@ type QueuedRealtimeEvent = {
  *
  * Conflict Resolution Strategy: "Most Recent Wins"
  * - When syncing, the entity with the most recent updatedAt timestamp is used as the source of truth.
- * - If user has local changes newer than remote, a conflict dialog is shown
+ * - For realtime remote changes:
+ *   - If cloud is newer than local, always prompt the user
+ *   - If local is newer than cloud, immediately overwrite cloud
  *
  * Deletion Handling:
  * - Deletions are tracked in a local deletion log when offline.
@@ -309,8 +311,7 @@ export class SynchronizationService extends EventEmitter {
         assetType?: string;
     } {
         return {
-            projectId:
-                (record.project_id as string) || (record.id as string) || "",
+            projectId: (record.project_id as string) || "",
             entityId: (record.id as string) || "",
             updatedAt:
                 (record.updated_at as string) || new Date().toISOString(),
@@ -318,21 +319,87 @@ export class SynchronizationService extends EventEmitter {
         };
     }
 
-    private handleRealtimeChange(
-        entityType: SyncEntityType,
-        payload: RealtimePostgresChangesPayload<Record<string, unknown>>
-    ): void {
-        const record = (payload.new || payload.old) as
-            | Record<string, unknown>
-            | undefined;
-        if (!record) return;
+    private getTableNameForEntityType(
+        entityType: SyncEntityType
+    ): string | null {
+        switch (entityType) {
+            case "project":
+                return "projects";
+            case "chapter":
+                return "chapters";
+            case "character":
+                return "characters";
+            case "location":
+                return "locations";
+            case "organization":
+                return "organizations";
+            case "scrapNote":
+                return "scrap_notes";
+            case "image":
+            case "bgm":
+            case "playlist":
+                return "assets";
+            default:
+                return null;
+        }
+    }
 
-        const { projectId, entityId, updatedAt } =
-            this.extractRecordFields(record);
+    private async lookupProjectIdForEntity(
+        entityType: SyncEntityType,
+        entityId: string
+    ): Promise<string | null> {
+        const tableName = this.getTableNameForEntityType(entityType);
+        if (!tableName || tableName === "projects") return null;
+
+        const client = SupabaseService.getClient();
+        const { data, error } = await client
+            .from(tableName)
+            .select("project_id")
+            .eq("id", entityId)
+            .maybeSingle();
+
+        if (error) {
+            console.warn(
+                `[SynchronizationService] Failed to lookup project_id for ${entityType} ${entityId}`,
+                error
+            );
+            return null;
+        }
+
+        const projectId = (data as { project_id?: string } | null)?.project_id;
+        return projectId || null;
+    }
+
+    private async lookupAssetType(entityId: string): Promise<string | null> {
+        const client = SupabaseService.getClient();
+        const { data, error } = await client
+            .from("assets")
+            .select("type")
+            .eq("id", entityId)
+            .maybeSingle();
+
+        if (error) {
+            console.warn(
+                `[SynchronizationService] Failed to lookup asset type for asset ${entityId}`,
+                error
+            );
+            return null;
+        }
+
+        const assetType = (data as { type?: string } | null)?.type;
+        return assetType || null;
+    }
+
+    private handleRealtimeChangeResolved(
+        entityType: SyncEntityType,
+        payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
+        resolved: { projectId: string; entityId: string; updatedAt: string }
+    ): void {
+        const { projectId, entityId, updatedAt } = resolved;
 
         // Filter out changes for projects we don't own (security filter)
         // Projects table is already filtered by user_id in the subscription,
-        // but child entities need client-side filtering
+        // but child entities need client-side filtering (we rely on projectId)
         if (entityType !== "project" && !this.userProjectIds.has(projectId)) {
             // If the cache isn't ready yet (startup / initial sync), don't drop events.
             if (this.userProjectIds.size === 0) {
@@ -401,6 +468,52 @@ export class SynchronizationService extends EventEmitter {
         }
     }
 
+    private handleRealtimeChange(
+        entityType: SyncEntityType,
+        payload: RealtimePostgresChangesPayload<Record<string, unknown>>
+    ): void {
+        const record = (payload.new || payload.old) as
+            | Record<string, unknown>
+            | undefined;
+        if (!record) return;
+
+        const { projectId, entityId, updatedAt } =
+            this.extractRecordFields(record);
+
+        // For UPDATE events, some columns (like project_id) may not be present in the payload.
+        // If projectId is missing for child entities, resolve it before filtering/emitting.
+        if (
+            entityType !== "project" &&
+            (!projectId || projectId.length === 0)
+        ) {
+            void (async () => {
+                const resolvedProjectId =
+                    (await this.lookupProjectIdForEntity(
+                        entityType,
+                        entityId
+                    )) || "";
+                if (!resolvedProjectId) {
+                    console.warn(
+                        `[SynchronizationService] Realtime payload missing project_id; cannot process ${entityType} ${payload.eventType} ${entityId}`
+                    );
+                    return;
+                }
+                this.handleRealtimeChangeResolved(entityType, payload, {
+                    projectId: resolvedProjectId,
+                    entityId,
+                    updatedAt,
+                });
+            })();
+            return;
+        }
+
+        this.handleRealtimeChangeResolved(entityType, payload, {
+            projectId,
+            entityId,
+            updatedAt,
+        });
+    }
+
     private handleAssetRealtimeChange(
         payload: RealtimePostgresChangesPayload<Record<string, unknown>>
     ): void {
@@ -409,8 +522,47 @@ export class SynchronizationService extends EventEmitter {
             | undefined;
         if (!record) return;
 
-        const { assetType } = this.extractRecordFields(record);
-        if (!assetType) return;
+        const { assetType, entityId, updatedAt, projectId } =
+            this.extractRecordFields(record);
+
+        // Asset updates may omit `type` and/or `project_id` in the payload. Resolve if needed.
+        if (!assetType) {
+            void (async () => {
+                const resolvedAssetType = await this.lookupAssetType(entityId);
+                if (!resolvedAssetType) return;
+
+                let resolvedEntityType: SyncEntityType;
+                switch (resolvedAssetType) {
+                    case "image":
+                        resolvedEntityType = "image";
+                        break;
+                    case "bgm":
+                        resolvedEntityType = "bgm";
+                        break;
+                    case "playlist":
+                        resolvedEntityType = "playlist";
+                        break;
+                    default:
+                        return;
+                }
+
+                const resolvedProjectId =
+                    projectId ||
+                    (await this.lookupProjectIdForEntity(
+                        resolvedEntityType,
+                        entityId
+                    )) ||
+                    "";
+                if (!resolvedProjectId) return;
+
+                this.handleRealtimeChangeResolved(resolvedEntityType, payload, {
+                    projectId: resolvedProjectId,
+                    entityId,
+                    updatedAt,
+                });
+            })();
+            return;
+        }
 
         let entityType: SyncEntityType;
 
@@ -428,7 +580,26 @@ export class SynchronizationService extends EventEmitter {
                 return; // Unknown asset type
         }
 
-        this.handleRealtimeChange(entityType, payload);
+        if (projectId && projectId.length > 0) {
+            this.handleRealtimeChangeResolved(entityType, payload, {
+                projectId,
+                entityId,
+                updatedAt,
+            });
+            return;
+        }
+
+        void (async () => {
+            const resolvedProjectId =
+                (await this.lookupProjectIdForEntity(entityType, entityId)) ||
+                "";
+            if (!resolvedProjectId) return;
+            this.handleRealtimeChangeResolved(entityType, payload, {
+                projectId: resolvedProjectId,
+                entityId,
+                updatedAt,
+            });
+        })();
     }
 
     private async handleRemoteEntityChange(
@@ -495,8 +666,9 @@ export class SynchronizationService extends EventEmitter {
 
             if (!remoteUpdatedAt) return;
 
-            // If no local version or remote is newer, update local and notify
-            if (!localUpdatedAt || remoteUpdatedAt > localUpdatedAt) {
+            // If the entity doesn't exist locally yet, just pull it down.
+            // (No "keep-local" option is meaningful when we have no local copy.)
+            if (!localUpdatedAt) {
                 const entity = await this.syncSingleEntityAndReturn(
                     entityType as EntityType,
                     entityId,
@@ -510,10 +682,11 @@ export class SynchronizationService extends EventEmitter {
                         data: entity,
                     });
                 }
-            } else if (localUpdatedAt > remoteUpdatedAt) {
-                // Local is newer - this is a conflict scenario
-                // The user on this device made changes while another device pushed to DB
-                // We notify the user via the gateway
+                return;
+            }
+
+            // Cloud is newer: ALWAYS prompt user which version to keep.
+            if (remoteUpdatedAt > localUpdatedAt) {
                 const entityName = await this.getEntityName(
                     entityType as EntityType,
                     entityId
@@ -526,6 +699,32 @@ export class SynchronizationService extends EventEmitter {
                     localUpdatedAt: localUpdatedAt.toISOString(),
                     remoteUpdatedAt: remoteUpdatedAt.toISOString(),
                 });
+                return;
+            }
+
+            // Local is newer: immediately overwrite cloud.
+            if (localUpdatedAt > remoteUpdatedAt) {
+                await this.pushLocalToRemoteAndReturn(
+                    entityType as EntityType,
+                    entityId,
+                    projectId
+                );
+
+                // Refresh local from remote after push so timestamps converge
+                // and we don't re-prompt on our own write.
+                const refreshed = await this.syncSingleEntityAndReturn(
+                    entityType as EntityType,
+                    entityId,
+                    projectId
+                );
+                if (refreshed) {
+                    this.syncStateGateway?.notifyEntityUpdated({
+                        entityType,
+                        entityId,
+                        projectId,
+                        data: refreshed,
+                    });
+                }
             }
         } catch (error) {
             console.error(
@@ -741,7 +940,14 @@ export class SynchronizationService extends EventEmitter {
             );
         } else {
             // keep-local: push local version to remote
-            entity = await this.pushLocalToRemoteAndReturn(
+            await this.pushLocalToRemoteAndReturn(
+                entityType,
+                entityId,
+                projectId
+            );
+
+            // Refresh from remote to converge timestamps and avoid re-prompting.
+            entity = await this.syncSingleEntityAndReturn(
                 entityType,
                 entityId,
                 projectId
@@ -1444,12 +1650,15 @@ export class SynchronizationService extends EventEmitter {
                 await this.supabaseScrapNoteRepo.delete(id);
                 break;
             case "image":
+                await this.deleteRemoteAssetFile(type, id);
                 await this.supabaseAssetRepo.deleteImage(id);
                 break;
             case "bgm":
+                await this.deleteRemoteAssetFile(type, id);
                 await this.supabaseAssetRepo.deleteBGM(id);
                 break;
             case "playlist":
+                await this.deleteRemoteAssetFile(type, id);
                 await this.supabaseAssetRepo.deletePlaylist(id);
                 break;
         }
@@ -1476,14 +1685,112 @@ export class SynchronizationService extends EventEmitter {
                 await this.fsScrapNoteRepo.delete(id);
                 break;
             case "image":
+                await this.deleteLocalAssetFile(type, id);
                 await this.fsAssetRepo.deleteImage(id);
                 break;
             case "bgm":
+                await this.deleteLocalAssetFile(type, id);
                 await this.fsAssetRepo.deleteBGM(id);
                 break;
             case "playlist":
+                await this.deleteLocalAssetFile(type, id);
                 await this.fsAssetRepo.deletePlaylist(id);
                 break;
+        }
+    }
+
+    // ========================================================================
+    // ASSET DELETE HELPERS (avoid orphaned storage objects / local binaries)
+    // ========================================================================
+
+    private extractStorageObjectPath(pathOrUrl: string): string | null {
+        if (!pathOrUrl) return null;
+        if (!pathOrUrl.startsWith("http")) {
+            return pathOrUrl.replace(/^\/+/, "");
+        }
+
+        const match = pathOrUrl.match(
+            /\/storage\/v1\/object\/public\/[^/]+\/(.*)$/
+        );
+        if (match && match[1]) {
+            return match[1];
+        }
+
+        return null;
+    }
+
+    private async deleteRemoteAssetFile(
+        type: "image" | "bgm" | "playlist",
+        id: string
+    ): Promise<void> {
+        try {
+            let storagePath: string | null = null;
+            let url: string | null = null;
+
+            if (type === "image") {
+                const image = await this.supabaseAssetRepo.findImageById(id);
+                storagePath = image?.storagePath ?? null;
+                url = image?.url ?? null;
+            } else if (type === "bgm") {
+                const bgm = await this.supabaseAssetRepo.findBGMById(id);
+                storagePath = bgm?.storagePath ?? null;
+                url = bgm?.url ?? null;
+            } else {
+                const playlist =
+                    await this.supabaseAssetRepo.findPlaylistById(id);
+                storagePath = playlist?.storagePath ?? null;
+                url = playlist?.url ?? null;
+            }
+
+            const objectPath = this.extractStorageObjectPath(
+                (storagePath || url || "").trim()
+            );
+            if (!objectPath) return;
+
+            const client = SupabaseService.getClient();
+            const { error } = await client.storage
+                .from("inkline-assets")
+                .remove([objectPath]);
+            if (error) {
+                console.warn(
+                    `[SynchronizationService] Failed to delete remote asset object ${objectPath}`,
+                    error
+                );
+            }
+        } catch (error) {
+            console.warn(
+                `[SynchronizationService] Failed to delete remote asset file for ${type}:${id}`,
+                error
+            );
+        }
+    }
+
+    private async deleteLocalAssetFile(
+        type: "image" | "bgm" | "playlist",
+        id: string
+    ): Promise<void> {
+        try {
+            let storagePath: string | null = null;
+
+            if (type === "image") {
+                const image = await this.fsAssetRepo.findImageById(id);
+                storagePath = image?.storagePath ?? null;
+            } else if (type === "bgm") {
+                const bgm = await this.fsAssetRepo.findBGMById(id);
+                storagePath = bgm?.storagePath ?? null;
+            } else {
+                const playlist = await this.fsAssetRepo.findPlaylistById(id);
+                storagePath = playlist?.storagePath ?? null;
+            }
+
+            if (!storagePath) return;
+
+            const localPath = path.join("assets", storagePath);
+            if (await fileSystemService.exists(localPath)) {
+                await fileSystemService.deleteFile(localPath);
+            }
+        } catch {
+            // best-effort cleanup
         }
     }
 

@@ -77,7 +77,10 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
     async updateContent(noteId: string, content: string): Promise<void> {
         await this.fsRepo.updateContent(noteId, content);
         try {
-            await this.supabaseRepo.updateContent(noteId, content);
+            const local = await this.fsRepo.findById(noteId);
+            if (local) {
+                await this.supabaseRepo.update(local);
+            }
         } catch (error) {
             console.warn(
                 "Failed to update scrap note content in Supabase (Offline?)",
