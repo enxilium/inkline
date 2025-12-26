@@ -32,22 +32,29 @@ export class UpdateScrapNote {
             throw new Error("Scrap note not found for this project.");
         }
 
-        if (title !== undefined) {
+        let hasChanges = false;
+
+        if (title !== undefined && scrapNote.title !== title) {
             if (!title.trim()) {
                 throw new Error("Scrap note title cannot be empty.");
             }
             scrapNote.title = title;
+            hasChanges = true;
         }
 
-        if (content !== undefined) {
+        if (content !== undefined && scrapNote.content !== content) {
             scrapNote.content = content;
+            hasChanges = true;
         }
 
-        if (isPinned !== undefined) {
+        if (isPinned !== undefined && scrapNote.isPinned !== isPinned) {
             scrapNote.isPinned = isPinned;
+            hasChanges = true;
         }
 
-        scrapNote.updatedAt = new Date();
-        await this.scrapNoteRepository.update(scrapNote);
+        if (hasChanges) {
+            scrapNote.updatedAt = new Date();
+            await this.scrapNoteRepository.update(scrapNote);
+        }
     }
 }

@@ -36,7 +36,24 @@ export class SaveLocationInfo {
             location.conflicts = payload.conflicts;
         if (payload.tags !== undefined) location.tags = payload.tags;
 
-        location.updatedAt = new Date();
-        await this.locationRepository.update(location);
+        // Check if anything actually changed
+        const hasChanges =
+            (payload.name !== undefined && location.name !== payload.name) ||
+            (payload.description !== undefined &&
+                location.description !== payload.description) ||
+            (payload.culture !== undefined &&
+                location.culture !== payload.culture) ||
+            (payload.history !== undefined &&
+                location.history !== payload.history) ||
+            (payload.conflicts !== undefined &&
+                JSON.stringify(location.conflicts) !==
+                    JSON.stringify(payload.conflicts)) ||
+            (payload.tags !== undefined &&
+                JSON.stringify(location.tags) !== JSON.stringify(payload.tags));
+
+        if (hasChanges) {
+            location.updatedAt = new Date();
+            await this.locationRepository.update(location);
+        }
     }
 }

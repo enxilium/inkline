@@ -69,8 +69,37 @@ export class SaveCharacterInfo {
             );
         }
 
-        character.updatedAt = new Date();
-        await this.characterRepository.update(character);
+        // Check if anything actually changed
+        const hasChanges =
+            (payload.name !== undefined && character.name !== payload.name) ||
+            (payload.race !== undefined && character.race !== payload.race) ||
+            (payload.age !== undefined && character.age !== payload.age) ||
+            (payload.description !== undefined &&
+                character.description !== payload.description) ||
+            (payload.traits !== undefined &&
+                JSON.stringify(character.traits) !==
+                    JSON.stringify(payload.traits)) ||
+            (payload.goals !== undefined &&
+                JSON.stringify(character.goals) !==
+                    JSON.stringify(payload.goals)) ||
+            (payload.secrets !== undefined &&
+                JSON.stringify(character.secrets) !==
+                    JSON.stringify(payload.secrets)) ||
+            (payload.tags !== undefined &&
+                JSON.stringify(character.tags) !==
+                    JSON.stringify(payload.tags)) ||
+            (payload.currentLocationId !== undefined &&
+                character.currentLocationId !== payload.currentLocationId) ||
+            (payload.backgroundLocationId !== undefined &&
+                character.backgroundLocationId !==
+                    payload.backgroundLocationId) ||
+            (payload.organizationId !== undefined &&
+                character.organizationId !== payload.organizationId);
+
+        if (hasChanges) {
+            character.updatedAt = new Date();
+            await this.characterRepository.update(character);
+        }
 
         await this.syncLocationCaches(
             character.id,

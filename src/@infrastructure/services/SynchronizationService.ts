@@ -93,6 +93,7 @@ export class SynchronizationService extends EventEmitter {
     private wasOffline = false;
     private currentUserId: string | null = null;
     private isOnline = false;
+    private lastSyncedAt: Date | null = null;
 
     // Event queue for realtime events received during sync
     private eventQueue: QueuedRealtimeEvent[] = [];
@@ -1187,7 +1188,8 @@ export class SynchronizationService extends EventEmitter {
             }
 
             console.log("[SynchronizationService] Sync complete");
-            this.syncStateGateway?.setLastSyncedAt(new Date());
+            this.lastSyncedAt = new Date();
+            this.syncStateGateway?.setLastSyncedAt(this.lastSyncedAt);
             this.isOnline = true;
             this.syncStateGateway?.setStatus("online");
         } catch (error) {

@@ -47,8 +47,25 @@ export class SaveOrganizationInfo {
             organization.locationIds = nextLocationIds;
         }
 
-        organization.updatedAt = new Date();
-        await this.organizationRepository.update(organization);
+        // Check if anything actually changed
+        const hasChanges =
+            (payload.name !== undefined &&
+                organization.name !== payload.name) ||
+            (payload.description !== undefined &&
+                organization.description !== payload.description) ||
+            (payload.mission !== undefined &&
+                organization.mission !== payload.mission) ||
+            (payload.tags !== undefined &&
+                JSON.stringify(organization.tags) !==
+                    JSON.stringify(payload.tags)) ||
+            (nextLocationIds !== null &&
+                JSON.stringify(previousLocationIds) !==
+                    JSON.stringify(nextLocationIds));
+
+        if (hasChanges) {
+            organization.updatedAt = new Date();
+            await this.organizationRepository.update(organization);
+        }
 
         if (nextLocationIds !== null) {
             await this.syncLocationCaches(
