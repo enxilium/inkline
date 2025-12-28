@@ -5,25 +5,22 @@ import {
     type CharacterEditorValues,
 } from "../workspace/CharacterEditor";
 import type { AutosaveStatus } from "../../types";
+import type { DocumentRef } from "../ui/ListInput";
 
 interface ConnectedCharacterEditorProps {
     characterId: string;
 }
-
-const listFromMultiline = (value: string): string[] =>
-    value
-        .split(/\r?\n/)
-        .map((entry) => entry.trim())
-        .filter(Boolean);
 
 export const ConnectedCharacterEditor: React.FC<
     ConnectedCharacterEditorProps
 > = ({ characterId }) => {
     const {
         projectId,
+        chapters,
         characters,
         locations,
         organizations,
+        scrapNotes,
         assets,
         activeDocument,
         updateCharacterLocally,
@@ -35,6 +32,7 @@ export const ConnectedCharacterEditor: React.FC<
         importAsset,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
+        setActiveDocument,
     } = useAppStore();
 
     const [autosaveStatus, setAutosaveStatus] =
@@ -77,6 +75,69 @@ export const ConnectedCharacterEditor: React.FC<
         [character, assets.bgms]
     );
 
+    // Build available documents for slash-command references
+    const availableDocuments: DocumentRef[] = React.useMemo(() => {
+        const docs: DocumentRef[] = [];
+
+        chapters.forEach((ch) => {
+            docs.push({
+                kind: "chapter",
+                id: ch.id,
+                name: ch.title || `Chapter ${ch.order}`,
+            });
+        });
+
+        scrapNotes.forEach((sn) => {
+            docs.push({
+                kind: "scrapNote",
+                id: sn.id,
+                name: sn.title || "Untitled Note",
+            });
+        });
+
+        characters.forEach((c) => {
+            if (c.id !== characterId) {
+                docs.push({
+                    kind: "character",
+                    id: c.id,
+                    name: c.name || "Untitled Character",
+                });
+            }
+        });
+
+        locations.forEach((loc) => {
+            docs.push({
+                kind: "location",
+                id: loc.id,
+                name: loc.name || "Untitled Location",
+            });
+        });
+
+        organizations.forEach((org) => {
+            docs.push({
+                kind: "organization",
+                id: org.id,
+                name: org.name || "Untitled Organization",
+            });
+        });
+
+        return docs;
+    }, [
+        chapters,
+        scrapNotes,
+        characters,
+        locations,
+        organizations,
+        characterId,
+    ]);
+
+    const handleNavigateToDocument = React.useCallback(
+        (ref: DocumentRef) => {
+            setActiveDocument({ kind: ref.kind, id: ref.id });
+        },
+        [setActiveDocument]
+    );
+
     const handleSubmit = React.useCallback(
         async (values: CharacterEditorValues) => {
             if (!character || !projectId) return;
@@ -88,9 +149,10 @@ export const ConnectedCharacterEditor: React.FC<
                 race: values.race,
                 age: values.age ? Number(values.age) : null,
                 description: values.description,
-                traits: listFromMultiline(values.traits),
-                goals: listFromMultiline(values.goals),
-                secrets: listFromMultiline(values.secrets),
+                traits: values.traits,
+                goals: values.goals,
+                secrets: values.secrets,
+                powers: values.powers,
                 tags: values.tags,
                 currentLocationId: values.currentLocationId || null,
                 backgroundLocationId: values.backgroundLocationId || null,
@@ -233,6 +295,7 @@ export const ConnectedCharacterEditor: React.FC<
             organizations={organizations}
             gallerySources={gallerySources}
             songUrl={songUrl}
+            availableDocuments={availableDocuments}
             onSubmit={handleSubmit}
             onGeneratePortrait={handleGeneratePortrait}
             onImportPortrait={handleImportPortrait}
@@ -240,6 +303,7 @@ export const ConnectedCharacterEditor: React.FC<
             onImportSong={handleImportSong}
             onGeneratePlaylist={handleGeneratePlaylist}
             onImportPlaylist={handleImportPlaylist}
+            onNavigateToDocument={handleNavigateToDocument}
         />
     );
 };

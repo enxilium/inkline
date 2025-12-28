@@ -48,6 +48,7 @@ export class CreateCharacter {
             [],
             [],
             [],
+            [],
             null,
             null,
             [],

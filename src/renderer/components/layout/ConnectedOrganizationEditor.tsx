@@ -4,6 +4,7 @@ import {
     OrganizationEditor,
     type OrganizationEditorValues,
 } from "../workspace/OrganizationEditor";
+import type { DocumentRef } from "../ui/ListInput";
 import type { AutosaveStatus } from "../../types";
 
 interface ConnectedOrganizationEditorProps {
@@ -17,6 +18,9 @@ export const ConnectedOrganizationEditor: React.FC<
         projectId,
         organizations,
         locations,
+        characters,
+        chapters,
+        scrapNotes,
         assets,
         activeDocument,
         updateOrganizationLocally,
@@ -26,6 +30,7 @@ export const ConnectedOrganizationEditor: React.FC<
         generateOrganizationSong,
         generateOrganizationPlaylist,
         importAsset,
+        setActiveDocument,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
     } = useAppStore();
@@ -80,8 +85,8 @@ export const ConnectedOrganizationEditor: React.FC<
 
             const payload = {
                 name: values.name,
-                description: values.description,
-                mission: values.mission,
+                description: values.description.join("\n"),
+                mission: values.mission.join("\n"),
                 tags: values.tags,
                 locationIds: values.locationIds,
             };
@@ -212,6 +217,62 @@ export const ConnectedOrganizationEditor: React.FC<
         await reloadActiveProject();
     };
 
+    const availableDocuments: DocumentRef[] = React.useMemo(() => {
+        const docs: DocumentRef[] = [];
+        for (const ch of chapters) {
+            docs.push({
+                id: ch.id,
+                name: ch.title || "Untitled Chapter",
+                kind: "chapter",
+            });
+        }
+        for (const sn of scrapNotes) {
+            docs.push({
+                id: sn.id,
+                name: sn.title || "Untitled Note",
+                kind: "scrapNote",
+            });
+        }
+        for (const c of characters) {
+            docs.push({
+                id: c.id,
+                name: c.name || "Untitled Character",
+                kind: "character",
+            });
+        }
+        for (const l of locations) {
+            docs.push({
+                id: l.id,
+                name: l.name || "Untitled Location",
+                kind: "location",
+            });
+        }
+        for (const o of organizations) {
+            if (o.id !== organizationId) {
+                docs.push({
+                    id: o.id,
+                    name: o.name || "Untitled Organization",
+                    kind: "organization",
+                });
+            }
+        }
+        return docs;
+    }, [
+        chapters,
+        scrapNotes,
+        characters,
+        locations,
+        organizations,
+        organizationId,
+    ]);
+
+    const handleNavigateToDocument = React.useCallback(
+        (ref: DocumentRef) => {
+            setActiveDocument({ kind: ref.kind, id: ref.id });
+        },
+        [setActiveDocument]
+    );
+
     if (!organization) {
         return <div className="empty-editor">Organization not found.</div>;
     }
@@ -222,7 +283,9 @@ export const ConnectedOrganizationEditor: React.FC<
             locations={locations}
             gallerySources={gallerySources}
             songUrl={songUrl}
+            availableDocuments={availableDocuments}
             onSubmit={handleSubmit}
+            onNavigateToDocument={handleNavigateToDocument}
             onGeneratePortrait={handleGeneratePortrait}
             onImportPortrait={handleImportPortrait}
             onGenerateSong={handleGenerateSong}

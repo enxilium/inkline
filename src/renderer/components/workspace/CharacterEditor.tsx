@@ -8,16 +8,22 @@ import type {
 import { Button } from "../ui/Button";
 import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
+import { ListInput, type DocumentRef } from "../ui/ListInput";
+import { RichListInput } from "../ui/RichListInput";
+import { SearchableSelect, type SelectOption } from "../ui/SearchableSelect";
 import { TagsInput } from "../ui/Tags";
+import { RichTextAreaInput } from "../ui/RichTextAreaInput";
+import { TraitsInput } from "../ui/TraitsInput";
 
 export type CharacterEditorValues = {
     name: string;
     race: string;
     age: string;
     description: string;
-    traits: string;
-    goals: string;
-    secrets: string;
+    traits: string[];
+    goals: string[];
+    secrets: string[];
+    powers: { title: string; description: string }[];
     tags: string[];
     currentLocationId: string;
     backgroundLocationId: string;
@@ -30,6 +36,8 @@ export type CharacterEditorProps = {
     organizations: WorkspaceOrganization[];
     gallerySources: string[];
     songUrl?: string;
+    /** All documents available for slash-command references */
+    availableDocuments?: DocumentRef[];
     onSubmit: (values: CharacterEditorValues) => Promise<void>;
     onGeneratePortrait: () => Promise<void>;
     onImportPortrait: (file: File) => Promise<void>;
@@ -37,6 +45,8 @@ export type CharacterEditorProps = {
     onImportSong: (file: File) => Promise<void>;
     onGeneratePlaylist: () => Promise<void>;
     onImportPlaylist: (file: File) => Promise<void>;
+    /** Navigate to a referenced document */
+    onNavigateToDocument?: (ref: DocumentRef) => void;
 };
 
 const defaultValues = (
@@ -46,9 +56,10 @@ const defaultValues = (
     race: character.race ?? "",
     age: character.age?.toString() ?? "",
     description: character.description ?? "",
-    traits: (character.traits ?? []).join("\n"),
-    goals: (character.goals ?? []).join("\n"),
-    secrets: (character.secrets ?? []).join("\n"),
+    traits: character.traits ?? [],
+    goals: character.goals ?? [],
+    secrets: character.secrets ?? [],
+    powers: character.powers ?? [],
     tags: character.tags ?? [],
     currentLocationId: character.currentLocationId ?? "",
     backgroundLocationId: character.backgroundLocationId ?? "",
@@ -61,6 +72,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     organizations,
     gallerySources,
     songUrl,
+    availableDocuments = [],
     onSubmit,
     onGeneratePortrait,
     onImportPortrait,
@@ -68,6 +80,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     onImportSong,
     onGeneratePlaylist,
     onImportPlaylist,
+    onNavigateToDocument,
 }) => {
     const [values, setValues] = React.useState<CharacterEditorValues>(() =>
         defaultValues(character)
@@ -113,9 +126,28 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         });
     }, [gallerySources]);
 
+    // Memoize options for searchable selects
+    const locationOptions: SelectOption[] = React.useMemo(
+        () =>
+            locations.map((loc) => ({
+                id: loc.id,
+                label: loc.name || "Untitled location",
+            })),
+        [locations]
+    );
+
+    const organizationOptions: SelectOption[] = React.useMemo(
+        () =>
+            organizations.map((org) => ({
+                id: org.id,
+                label: org.name || "Untitled organization",
+            })),
+        [organizations]
+    );
+
     const handleChange = (
         field: keyof CharacterEditorValues,
-        value: string | string[]
+        value: string | string[] | { title: string; description: string }[]
     ) => {
         isUserChange.current = true;
         setValues((prev) => ({
@@ -266,11 +298,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     };
 
     const portraitUrl = gallerySources[currentImageIndex];
-    console.log("[CharacterEditor] Render", {
-        currentImageIndex,
-        total: gallerySources.length,
-        portraitUrl,
-    });
     const canCycleGallery = gallerySources.length > 1;
 
     const showNextImage = () => {
@@ -293,33 +320,21 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         <div className="entity-editor-panel">
             <form className="entity-editor" onSubmit={handleSubmit}>
                 <div className="entity-header">
-                    <div>
+                    <div className="entity-header-title">
                         <p className="panel-label">Character</p>
-                        <h2>{values.name || "Untitled Character"}</h2>
-                    </div>
-                    <div className="entity-actions">
-                        <Button
-                            type="submit"
-                            variant="primary"
-                            disabled={isSaving}
-                        >
-                            {isSaving ? "Saving…" : "Save profile"}
-                        </Button>
+                        <input
+                            type="text"
+                            className="entity-name-input"
+                            value={values.name}
+                            onChange={(e) =>
+                                handleChange("name", e.target.value)
+                            }
+                            placeholder="Untitled Character"
+                        />
                     </div>
                 </div>
                 <div className="entity-editor-grid">
                     <div className="entity-column">
-                        <div className="entity-field">
-                            <Label htmlFor="character-name">Name</Label>
-                            <Input
-                                id="character-name"
-                                value={values.name}
-                                onChange={(event) =>
-                                    handleChange("name", event.target.value)
-                                }
-                                placeholder="Name"
-                            />
-                        </div>
                         <div className="entity-row">
                             <div className="entity-field">
                                 <Label htmlFor="character-race">Race</Label>
@@ -350,57 +365,69 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                             <Label htmlFor="character-description">
                                 Description
                             </Label>
-                            <textarea
+                            <RichTextAreaInput
                                 id="character-description"
-                                className="text-area"
                                 value={values.description}
-                                onChange={(event) =>
-                                    handleChange(
-                                        "description",
-                                        event.target.value
-                                    )
+                                onChange={(val) =>
+                                    handleChange("description", val)
                                 }
-                                rows={5}
-                                placeholder="Physical appearance, demeanor, etc."
+                                rows={4}
+                                placeholder="Physical appearance, demeanor, etc. (use / to reference)"
+                                availableDocuments={availableDocuments}
+                                onReferenceClick={onNavigateToDocument}
                             />
                         </div>
                         <div className="entity-field">
-                            <Label htmlFor="character-traits">Traits</Label>
-                            <textarea
-                                id="character-traits"
-                                className="text-area"
+                            <Label>Personality Traits</Label>
+                            <TraitsInput
                                 value={values.traits}
-                                onChange={(event) =>
-                                    handleChange("traits", event.target.value)
+                                onChange={(traits) =>
+                                    handleChange("traits", traits)
                                 }
-                                rows={3}
-                                placeholder={"Enter one trait per line"}
+                                placeholder="Add a trait..."
                             />
                         </div>
                         <div className="entity-field">
-                            <Label htmlFor="character-goals">Goals</Label>
-                            <textarea
-                                id="character-goals"
-                                className="text-area"
+                            <Label>Goals</Label>
+                            <ListInput
                                 value={values.goals}
-                                onChange={(event) =>
-                                    handleChange("goals", event.target.value)
+                                onChange={(goals) =>
+                                    handleChange("goals", goals)
                                 }
-                                rows={3}
-                                placeholder={"Enter one goal per line"}
+                                placeholder="What drives this character?"
+                                addButtonLabel=""
+                                emptyMessage="No goals defined yet"
+                                availableDocuments={availableDocuments}
+                                onReferenceClick={onNavigateToDocument}
                             />
                         </div>
                         <div className="entity-field">
-                            <Label htmlFor="character-secrets">Secrets</Label>
-                            <textarea
-                                id="character-secrets"
-                                className="text-area"
+                            <Label>Secrets</Label>
+                            <ListInput
                                 value={values.secrets}
-                                onChange={(event) =>
-                                    handleChange("secrets", event.target.value)
+                                onChange={(secrets) =>
+                                    handleChange("secrets", secrets)
                                 }
-                                rows={3}
-                                placeholder={"Enter one secret per line"}
+                                placeholder="What are they hiding?"
+                                addButtonLabel=""
+                                emptyMessage="No secrets defined yet"
+                                availableDocuments={availableDocuments}
+                                onReferenceClick={onNavigateToDocument}
+                            />
+                        </div>
+                        <div className="entity-field">
+                            <Label>Powers & Abilities</Label>
+                            <RichListInput
+                                value={values.powers}
+                                onChange={(powers) =>
+                                    handleChange("powers", powers)
+                                }
+                                placeholderTitle="Ability Name"
+                                placeholderDescription="What does it do?"
+                                addButtonLabel=""
+                                emptyMessage="No powers defined yet"
+                                availableDocuments={availableDocuments}
+                                onReferenceClick={onNavigateToDocument}
                             />
                         </div>
                         <div className="entity-field">
@@ -461,37 +488,6 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                     onChange={handleFileChange}
                                 />
                             </div>
-                            {portraitUrl && (
-                                <div
-                                    style={{
-                                        padding: "0.5rem",
-                                        background: "rgba(0,0,0,0.2)",
-                                        borderRadius: "8px",
-                                        fontSize: "0.75rem",
-                                        wordBreak: "break-all",
-                                    }}
-                                >
-                                    <p
-                                        style={{
-                                            margin: "0 0 0.5rem",
-                                            color: "var(--text-error)",
-                                        }}
-                                    >
-                                        Debug: Image not showing?
-                                    </p>
-                                    <a
-                                        href={portraitUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        style={{
-                                            color: "var(--accent)",
-                                            textDecoration: "underline",
-                                        }}
-                                    >
-                                        Open Image in Browser
-                                    </a>
-                                </div>
-                            )}
                             {gallerySources.length ? (
                                 <div className="portrait-actions">
                                     <Button
@@ -608,80 +604,49 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                             <Label htmlFor="character-current-location">
                                 Current location
                             </Label>
-                            <select
-                                id="character-current-location"
-                                className="input"
+                            <SearchableSelect
                                 value={values.currentLocationId}
-                                onChange={(event) =>
+                                options={locationOptions}
+                                onChange={(locationId) =>
                                     handleChange(
                                         "currentLocationId",
-                                        event.target.value
+                                        locationId
                                     )
                                 }
-                            >
-                                <option value="">Unassigned</option>
-                                {locations.map((location) => (
-                                    <option
-                                        key={location.id}
-                                        value={location.id}
-                                    >
-                                        {location.name || "Untitled location"}
-                                    </option>
-                                ))}
-                            </select>
+                                placeholder="Search locations..."
+                                emptyLabel="Unassigned"
+                            />
                         </div>
                         <div className="entity-field">
                             <Label htmlFor="character-origin-location">
                                 Origin location
                             </Label>
-                            <select
-                                id="character-origin-location"
-                                className="input"
+                            <SearchableSelect
                                 value={values.backgroundLocationId}
-                                onChange={(event) =>
+                                options={locationOptions}
+                                onChange={(locationId) =>
                                     handleChange(
                                         "backgroundLocationId",
-                                        event.target.value
+                                        locationId
                                     )
                                 }
-                            >
-                                <option value="">Unassigned</option>
-                                {locations.map((location) => (
-                                    <option
-                                        key={location.id}
-                                        value={location.id}
-                                    >
-                                        {location.name || "Untitled location"}
-                                    </option>
-                                ))}
-                            </select>
+                                placeholder="Search locations..."
+                                emptyLabel="Unassigned"
+                            />
                         </div>
                         <div className="entity-field">
                             <Label htmlFor="character-organization">
                                 Affiliated organization
                             </Label>
-                            <select
-                                id="character-organization"
-                                className="input"
+                            <SearchableSelect
                                 value={values.organizationId}
-                                onChange={(event) =>
-                                    handleChange(
-                                        "organizationId",
-                                        event.target.value
-                                    )
+                                options={organizationOptions}
+                                onChange={(orgId) =>
+                                    handleChange("organizationId", orgId)
                                 }
-                            >
-                                <option value="">Unassigned</option>
-                                {organizations.map((organization) => (
-                                    <option
-                                        key={organization.id}
-                                        value={organization.id}
-                                    >
-                                        {organization.name ||
-                                            "Untitled organization"}
-                                    </option>
-                                ))}
-                            </select>
+                                placeholder="Search organizations..."
+                                emptyLabel="Unassigned"
+                            />
                         </div>
                     </div>
                 </div>

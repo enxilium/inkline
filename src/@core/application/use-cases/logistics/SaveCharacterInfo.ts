@@ -12,6 +12,7 @@ export interface SaveCharacterInfoRequest {
         traits?: string[];
         goals?: string[];
         secrets?: string[];
+        powers?: { title: string; description: string }[];
         currentLocationId?: string | null;
         backgroundLocationId?: string | null;
         organizationId?: string | null;
@@ -82,6 +83,13 @@ export class SaveCharacterInfo {
                 JSON.stringify(payload.secrets)
         ) {
             character.secrets = payload.secrets;
+            hasChanges = true;
+        }
+        if (
+            payload.powers !== undefined &&
+            JSON.stringify(character.powers) !== JSON.stringify(payload.powers)
+        ) {
+            character.powers = payload.powers;
             hasChanges = true;
         }
         if (

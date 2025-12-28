@@ -15,6 +15,7 @@ type CharacterRow = {
     traits: string[] | null;
     goals: string[] | null;
     secrets: string[] | null;
+    powers: { title: string; description: string }[] | null;
     tags: string[] | null;
     bgm_id: string | null;
     playlist_id: string | null;
@@ -27,6 +28,15 @@ const parseStringArray = (value: string[] | null | undefined): string[] =>
     Array.isArray(value)
         ? value.map((entry) => entry ?? "").filter(Boolean)
         : [];
+
+const parsePowers = (value: any): { title: string; description: string }[] => {
+    if (!Array.isArray(value)) return [];
+    return value.map((entry: any) => ({
+        title: typeof entry?.title === "string" ? entry.title : "",
+        description:
+            typeof entry?.description === "string" ? entry.description : "",
+    }));
+};
 
 const mapRowToCharacter = (row: CharacterRow): Character =>
     new Character(
@@ -41,6 +51,7 @@ const mapRowToCharacter = (row: CharacterRow): Character =>
         parseStringArray(row.traits),
         parseStringArray(row.goals),
         parseStringArray(row.secrets),
+        parsePowers(row.powers),
         parseStringArray(row.tags),
         row.bgm_id,
         row.playlist_id,
@@ -65,6 +76,7 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
             traits: character.traits,
             goals: character.goals,
             secrets: character.secrets,
+            powers: character.powers,
             tags: character.tags,
             bgm_id: character.bgmId,
             playlist_id: character.playlistId,
@@ -118,6 +130,7 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
                 traits: character.traits,
                 goals: character.goals,
                 secrets: character.secrets,
+                powers: character.powers,
                 tags: character.tags,
                 bgm_id: character.bgmId,
                 playlist_id: character.playlistId,
