@@ -124,10 +124,9 @@ import type { IProjectRepository } from "../@core/domain/repositories/IProjectRe
 import type { IScrapNoteRepository } from "../@core/domain/repositories/IScrapNoteRepository";
 import type { IUserRepository } from "../@core/domain/repositories/IUserRepository";
 import type { IAITextService } from "../@core/domain/services/IAITextService";
-import type { IAudioGenerationService } from "../@core/domain/services/IAudioGenerationService";
+import type { ICreativeAssetGenerationService } from "../@core/domain/services/ICreativeAssetGenerationService";
 import type { IAuthService } from "../@core/domain/services/IAuthService";
 import type { IExportService } from "../@core/domain/services/IExportService";
-import type { IImageGenerationService } from "../@core/domain/services/IImageGenerationService";
 import type { IPlaylistGenerationService } from "../@core/domain/services/IPlaylistGenerationService";
 import type { IStorageService } from "../@core/domain/services/IStorageService";
 import type { IUserSessionStore } from "../@core/domain/services/IUserSessionStore";
@@ -149,10 +148,10 @@ export type RepositoryDependencies = {
 
 export type ServiceDependencies = {
     aiText: IAITextService;
-    audioGeneration: IAudioGenerationService;
+    audioGeneration: ICreativeAssetGenerationService;
     auth: IAuthService;
     export: IExportService;
-    imageGeneration: IImageGenerationService;
+    imageGeneration: ICreativeAssetGenerationService;
     playlistGeneration: IPlaylistGenerationService;
     storage: IStorageService;
     sessionStore: IUserSessionStore;

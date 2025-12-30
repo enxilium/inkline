@@ -10,7 +10,12 @@ import CommentExtension from "@sereneinserenade/tiptap-comment-extension";
 import { useAppStore } from "../../state/appStore";
 import { TextEditor } from "../workspace/TextEditor";
 import { SearchAndReplace } from "../../tiptap/searchAndReplace";
+import {
+    DocumentReference,
+    createDocumentReferenceSuggestion,
+} from "../../tiptap/documentReference";
 import type { AutosaveStatus } from "../../types";
+import type { DocumentRef } from "../ui/ListInput";
 import {
     extractWordsWithPositions,
     hasCommentId,
@@ -53,6 +58,9 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         activeDocument,
         chapters,
         scrapNotes,
+        characters,
+        locations,
+        organizations,
         updateChapterLocally,
         updateScrapNoteLocally,
         setAutosaveStatus: setGlobalAutosaveStatus,
@@ -62,6 +70,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         setCurrentSelection,
         saveChapterContent,
         updateScrapNoteRemote,
+        setActiveDocument,
     } = useAppStore();
 
     // 1. Resolve Data
@@ -114,6 +123,80 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     );
 
     const warnedEditsRef = React.useRef<Set<string>>(new Set());
+
+    // Build available documents for slash-command references
+    const availableDocuments: DocumentRef[] = React.useMemo(() => {
+        const docs: DocumentRef[] = [];
+
+        chapters.forEach((ch) => {
+            docs.push({
+                kind: "chapter",
+                id: ch.id,
+                name: ch.title || `Chapter ${ch.order}`,
+            });
+        });
+
+        scrapNotes.forEach((sn) => {
+            if (kind === "scrapNote" && sn.id === documentId) return; // Exclude self
+            docs.push({
+                kind: "scrapNote",
+                id: sn.id,
+                name: sn.title || "Untitled Note",
+            });
+        });
+
+        characters.forEach((c) => {
+            docs.push({
+                kind: "character",
+                id: c.id,
+                name: c.name || "Unnamed Character",
+            });
+        });
+
+        locations.forEach((loc) => {
+            docs.push({
+                kind: "location",
+                id: loc.id,
+                name: loc.name || "Unnamed Location",
+            });
+        });
+
+        organizations.forEach((org) => {
+            docs.push({
+                kind: "organization",
+                id: org.id,
+                name: org.name || "Unnamed Organization",
+            });
+        });
+
+        return docs;
+    }, [
+        chapters,
+        scrapNotes,
+        characters,
+        locations,
+        organizations,
+        kind,
+        documentId,
+    ]);
+
+    // Handle reference click - navigate to the referenced document
+    const handleReferenceClick = React.useCallback(
+        (ref: DocumentRef) => {
+            setActiveDocument({ kind: ref.kind, id: ref.id });
+        },
+        [setActiveDocument]
+    );
+
+    // Create document reference suggestion with current available docs
+    const documentReferenceSuggestion = React.useMemo(
+        () =>
+            createDocumentReferenceSuggestion({
+                availableDocuments,
+                onReferenceClick: handleReferenceClick,
+            }),
+        [availableDocuments, handleReferenceClick]
+    );
 
     // If undo brings back a highlight, restore its edit payload from archive.
     React.useEffect(() => {
@@ -190,6 +273,14 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 },
                 underline: {},
             }),
+            // Only enable document references for scrap notes, not chapters
+            ...(kind === "scrapNote"
+                ? [
+                      DocumentReference.configure({
+                          suggestion: documentReferenceSuggestion,
+                      }),
+                  ]
+                : []),
             TabIndentation,
         ],
         content: "<p></p>", // Initial empty, will be populated by useEffect
@@ -728,6 +819,31 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         },
         [archivePendingEdit, editor, jumpToNextHighlightedEdit]
     );
+
+    // Listen for document reference clicks from the editor
+    React.useEffect(() => {
+        const editorElement = editor?.view?.dom;
+        if (!editorElement) return;
+
+        const handleDocRefClick = (e: Event) => {
+            const customEvent = e as CustomEvent<DocumentRef>;
+            if (customEvent.detail) {
+                handleReferenceClick(customEvent.detail);
+            }
+        };
+
+        editorElement.addEventListener(
+            "document-reference-click",
+            handleDocRefClick
+        );
+
+        return () => {
+            editorElement.removeEventListener(
+                "document-reference-click",
+                handleDocRefClick
+            );
+        };
+    }, [editor, handleReferenceClick]);
 
     return (
         <div className="connected-editor">

@@ -14,6 +14,7 @@ export class Character {
         public traits: string[],
         public goals: string[],
         public secrets: string[],
+        public powers: { title: string; description: string }[],
         public tags: string[],
         public bgmId: string | null,
         public playlistId: string | null,

@@ -1337,6 +1337,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         traits: [],
                         goals: [],
                         secrets: [],
+                        powers: [],
                         tags: [],
                         bgmId: null,
                         playlistId: null,

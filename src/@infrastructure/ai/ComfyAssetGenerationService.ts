@@ -1,8 +1,6 @@
-import { IImageGenerationService } from "../../@core/domain/services/IImageGenerationService";
 import { Character } from "../../@core/domain/entities/story/world/Character";
 import { Location } from "../../@core/domain/entities/story/world/Location";
 import { Organization } from "../../@core/domain/entities/story/world/Organization";
-import { IAudioGenerationService } from "../../@core/domain/services/IAudioGenerationService";
 import { NarrativeContext } from "../../@core/domain/services/NarrativeContext";
 import { IUserSessionStore } from "../../@core/domain/services/IUserSessionStore";
 import { IChapterRepository } from "../../@core/domain/repositories/IChapterRepository";
@@ -23,6 +21,8 @@ import fs from "fs";
 import { app } from "electron";
 import { GoogleGenAI } from "@google/genai";
 
+import { ICreativeAssetGenerationService } from "../../@core/domain/services/ICreativeAssetGenerationService";
+
 const ERROR_MESSAGE = "Audio generation is not available in this build.";
 
 type WorkflowFileInfo = {
@@ -40,7 +40,7 @@ type WorkflowGraphNode = {
 type WorkflowGraph = Record<string, WorkflowGraphNode>;
 
 export class ComfyAssetGenerationService
-    implements IAudioGenerationService, IImageGenerationService
+    implements ICreativeAssetGenerationService
 {
     private sessionStore: IUserSessionStore;
     private chapterRepository: IChapterRepository;

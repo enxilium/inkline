@@ -45,16 +45,6 @@ protocol.registerSchemesAsPrivileged([
 const dependencies = resolveDependencies();
 const appBuilder = new AppBuilder(dependencies);
 
-/*
-dependencies.syncService.on("update-available", (payload) => {
-    BrowserWindow.getAllWindows().forEach((win) => {
-        if (!win.isDestroyed()) {
-            win.webContents.send("manuscript:updateAvailable", payload);
-        }
-    });
-});
-*/
-
 let loadingWindow: BrowserWindow | null = null;
 
 const createLoadingWindow = (): void => {
@@ -182,10 +172,16 @@ const bootstrap = async (): Promise<void> => {
             /^\//,
             ""
         );
-        const filePath = path.join(
-            fileSystemService.getBasePath(),
-            relativePath
-        );
+        const basePath = fileSystemService.getBasePath();
+        const filePath = path.join(basePath, relativePath);
+
+        // Security check: Ensure the resolved path is still within the base path
+        if (!filePath.startsWith(basePath)) {
+            console.error(
+                `[Security] Blocked path traversal attempt: ${relativePath}`
+            );
+            return new Response("Access Denied", { status: 403 });
+        }
 
         // Use pathToFileURL for proper cross-platform file URL conversion
         return net.fetch(pathToFileURL(filePath).toString());
@@ -197,8 +193,7 @@ const bootstrap = async (): Promise<void> => {
 
     await appBuilder.build();
 
-    const comfyService = dependencies.services
-        .audioGeneration as ComfyAssetGenerationService;
+    const comfyService = dependencies.services.audioGeneration;
     if (comfyService && typeof comfyService.waitForReady === "function") {
         try {
             await comfyService.waitForReady();
@@ -269,5 +264,6 @@ app.on("activate", () => {
     }
 });
 
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.
+if (require("electron-squirrel-startup")) {
+    app.quit();
+}
