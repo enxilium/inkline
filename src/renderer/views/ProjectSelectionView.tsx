@@ -228,7 +228,7 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                 className="sr-only"
                             >
                                 New Project Title
-                            </Label>
+                            </Label> 
                             <Input
                                 id="new-project-title"
                                 type="text"
