@@ -26,11 +26,11 @@ export const InklineLogo: React.FC<InklineLogoProps> = ({
             aria-hidden="true"
             focusable="false"
         >
-            <defs>
+            <defs> 
                 <linearGradient
                     id={gradientId}
-                    x1="0%"
-                    y1="0%"
+                    x1="0%" 
+                    y1="0%" 
                     x2="100%"
                     y2="0%"
                 >

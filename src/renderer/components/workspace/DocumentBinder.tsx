@@ -302,15 +302,15 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     const getIconForKind = (kind: WorkspaceDocumentKind) => {
         switch (kind) {
             case "chapter":
-                return <BinderChapterIcon size={16} />;
+                return <BinderChapterIcon size={16} style={{ color: "var(--text)" }} />;
             case "scrapNote":
-                return <BinderScrapNoteIcon size={16} />;
+                return <BinderScrapNoteIcon size={16} style={{ color: "var(--text)" }} />;
             case "character":
-                return <PersonIcon size={16} />;
+                return <PersonIcon size={16} style={{ color: "var(--text)" }} />;
             case "location":
-                return <MapIcon size={16} />;
+                return <MapIcon size={16} style={{ color: "var(--text)" }} />;
             case "organization":
-                return <BinderOrganizationIcon size={16} />;
+                return <BinderOrganizationIcon size={16} style={{ color: "var(--text)" }} />;
         }
     };
 
@@ -492,6 +492,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                 <Button
                     variant="icon"
                     className="binder-create"
+                    style={{ color: "var(--text)" }}
                     onClick={activeSection.onCreate}
                     title={`New ${activeSection.title}`}
                 >

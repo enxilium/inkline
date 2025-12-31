@@ -2,7 +2,6 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "../ui/Button";
 import {
-    ChevronRightIcon,
     SendIcon,
     BinderChapterIcon,
     BinderScrapNoteIcon,
@@ -252,7 +251,7 @@ export const ChatPanel: React.FC = () => {
             case "organization":
                 return <BinderOrganizationIcon size={12} />;
             case "text":
-                return <span style={{ fontSize: "10px" }}>TXT</span>;
+                return <span className="chat-txt-badge">TXT</span>;
             default:
                 return null;
         }
@@ -260,7 +259,7 @@ export const ChatPanel: React.FC = () => {
 
     return (
         <aside
-            className="binder-panel chat-panel-override"
+            className="chat-panel"
             onDrop={handleDrop}
             onDragOver={handleDragOver}
         >
@@ -290,44 +289,13 @@ export const ChatPanel: React.FC = () => {
             </div>
 
             {showHistory && (
-                <div
-                    style={{
-                        position: "absolute",
-                        top: "36px",
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        background: "var(--surface)",
-                        zIndex: 10,
-                        padding: "1rem",
-                        overflowY: "auto",
-                    }}
-                >
-                    <h3
-                        style={{
-                            marginTop: 0,
-                            marginBottom: "1rem",
-                            fontSize: "0.9rem",
-                            color: "var(--text-subtle)",
-                        }}
-                    >
+                <div className="chat-history-overlay">
+                    <h3 className="chat-history-title">
                         Previous Chats
                     </h3>
-                    <div
-                        style={{
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "0.5rem",
-                        }}
-                    >
+                    <div className="chat-history-list">
                         {historyList.length === 0 ? (
-                            <p
-                                style={{
-                                    fontSize: "0.85rem",
-                                    color: "var(--text-subtle)",
-                                    fontStyle: "italic",
-                                }}
-                            >
+                            <p className="chat-history-empty">
                                 No history found.
                             </p>
                         ) : (
@@ -337,33 +305,12 @@ export const ChatPanel: React.FC = () => {
                                     onClick={() =>
                                         handleSelectConversation(chat.id)
                                     }
-                                    style={{
-                                        background: "var(--surface-strong)",
-                                        border: "1px solid var(--stroke)",
-                                        padding: "0.75rem",
-                                        borderRadius: "8px",
-                                        textAlign: "left",
-                                        cursor: "pointer",
-                                        color: "var(--text)",
-                                        display: "flex",
-                                        flexDirection: "column",
-                                        gap: "4px",
-                                    }}
+                                    className="chat-history-item"
                                 >
-                                    <span
-                                        style={{
-                                            fontWeight: 500,
-                                            fontSize: "0.9rem",
-                                        }}
-                                    >
+                                    <span className="chat-history-item-title">
                                         {chat.title || "Untitled Chat"}
                                     </span>
-                                    <span
-                                        style={{
-                                            fontSize: "0.75rem",
-                                            color: "var(--text-subtle)",
-                                        }}
-                                    >
+                                    <span className="chat-history-item-date">
                                         {chat.updatedAt.toLocaleDateString()}{" "}
                                         {chat.updatedAt.toLocaleTimeString()}
                                     </span>
@@ -374,77 +321,21 @@ export const ChatPanel: React.FC = () => {
                 </div>
             )}
 
-            <div
-                className="binder-sections binder-scroll-area"
-                style={{
-                    flex: 1,
-                    overflowY: "auto",
-                    padding: "0.5rem",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "1rem",
-                }}
-            >
+            <div className="chat-messages binder-scroll-area">
                 {messages.map((msg) => (
                     <div
                         key={msg.id}
                         className={`chat-message ${msg.role}`}
-                        style={{
-                            alignSelf:
-                                msg.role === "user" ? "flex-end" : "flex-start",
-                            maxWidth: "85%",
-                            background:
-                                msg.role === "user"
-                                    ? "var(--accent-transparent)"
-                                    : "rgba(255,255,255,0.05)",
-                            padding: "0.5rem 0.75rem",
-                            borderRadius: "8px",
-                            fontSize: "0.9rem",
-                            lineHeight: "1.5",
-                            border:
-                                msg.role === "user"
-                                    ? "1px solid var(--accent-transparent2)"
-                                    : "1px solid var(--stroke)",
-                            display: "flex",
-                            flexDirection: "column",
-                            gap: "0.25rem",
-                        }}
                     >
                         {msg.context && msg.context.length > 0 && (
-                            <div
-                                style={{
-                                    display: "flex",
-                                    flexWrap: "wrap",
-                                    gap: "4px",
-                                    marginBottom: "2px",
-                                    paddingBottom: "4px",
-                                    borderBottom:
-                                        "1px solid rgba(255,255,255,0.1)",
-                                }}
-                            >
+                            <div className="chat-message-contexts">
                                 {msg.context.map((ctx) => (
                                     <div
                                         key={ctx.id}
-                                        style={{
-                                            display: "flex",
-                                            alignItems: "center",
-                                            gap: "4px",
-                                            background: "rgba(0,0,0,0.2)",
-                                            borderRadius: "4px",
-                                            padding: "2px 6px",
-                                            fontSize: "0.75rem",
-                                            color: "var(--text-secondary)",
-                                        }}
+                                        className="chat-message-context"
                                     >
                                         {getIconForKind(ctx.type)}
-                                        <span
-                                            style={{
-                                                maxWidth: "100px",
-                                                overflow: "hidden",
-                                                textOverflow: "ellipsis",
-                                                whiteSpace: "nowrap",
-                                            }}
-                                        >
+                                        <span className="chat-message-context-title">
                                             {ctx.title}
                                         </span>
                                     </div>
@@ -457,102 +348,38 @@ export const ChatPanel: React.FC = () => {
                     </div>
                 ))}
                 {isLoading && (
-                    <div
-                        className="chat-message assistant"
-                        style={{
-                            alignSelf: "flex-start",
-                            padding: "0.5rem 0.75rem",
-                            fontSize: "0.85rem",
-                            fontStyle: "italic",
-                            opacity: 0.7,
-                        }}
-                    >
+                    <div className="chat-message-thinking">
                         Thinking...
                     </div>
                 )}
                 <div ref={messagesEndRef} />
             </div>
 
-            <div
-                style={{
-                    padding: "0.5rem",
-                    borderTop: "1px solid var(--stroke)",
-                }}
-            >
+            <div className="chat-composer">
                 {/* Context Area */}
                 {(attachedContexts.length > 0 || currentSelection) && (
-                    <div
-                        style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: "4px",
-                            marginBottom: "8px",
-                        }}
-                    >
+                    <div className="chat-composer-contexts">
                         {attachedContexts.map((ctx) => (
                             <div
                                 key={ctx.id}
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "4px",
-                                    background: "var(--surface-strong)",
-                                    border: "1px solid var(--stroke)",
-                                    borderRadius: "4px",
-                                    padding: "2px 6px",
-                                    fontSize: "0.75rem",
-                                    color: "var(--text-subtle)",
-                                }}
+                                className="chat-composer-chip"
                             >
                                 {getIconForKind(ctx.type)}
-                                <span
-                                    style={{
-                                        maxWidth: "100px",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                    }}
-                                >
+                                <span className="chat-composer-chip-title">
                                     {ctx.title}
                                 </span>
                                 <button
                                     onClick={() => removeContext(ctx.id)}
-                                    style={{
-                                        background: "none",
-                                        border: "none",
-                                        cursor: "pointer",
-                                        padding: 0,
-                                        display: "flex",
-                                        color: "inherit",
-                                    }}
+                                    className="chat-composer-chip-remove"
                                 >
                                     <CloseIcon size={10} />
                                 </button>
                             </div>
                         ))}
                         {currentSelection && (
-                            <div
-                                style={{
-                                    display: "flex",
-                                    alignItems: "center",
-                                    gap: "4px",
-                                    background: "var(--accent-transparent)",
-                                    border: "1px solid var(--accent-transparent2)",
-                                    borderRadius: "4px",
-                                    padding: "2px 6px",
-                                    fontSize: "0.75rem",
-                                    color: "var(--accent)",
-                                }}
-                            >
-                                <span style={{ fontSize: "10px" }}>TXT</span>
-                                <span
-                                    style={{
-                                        maxWidth: "120px",
-                                        overflow: "hidden",
-                                        textOverflow: "ellipsis",
-                                        whiteSpace: "nowrap",
-                                    }}
-                                >
+                            <div className="chat-composer-chip is-selection">
+                                <span className="chat-txt-badge">TXT</span>
+                                <span className="chat-composer-chip-title is-selection">
                                     {currentSelection.range}
                                 </span>
                             </div>
@@ -560,39 +387,23 @@ export const ChatPanel: React.FC = () => {
                     </div>
                 )}
 
-                <div style={{ position: "relative" }}>
+                <div className="chat-input-wrap">
                     <textarea
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyDown={handleKeyDown}
                         placeholder="Ask something..."
                         className="chat-input"
-                        style={{
-                            width: "100%",
-                            minHeight: "60px",
-                            padding: "8px",
-                            paddingRight: "32px",
-                            background: "var(--surface-strong)",
-                            border: "1px solid var(--stroke)",
-                            borderRadius: "6px",
-                            color: "var(--text)",
-                            fontSize: "0.9rem",
-                            resize: "vertical",
-                            fontFamily: "inherit",
-                        }}
                     />
-                    <div
-                        style={{
-                            position: "absolute",
-                            bottom: "0.5rem",
-                            right: "0.5rem",
-                        }}
-                    >
+                    <div className="chat-send-wrap">
                         <Button
                             variant="icon"
                             onClick={handleSendMessage}
                             disabled={!inputValue.trim() || isLoading}
-                            style={{ opacity: inputValue.trim() ? 1 : 0.5 }}
+                            className={
+                                "chat-send-button" +
+                                (!inputValue.trim() ? " is-dimmed" : "")
+                            }
                         >
                             <SendIcon size={16} />
                         </Button>

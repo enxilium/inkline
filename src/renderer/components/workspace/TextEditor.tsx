@@ -311,21 +311,33 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                             </select>
                             <div className="toolbar-divider" />
                             <ToolbarButton
-                                label="B"
+                                label={
+                                    <span className="toolbar-format-label toolbar-format-bold">
+                                        B
+                                    </span>
+                                }
                                 onClick={() =>
                                     editor.chain().focus().toggleBold().run()
                                 }
                                 isActive={editor.isActive("bold")}
                             />
                             <ToolbarButton
-                                label="I"
+                                label={
+                                    <span className="toolbar-format-label toolbar-format-italic">
+                                        I
+                                    </span>
+                                }
                                 onClick={() =>
                                     editor.chain().focus().toggleItalic().run()
                                 }
                                 isActive={editor.isActive("italic")}
                             />
                             <ToolbarButton
-                                label="U"
+                                label={
+                                    <span className="toolbar-format-label toolbar-format-underline">
+                                        U
+                                    </span>
+                                }
                                 onClick={() =>
                                     editor
                                         .chain()
@@ -336,7 +348,11 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                 isActive={editor.isActive("underline")}
                             />
                             <ToolbarButton
-                                label="S"
+                                label={
+                                    <span className="toolbar-format-label toolbar-format-strike">
+                                        S
+                                    </span>
+                                }
                                 onClick={() =>
                                     editor.chain().focus().toggleStrike().run()
                                 }
