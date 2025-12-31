@@ -2,14 +2,18 @@ import React from "react";
 
 import type { WorkspaceLocation, WorkspaceOrganization } from "../../types";
 import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
+import { ListInput, type DocumentRef } from "../ui/ListInput";
+import {
+    SearchableMultiSelect,
+    type SelectOption,
+} from "../ui/SearchableSelect";
 import { TagsInput } from "../ui/Tags";
 
 export type OrganizationEditorValues = {
     name: string;
-    description: string;
-    mission: string;
+    description: string[];
+    mission: string[];
     tags: string[];
     locationIds: string[];
 };
@@ -19,7 +23,9 @@ export type OrganizationEditorProps = {
     locations: WorkspaceLocation[];
     gallerySources: string[];
     songUrl?: string;
+    availableDocuments?: DocumentRef[];
     onSubmit: (values: OrganizationEditorValues) => Promise<void>;
+    onNavigateToDocument?: (ref: DocumentRef) => void;
     onGeneratePortrait: () => Promise<void>;
     onImportPortrait: (file: File) => Promise<void>;
     onGenerateSong: () => Promise<void>;
@@ -32,8 +38,12 @@ const defaultValues = (
     organization: WorkspaceOrganization
 ): OrganizationEditorValues => ({
     name: organization.name ?? "",
-    description: organization.description ?? "",
-    mission: organization.mission ?? "",
+    description: organization.description
+        ? organization.description.split("\n").filter((s) => s.trim())
+        : [],
+    mission: organization.mission
+        ? organization.mission.split("\n").filter((s) => s.trim())
+        : [],
     tags: organization.tags ?? [],
     locationIds: organization.locationIds ?? [],
 });
@@ -43,7 +53,9 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     locations,
     gallerySources,
     songUrl,
+    availableDocuments = [],
     onSubmit,
+    onNavigateToDocument,
     onGeneratePortrait,
     onImportPortrait,
     onGenerateSong,
@@ -94,6 +106,16 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
             return prev;
         });
     }, [gallerySources]);
+
+    // Memoize options for searchable multi-select
+    const locationOptions: SelectOption[] = React.useMemo(
+        () =>
+            locations.map((loc) => ({
+                id: loc.id,
+                label: loc.name || "Untitled location",
+            })),
+        [locations]
+    );
 
     const handleChange = (
         field: keyof OrganizationEditorValues,
@@ -268,64 +290,49 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
         <div className="entity-editor-panel">
             <form className="entity-editor" onSubmit={handleSubmit}>
                 <div className="entity-header">
-                    <div>
+                    <div className="entity-header-title">
                         <p className="panel-label">Organization</p>
-                        <h2>{values.name || "Untitled Organization"}</h2>
-                    </div>
-                    <div className="entity-actions">
-                        <Button
-                            type="submit"
-                            variant="primary"
-                            disabled={isSaving}
-                        >
-                            {isSaving ? "Saving…" : "Save organization"}
-                        </Button>
+                        <input
+                            type="text"
+                            className="entity-name-input"
+                            value={values.name}
+                            onChange={(e) =>
+                                handleChange("name", e.target.value)
+                            }
+                            placeholder="Untitled Organization"
+                        />
                     </div>
                 </div>
                 <div className="entity-editor-grid">
                     <div className="entity-column">
                         <div className="entity-field">
-                            <Label htmlFor="organization-name">Name</Label>
-                            <Input
-                                id="organization-name"
-                                value={values.name}
-                                onChange={(event) =>
-                                    handleChange("name", event.target.value)
-                                }
-                                placeholder="House Astra"
-                            />
-                        </div>
-                        <div className="entity-field">
                             <Label htmlFor="organization-description">
                                 Description
                             </Label>
-                            <textarea
-                                id="organization-description"
-                                className="text-area"
-                                rows={4}
+                            <ListInput
                                 value={values.description}
-                                onChange={(event) =>
-                                    handleChange(
-                                        "description",
-                                        event.target.value
-                                    )
+                                onChange={(items) =>
+                                    handleChange("description", items)
                                 }
-                                placeholder="Purpose, history, notable feats"
+                                placeholder="Add description point... (use / to reference)"
+                                addButtonLabel=""
+                                availableDocuments={availableDocuments}
+                                onReferenceClick={onNavigateToDocument}
                             />
                         </div>
                         <div className="entity-field">
                             <Label htmlFor="organization-mission">
                                 Mission
                             </Label>
-                            <textarea
-                                id="organization-mission"
-                                className="text-area"
-                                rows={3}
+                            <ListInput
                                 value={values.mission}
-                                onChange={(event) =>
-                                    handleChange("mission", event.target.value)
+                                onChange={(items) =>
+                                    handleChange("mission", items)
                                 }
-                                placeholder="Core goals"
+                                placeholder="Add mission point... (use / to reference)"
+                                addButtonLabel=""
+                                availableDocuments={availableDocuments}
+                                onReferenceClick={onNavigateToDocument}
                             />
                         </div>
                         <div className="entity-field">
@@ -340,30 +347,14 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                             <Label htmlFor="organization-locations">
                                 Locations
                             </Label>
-                            <select
-                                id="organization-locations"
-                                className="input"
-                                multiple
+                            <SearchableMultiSelect
                                 value={values.locationIds}
-                                onChange={(event) => {
-                                    const selected = Array.from(
-                                        event.target.selectedOptions
-                                    ).map((option) => option.value);
-                                    handleChange("locationIds", selected);
-                                }}
-                            >
-                                {locations.map((location) => (
-                                    <option
-                                        key={location.id}
-                                        value={location.id}
-                                    >
-                                        {location.name || "Untitled location"}
-                                    </option>
-                                ))}
-                            </select>
-                            <span className="helper-text">
-                                Hold Ctrl / Cmd to select multiple.
-                            </span>
+                                options={locationOptions}
+                                onChange={(ids) =>
+                                    handleChange("locationIds", ids)
+                                }
+                                placeholder="Search to add locations..."
+                            />
                         </div>
                     </div>
                     <div className="entity-column">

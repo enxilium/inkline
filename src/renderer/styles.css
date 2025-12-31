@@ -1089,8 +1089,8 @@ html {
 .welcome-handwritten {
     font-family: inherit;
     font-style: normal;
-    font-weight: 600;
-    letter-spacing: 0rem;
+    font-weight: 200;
+    letter-spacing: 0.2rem;
     text-transform: uppercase;
     position: relative;
     display: inline-block;
@@ -2106,10 +2106,7 @@ input.toolbar-color:focus {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding-top: 0.2rem;
-    padding-bottom: 0.25rem;
-    padding-left: 0.3rem;
-    padding-right: 0;
+    padding: 0.55rem 0.5rem;
     margin-top: 0;
     border-radius: 6px;
     color: var(--text);
@@ -2708,6 +2705,19 @@ input.toolbar-color:focus {
     max-height: 100%;
 }
 
+/* Entity editor tabs get borders, but only rounded on top when first in stack */
+.flexlayout__tab:has(.entity-editor) {
+    border: 1px solid var(--stroke);
+    border-radius: 0;
+}
+
+/* Only the first tabset in a vertical stack should have rounded top corners */
+.flexlayout__row
+    > .flexlayout__tabset:first-child
+    .flexlayout__tab:has(.entity-editor) {
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
+}
 
 .flexlayout__border {
     background-color: transparent;
@@ -3243,4 +3253,1010 @@ input.toolbar-color:focus {
 .markdown-content pre code {
     background: none;
     padding: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Searchable Select Components
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.searchable-select,
+.searchable-multi-select {
+    position: relative;
+    width: 100%;
+}
+
+.searchable-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.95rem;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+    min-height: 42px;
+}
+
+.searchable-select-trigger:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.searchable-select-trigger:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-transparent2);
+}
+
+.searchable-select-value {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.searchable-select-value.is-placeholder {
+    color: var(--text-subtle);
+}
+
+.searchable-select-clear {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.15rem;
+    margin-left: 0.5rem;
+    border-radius: 4px;
+    color: var(--text-subtle);
+    transition:
+        color 0.15s ease,
+        background 0.15s ease;
+}
+
+.searchable-select-clear:hover {
+    color: var(--text-error);
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.searchable-select-input-wrapper {
+    width: 100%;
+}
+
+.searchable-select-input {
+    width: 100%;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.95rem;
+    font-family: inherit;
+    min-height: 42px;
+    box-shadow: 0 0 0 1px var(--accent-transparent2);
+}
+
+.searchable-select-input:focus {
+    outline: none;
+}
+
+.searchable-select-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    background: #2a2b2d;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow:
+        0 8px 24px rgba(0, 0, 0, 0.5),
+        0 0 0 1px rgba(255, 255, 255, 0.05);
+    z-index: 100;
+}
+
+.searchable-select-option {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.searchable-select-option:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.searchable-select-option.is-selected {
+    background: var(--accent-transparent2);
+}
+
+.searchable-select-option .option-label.is-placeholder {
+    color: var(--text-subtle);
+    font-style: italic;
+}
+
+.searchable-select-empty {
+    padding: 0.75rem;
+    color: var(--text-subtle);
+    font-size: 0.875rem;
+    text-align: center;
+}
+
+/* Searchable Multi-Select (Tag-like) */
+.searchable-multi-select-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    min-height: 42px;
+    align-items: center;
+    cursor: text;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.searchable-multi-select-container:hover {
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.searchable-multi-select.is-open .searchable-multi-select-container {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-transparent2);
+}
+
+.searchable-multi-input {
+    flex: 1;
+    min-width: 100px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 0.95rem;
+    font-family: inherit;
+}
+
+.searchable-multi-input:focus {
+    outline: none;
+}
+
+.searchable-multi-placeholder {
+    color: var(--text-subtle);
+    font-size: 0.95rem;
+}
+
+.searchable-multi-placeholder.hidden {
+    display: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Entity Name Input (Editable Title)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.entity-header-title {
+    flex: 1;
+    min-width: 0;
+}
+
+.entity-name-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--text);
+    font-size: 1.5rem;
+    font-weight: 500;
+    font-family: inherit;
+    padding: 0.25rem 0;
+    margin: 0;
+    transition: border-color 0.15s ease;
+}
+
+.entity-name-input:hover {
+    border-bottom-color: rgba(255, 255, 255, 0.15);
+}
+
+.entity-name-input:focus {
+    outline: none;
+    border-bottom-color: var(--accent);
+}
+
+.entity-name-input::placeholder {
+    color: var(--text-subtle);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Traits Input Component
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.traits-input-wrapper {
+    position: relative;
+}
+
+.traits-input-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    padding: 0.5rem;
+    min-height: 42px;
+    align-items: center;
+    transition:
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.traits-input-container:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-transparent2);
+}
+
+.trait-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: linear-gradient(
+        135deg,
+        rgba(46, 246, 173, 0.15),
+        rgba(46, 246, 173, 0.05)
+    );
+    border: 1px solid rgba(46, 246, 173, 0.25);
+    border-radius: 16px;
+    padding: 0.25rem 0.5rem 0.25rem 0.6rem;
+    font-size: 0.85rem;
+    font-family: inherit;
+    color: var(--text);
+}
+
+.trait-icon {
+    font-size: 0.9rem;
+    line-height: 1;
+}
+
+.trait-label {
+    text-transform: capitalize;
+    font-family: inherit;
+}
+
+.traits-input-field {
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 0.95rem;
+    font-family: inherit;
+    flex: 1;
+    min-width: 100px;
+    padding: 0;
+}
+
+.traits-input-field:focus {
+    outline: none;
+}
+
+.traits-suggestions-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    max-height: 280px;
+    overflow-y: auto;
+    background: #2a2b2d;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    padding: 0.75rem;
+}
+
+.traits-suggestion-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    padding: 0.3rem 0.6rem;
+    font-size: 0.85rem;
+    font-family: inherit;
+    color: var(--text);
+    cursor: pointer;
+    transition:
+        background 0.1s ease,
+        border-color 0.1s ease;
+}
+
+.traits-suggestion-item:hover {
+    background: rgba(46, 246, 173, 0.15);
+    border-color: rgba(46, 246, 173, 0.3);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   List Input Component
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.list-input-container {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.list-input-items {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+.list-input-empty {
+    color: var(--text-subtle);
+    font-size: 0.875rem;
+    font-style: italic;
+    padding: 0.75rem;
+    text-align: center;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 8px;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+.list-input-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    transition:
+        background 0.1s ease,
+        border-color 0.1s ease;
+}
+
+.list-input-item:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.12);
+}
+
+.list-input-item-text {
+    flex: 1;
+    font-size: 0.9rem;
+    color: var(--text);
+    cursor: text;
+    line-height: 1.4;
+}
+
+.list-input-item-remove {
+    background: transparent;
+    border: none;
+    padding: 0.25rem;
+    color: var(--text-subtle);
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transition:
+        opacity 0.1s ease,
+        color 0.1s ease;
+}
+
+.list-input-item:hover .list-input-item-remove {
+    opacity: 1;
+}
+
+.list-input-item-remove:hover {
+    color: var(--text-error);
+}
+
+.list-input-edit-field {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid var(--accent);
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    padding: 0;
+}
+
+.list-input-edit-field:focus {
+    outline: none;
+}
+
+.list-input-add-wrapper {
+    position: relative;
+}
+
+.list-input-add-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.list-input-field {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 8px;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    transition: border-color 0.15s ease;
+}
+
+.list-input-field:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+.list-input-add-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.5rem 0.75rem;
+    background: rgba(46, 246, 173, 0.1);
+    border: 1px solid rgba(46, 246, 173, 0.25);
+    border-radius: 8px;
+    color: var(--accent);
+    font-size: 0.85rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.list-input-add-btn:hover:not(:disabled) {
+    background: rgba(46, 246, 173, 0.2);
+}
+
+.list-input-add-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* List Input - Reference links */
+.list-input-reference {
+    display: inline;
+    color: #ffb347;
+    background: rgba(255, 179, 71, 0.15);
+    padding: 0.1rem 0.4rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+    cursor: pointer;
+    border: 1px solid rgba(255, 179, 71, 0.3);
+    font-family: inherit;
+    font-weight: 500;
+    transition:
+        background 0.1s ease,
+        border-color 0.1s ease;
+}
+
+.list-input-reference:hover {
+    background: rgba(255, 179, 71, 0.25);
+    border-color: rgba(255, 179, 71, 0.5);
+    text-decoration: none;
+}
+
+.list-input-reference-unresolved {
+    display: inline;
+    color: var(--text-subtle);
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0.1rem 0.35rem;
+    border-radius: 4px;
+    font-size: 0.85em;
+    font-style: italic;
+    border: 1px dashed rgba(255, 255, 255, 0.2);
+}
+
+/* List Input - Reference dropdown */
+.list-input-ref-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: #2a2b2d;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.list-input-ref-header {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-subtle);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.list-input-ref-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.list-input-ref-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.list-input-ref-icon {
+    font-size: 1rem;
+}
+
+.list-input-ref-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.list-input-ref-kind {
+    font-size: 0.75rem;
+    color: var(--text-subtle);
+    text-transform: capitalize;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   TextArea Input Component (with slash-command support)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.textarea-input-wrapper {
+    position: relative;
+}
+
+.textarea-input {
+    width: 100%;
+}
+
+.textarea-ref-dropdown {
+    position: absolute;
+    left: 0;
+    right: 0;
+    background: #2a2b2d;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    z-index: 100;
+    max-height: 240px;
+    overflow-y: auto;
+}
+
+.textarea-ref-header {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-subtle);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.textarea-ref-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    padding: 0.6rem 0.75rem;
+    background: transparent;
+    border: none;
+    color: var(--text);
+    font-size: 0.9rem;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.textarea-ref-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.textarea-ref-icon {
+    font-size: 1rem;
+}
+
+.textarea-ref-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.textarea-ref-kind {
+    font-size: 0.75rem;
+    color: var(--text-subtle);
+    text-transform: capitalize;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Tiptap Document Reference Extension (rich text slash commands)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Reference node rendered inline in the editor */
+.tiptap-document-reference {
+    display: inline;
+    padding: 0.05rem 0.15rem;
+    border-radius: 3px;
+    font-size: inherit;
+    cursor: pointer;
+    font-weight: 500;
+    background: transparent;
+    border: 1px solid transparent;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease,
+        box-shadow 0.15s ease;
+}
+
+.tiptap-document-reference:hover {
+    text-decoration: none;
+}
+
+/* Color variants by document kind */
+/* Chapter - Blue */
+.tiptap-ref-kind-chapter {
+    color: #64b5f6;
+}
+.tiptap-ref-kind-chapter:hover {
+    background: rgba(100, 181, 246, 0.1);
+    border-color: rgba(100, 181, 246, 0.25);
+    box-shadow: 0 0 8px rgba(100, 181, 246, 0.2);
+}
+
+/* Scrap Note - Purple */
+.tiptap-ref-kind-scrapNote {
+    color: #ba68c8;
+}
+.tiptap-ref-kind-scrapNote:hover {
+    background: rgba(186, 104, 200, 0.1);
+    border-color: rgba(186, 104, 200, 0.25);
+    box-shadow: 0 0 8px rgba(186, 104, 200, 0.2);
+}
+
+/* Character - Orange */
+.tiptap-ref-kind-character {
+    color: #ffb347;
+}
+.tiptap-ref-kind-character:hover {
+    background: rgba(255, 179, 71, 0.1);
+    border-color: rgba(255, 179, 71, 0.25);
+    box-shadow: 0 0 8px rgba(255, 179, 71, 0.2);
+}
+
+/* Location - Green */
+.tiptap-ref-kind-location {
+    color: #81c784;
+}
+.tiptap-ref-kind-location:hover {
+    background: rgba(129, 199, 132, 0.1);
+    border-color: rgba(129, 199, 132, 0.25);
+    box-shadow: 0 0 8px rgba(129, 199, 132, 0.2);
+}
+
+/* Organization - Cyan */
+.tiptap-ref-kind-organization {
+    color: #4dd0e1;
+}
+.tiptap-ref-kind-organization:hover {
+    background: rgba(77, 208, 225, 0.1);
+    border-color: rgba(77, 208, 225, 0.25);
+    box-shadow: 0 0 8px rgba(77, 208, 225, 0.2);
+}
+
+/* Suggestion dropdown triggered by "/" */
+.tiptap-document-ref-dropdown {
+    background: #2a2b2d;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    max-height: 280px;
+    overflow-y: auto;
+    min-width: 200px;
+}
+
+.tiptap-ref-empty {
+    padding: 0.75rem 1rem;
+    color: var(--text-subtle);
+    font-style: italic;
+    font-size: 0.9rem;
+}
+
+.tiptap-ref-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 0.75rem;
+    cursor: pointer;
+    transition: background 0.1s ease;
+}
+
+.tiptap-ref-item:hover,
+.tiptap-ref-item-selected {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.tiptap-ref-item-selected {
+    background: rgba(255, 179, 71, 0.15);
+}
+
+.tiptap-ref-icon {
+    font-size: 1rem;
+    flex-shrink: 0;
+}
+
+.tiptap-ref-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+    font-size: 0.9rem;
+}
+
+.tiptap-ref-kind {
+    font-size: 0.75rem;
+    color: var(--text-subtle);
+    text-transform: capitalize;
+    flex-shrink: 0;
+}
+
+/* Tippy theme for document reference dropdown */
+.tippy-box[data-theme~="document-reference"] {
+    background: transparent;
+    padding: 0;
+    box-shadow: none;
+}
+
+.tippy-box[data-theme~="document-reference"] > .tippy-content {
+    padding: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   RichTextAreaInput Component
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.rich-textarea-wrapper {
+    position: relative;
+    width: 100%;
+}
+
+.rich-textarea-input {
+    /* Mimic standard input/textarea styles */
+    width: 100%;
+    padding: 0.75rem;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    line-height: 1.5;
+    outline: none;
+    transition:
+        border-color 0.2s ease,
+        box-shadow 0.2s ease;
+    overflow-y: auto;
+}
+
+.rich-textarea-input:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-transparent2);
+}
+
+.rich-textarea-input .ProseMirror {
+    outline: none;
+    min-height: inherit;
+}
+
+.rich-textarea-input p {
+    margin: 0;
+}
+
+.rich-textarea-placeholder {
+    position: absolute;
+    top: 0.75rem;
+    left: 0.75rem;
+    color: var(--text-subtle);
+    pointer-events: none;
+    font-size: 0.95rem;
+    line-height: 1.5;
+    opacity: 0.6;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   ListInput Rich Text Overrides
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.list-input-field-rich .rich-textarea-input,
+.list-input-edit-field-rich .rich-textarea-input {
+    background: transparent;
+    border: none;
+    padding: 0;
+    min-height: auto !important;
+}
+
+.list-input-field-rich .rich-textarea-input:focus-within,
+.list-input-edit-field-rich .rich-textarea-input:focus-within {
+    box-shadow: none;
+    border: none;
+}
+
+.list-input-field-rich .rich-textarea-placeholder {
+    top: 0;
+    left: 0;
+}
+
+.rich-text-content p {
+    margin: 0;
+}
+
+.list-input-edit-wrapper {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 0.5rem;
+}
+
+.list-input-edit-field-rich {
+    flex: 1;
+}
+
+.list-input-edit-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.list-input-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-subtle);
+    cursor: pointer;
+    padding: 2px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+}
+
+.list-input-action-btn:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--text);
+}
+
+.list-input-action-btn.confirm:hover {
+    color: var(--accent);
+}
+
+.list-input-action-btn.cancel:hover {
+    color: var(--danger);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Enhanced Document Reference Styling (Icons, Bold, Underline)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+.tiptap-document-reference {
+    font-weight: 700 !important;
+    display: inline-flex !important;
+    align-items: center;
+    gap: 6px;
+    text-decoration: none !important;
+    border-bottom: 1px solid currentColor; /* Continuous underline including icon */
+    padding-bottom: 0px;
+    line-height: 1.4;
+    vertical-align: baseline;
+    cursor: pointer;
+}
+
+/* Icons via pseudo-elements using mask-image for coloring */
+.tiptap-document-reference::before {
+    content: "";
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    background-color: currentColor;
+    -webkit-mask-repeat: no-repeat;
+    -webkit-mask-size: contain;
+    -webkit-mask-position: center;
+    mask-repeat: no-repeat;
+    mask-size: contain;
+    mask-position: center;
+    flex-shrink: 0;
+}
+
+/* SVG Data URIs */
+.tiptap-document-reference[data-kind="chapter"]::before {
+    -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a3 3 0 0 1 3-3h12v18H7a3 3 0 0 0-3 3z" /><path d="M4 5v18" /><path d="M8 7h8" /><path d="M8 11h8" /></svg>');
+    mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5a3 3 0 0 1 3-3h12v18H7a3 3 0 0 0-3 3z" /><path d="M4 5v18" /><path d="M8 7h8" /><path d="M8 11h8" /></svg>');
+}
+
+.tiptap-document-reference[data-kind="scrapNote"]::before {
+    -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M8 12h8" /><path d="M8 16h6" /></svg>');
+    mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /><path d="M8 12h8" /><path d="M8 16h6" /></svg>');
+}
+
+.tiptap-document-reference[data-kind="character"]::before {
+    -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>');
+    mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>');
+}
+
+.tiptap-document-reference[data-kind="location"]::before {
+    -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>');
+    mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"></polygon><line x1="8" y1="2" x2="8" y2="18"></line><line x1="16" y1="6" x2="16" y2="22"></line></svg>');
+}
+
+.tiptap-document-reference[data-kind="organization"]::before {
+    -webkit-mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17" /><path d="M4 22h16" /><path d="M10 8h1" /><path d="M13 8h1" /><path d="M10 12h1" /><path d="M13 12h1" /><path d="M11 22v-4h2v4" /></svg>');
+    mask-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 22V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v17" /><path d="M4 22h16" /><path d="M10 8h1" /><path d="M13 8h1" /><path d="M10 12h1" /><path d="M13 12h1" /><path d="M11 22v-4h2v4" /></svg>');
+}
+
+/* Ensure colors apply via data-kind attribute as well (for serialized HTML) */
+.tiptap-document-reference[data-kind="chapter"] {
+    color: #64b5f6;
+}
+.tiptap-document-reference[data-kind="scrapNote"] {
+    color: #ba68c8;
+}
+.tiptap-document-reference[data-kind="character"] {
+    color: #ffb347;
+}
+.tiptap-document-reference[data-kind="location"] {
+    color: #81c784;
+}
+.tiptap-document-reference[data-kind="organization"] {
+    color: #4dd0e1;
+}
+
+/* Hover effects */
+.tiptap-document-reference[data-kind="chapter"]:hover {
+    background: rgba(100, 181, 246, 0.1);
+    box-shadow: 0 0 8px rgba(100, 181, 246, 0.2);
+}
+.tiptap-document-reference[data-kind="scrapNote"]:hover {
+    background: rgba(186, 104, 200, 0.1);
+    box-shadow: 0 0 8px rgba(186, 104, 200, 0.2);
+}
+.tiptap-document-reference[data-kind="character"]:hover {
+    background: rgba(255, 179, 71, 0.1);
+    box-shadow: 0 0 8px rgba(255, 179, 71, 0.2);
+}
+.tiptap-document-reference[data-kind="location"]:hover {
+    background: rgba(129, 199, 132, 0.1);
+    box-shadow: 0 0 8px rgba(129, 199, 132, 0.2);
+}
+.tiptap-document-reference[data-kind="organization"]:hover {
+    background: rgba(77, 208, 225, 0.1);
+    box-shadow: 0 0 8px rgba(77, 208, 225, 0.2);
 }

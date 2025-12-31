@@ -2,16 +2,17 @@ import React from "react";
 
 import type { WorkspaceLocation } from "../../types";
 import { Button } from "../ui/Button";
-import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
+import { ListInput, type DocumentRef } from "../ui/ListInput";
 import { TagsInput } from "../ui/Tags";
+import { RichTextAreaInput } from "../ui/RichTextAreaInput";
 
 export type LocationEditorValues = {
     name: string;
     description: string;
     culture: string;
     history: string;
-    conflicts: string;
+    conflicts: string[];
     tags: string[];
 };
 
@@ -19,6 +20,8 @@ export type LocationEditorProps = {
     location: WorkspaceLocation;
     gallerySources: string[];
     songUrl?: string;
+    /** All documents available for slash-command references */
+    availableDocuments?: DocumentRef[];
     onSubmit: (values: LocationEditorValues) => Promise<void>;
     onGeneratePortrait: () => Promise<void>;
     onImportPortrait: (file: File) => Promise<void>;
@@ -26,6 +29,8 @@ export type LocationEditorProps = {
     onImportSong: (file: File) => Promise<void>;
     onGeneratePlaylist: () => Promise<void>;
     onImportPlaylist: (file: File) => Promise<void>;
+    /** Navigate to a referenced document */
+    onNavigateToDocument?: (ref: DocumentRef) => void;
 };
 
 const defaultValues = (location: WorkspaceLocation): LocationEditorValues => ({
@@ -33,7 +38,7 @@ const defaultValues = (location: WorkspaceLocation): LocationEditorValues => ({
     description: location.description ?? "",
     culture: location.culture ?? "",
     history: location.history ?? "",
-    conflicts: (location.conflicts ?? []).join("\n"),
+    conflicts: location.conflicts ?? [],
     tags: location.tags ?? [],
 });
 
@@ -41,6 +46,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     location,
     gallerySources,
     songUrl,
+    availableDocuments = [],
     onSubmit,
     onGeneratePortrait,
     onImportPortrait,
@@ -48,6 +54,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     onImportSong,
     onGeneratePlaylist,
     onImportPlaylist,
+    onNavigateToDocument,
 }) => {
     const [values, setValues] = React.useState<LocationEditorValues>(() =>
         defaultValues(location)
@@ -268,93 +275,73 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
         <div className="entity-editor-panel">
             <form className="entity-editor" onSubmit={handleSubmit}>
                 <div className="entity-header">
-                    <div>
+                    <div className="entity-header-title">
                         <p className="panel-label">Location</p>
-                        <h2>{values.name || "Untitled Location"}</h2>
-                    </div>
-                    <div className="entity-actions">
-                        <Button
-                            type="submit"
-                            variant="primary"
-                            disabled={isSaving}
-                        >
-                            {isSaving ? "Saving…" : "Save location"}
-                        </Button>
+                        <input
+                            type="text"
+                            className="entity-name-input"
+                            value={values.name}
+                            onChange={(e) =>
+                                handleChange("name", e.target.value)
+                            }
+                            placeholder="Untitled Location"
+                        />
                     </div>
                 </div>
                 <div className="entity-editor-grid">
                     <div className="entity-column">
                         <div className="entity-field">
-                            <Label htmlFor="location-name">Name</Label>
-                            <Input
-                                id="location-name"
-                                value={values.name}
-                                placeholder="Asteria Station"
-                                onChange={(event) =>
-                                    handleChange("name", event.target.value)
-                                }
-                            />
-                        </div>
-                        <div className="entity-field">
                             <Label htmlFor="location-description">
                                 Description
                             </Label>
-                            <textarea
+                            <RichTextAreaInput
                                 id="location-description"
-                                className="text-area"
-                                rows={5}
-                                placeholder="Overall vibe, landscape, architecture"
+                                rows={4}
+                                placeholder="Overall vibe, landscape, architecture (use / to reference)"
                                 value={values.description}
-                                onChange={(event) =>
-                                    handleChange(
-                                        "description",
-                                        event.target.value
-                                    )
+                                onChange={(val) =>
+                                    handleChange("description", val)
                                 }
+                                availableDocuments={availableDocuments}
+                                onReferenceClick={onNavigateToDocument}
                             />
                         </div>
                         <div className="entity-field">
                             <Label htmlFor="location-culture">Culture</Label>
-                            <textarea
+                            <RichTextAreaInput
                                 id="location-culture"
-                                className="text-area"
-                                rows={4}
-                                placeholder="Traditions, customs, societal norms"
+                                rows={3}
+                                placeholder="Traditions, customs, societal norms (use / to reference)"
                                 value={values.culture}
-                                onChange={(event) =>
-                                    handleChange("culture", event.target.value)
-                                }
+                                onChange={(val) => handleChange("culture", val)}
+                                availableDocuments={availableDocuments}
+                                onReferenceClick={onNavigateToDocument}
                             />
                         </div>
                         <div className="entity-field">
                             <Label htmlFor="location-history">History</Label>
-                            <textarea
+                            <RichTextAreaInput
                                 id="location-history"
-                                className="text-area"
-                                rows={4}
-                                placeholder="Important historical events"
+                                rows={3}
+                                placeholder="Important historical events (use / to reference)"
                                 value={values.history}
-                                onChange={(event) =>
-                                    handleChange("history", event.target.value)
-                                }
+                                onChange={(val) => handleChange("history", val)}
+                                availableDocuments={availableDocuments}
+                                onReferenceClick={onNavigateToDocument}
                             />
                         </div>
                         <div className="entity-field">
-                            <Label htmlFor="location-conflicts">
-                                Conflicts
-                            </Label>
-                            <textarea
-                                id="location-conflicts"
-                                className="text-area"
-                                rows={3}
-                                placeholder="Enter one conflict per line"
+                            <Label>Conflicts</Label>
+                            <ListInput
                                 value={values.conflicts}
-                                onChange={(event) =>
-                                    handleChange(
-                                        "conflicts",
-                                        event.target.value
-                                    )
+                                onChange={(conflicts) =>
+                                    handleChange("conflicts", conflicts)
                                 }
+                                placeholder="What tensions exist here?"
+                                addButtonLabel=""
+                                emptyMessage="No conflicts defined yet"
+                                availableDocuments={availableDocuments}
+                                onReferenceClick={onNavigateToDocument}
                             />
                         </div>
                         <div className="entity-field">

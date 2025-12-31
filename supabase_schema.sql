@@ -173,6 +173,7 @@ create table if not exists public.characters (
   traits jsonb default '[]'::jsonb,
   goals jsonb default '[]'::jsonb,
   secrets jsonb default '[]'::jsonb,
+  powers jsonb default '[]'::jsonb,
   tags jsonb default '[]'::jsonb,
   bgm_id uuid,
   playlist_id uuid,

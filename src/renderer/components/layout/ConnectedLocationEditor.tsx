@@ -5,23 +5,22 @@ import {
     type LocationEditorValues,
 } from "../workspace/LocationEditor";
 import type { AutosaveStatus } from "../../types";
+import type { DocumentRef } from "../ui/ListInput";
 
 interface ConnectedLocationEditorProps {
     locationId: string;
 }
-
-const listFromMultiline = (value: string): string[] =>
-    value
-        .split(/\r?\n/)
-        .map((entry) => entry.trim())
-        .filter(Boolean);
 
 export const ConnectedLocationEditor: React.FC<
     ConnectedLocationEditorProps
 > = ({ locationId }) => {
     const {
         projectId,
+        chapters,
+        characters,
         locations,
+        organizations,
+        scrapNotes,
         assets,
         activeDocument,
         updateLocationLocally,
@@ -33,6 +32,7 @@ export const ConnectedLocationEditor: React.FC<
         importAsset,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
+        setActiveDocument,
     } = useAppStore();
 
     const [autosaveStatus, setAutosaveStatus] =
@@ -84,7 +84,7 @@ export const ConnectedLocationEditor: React.FC<
                 description: values.description,
                 culture: values.culture,
                 history: values.history,
-                conflicts: listFromMultiline(values.conflicts),
+                conflicts: values.conflicts,
                 tags: values.tags,
             };
 
@@ -215,11 +215,75 @@ export const ConnectedLocationEditor: React.FC<
         return <div className="empty-editor">Location not found.</div>;
     }
 
+    // Build available documents for slash-command references
+    const availableDocuments: DocumentRef[] = React.useMemo(() => {
+        const docs: DocumentRef[] = [];
+
+        chapters.forEach((ch) => {
+            docs.push({
+                kind: "chapter",
+                id: ch.id,
+                name: ch.title || `Chapter ${ch.order}`,
+            });
+        });
+
+        scrapNotes.forEach((sn) => {
+            docs.push({
+                kind: "scrapNote",
+                id: sn.id,
+                name: sn.title || "Untitled Note",
+            });
+        });
+
+        characters.forEach((c) => {
+            docs.push({
+                kind: "character",
+                id: c.id,
+                name: c.name || "Untitled Character",
+            });
+        });
+
+        locations.forEach((loc) => {
+            if (loc.id !== locationId) {
+                docs.push({
+                    kind: "location",
+                    id: loc.id,
+                    name: loc.name || "Untitled Location",
+                });
+            }
+        });
+
+        organizations.forEach((org) => {
+            docs.push({
+                kind: "organization",
+                id: org.id,
+                name: org.name || "Untitled Organization",
+            });
+        });
+
+        return docs;
+    }, [
+        chapters,
+        scrapNotes,
+        characters,
+        locations,
+        organizations,
+        locationId,
+    ]);
+
+    const handleNavigateToDocument = React.useCallback(
+        (ref: DocumentRef) => {
+            setActiveDocument({ kind: ref.kind, id: ref.id });
+        },
+        [setActiveDocument]
+    );
+
     return (
         <LocationEditor
             location={location}
             gallerySources={gallerySources}
             songUrl={songUrl}
+            availableDocuments={availableDocuments}
             onSubmit={handleSubmit}
             onGeneratePortrait={handleGeneratePortrait}
             onImportPortrait={handleImportPortrait}
@@ -227,6 +291,7 @@ export const ConnectedLocationEditor: React.FC<
             onImportSong={handleImportSong}
             onGeneratePlaylist={handleGeneratePlaylist}
             onImportPlaylist={handleImportPlaylist}
+            onNavigateToDocument={handleNavigateToDocument}
         />
     );
 };

@@ -16,6 +16,7 @@ type FileSystemCharacter = {
     traits: string[];
     goals: string[];
     secrets: string[];
+    powers: { title: string; description: string }[];
     tags: string[];
     bgmId: string | null;
     playlistId: string | null;
@@ -61,6 +62,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
             traits: character.traits,
             goals: character.goals,
             secrets: character.secrets,
+            powers: character.powers,
             tags: character.tags,
             bgmId: character.bgmId,
             playlistId: character.playlistId,
@@ -120,6 +122,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
                 organizationId: character.organizationId,
                 traits: character.traits,
                 goals: character.goals,
+                powers: character.powers,
                 secrets: character.secrets,
                 tags: character.tags,
                 bgmId: character.bgmId,
@@ -214,6 +217,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
             dto.traits,
             dto.goals,
             dto.secrets,
+            dto.powers || [],
             dto.tags,
             dto.bgmId,
             dto.playlistId,
