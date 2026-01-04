@@ -10,6 +10,7 @@ import {
     MapIcon,
     PanelLeftIcon,
     PanelLeftOutlineIcon,
+    PenLineIcon,
     PersonIcon,
     SearchIcon,
     SettingsIcon,
@@ -31,6 +32,8 @@ export const Titlebar: React.FC = () => {
         openSettings,
         globalFind,
         setActiveDocument,
+        workspaceViewMode,
+        setWorkspaceViewMode,
     } = useAppStore();
 
     const [searchTerm, setSearchTerm] = React.useState("");
@@ -263,18 +266,44 @@ export const Titlebar: React.FC = () => {
                 <div className="titlebar-right">
                     {stage === "workspace" ? (
                         <div className="titlebar-actions titlebar-no-drag">
+                            {/* Hide binder toggle when in timeline view */}
+                            {workspaceViewMode === "manuscript" && (
+                                <button
+                                    type="button"
+                                    className="titlebar-action-icon"
+                                    onClick={toggleBinder}
+                                    aria-label="Toggle Pane"
+                                    aria-pressed={isBinderOpen}
+                                    title="Toggle Pane"
+                                >
+                                    {isBinderOpen ? (
+                                        <PanelLeftIcon size={18} />
+                                    ) : (
+                                        <PanelLeftOutlineIcon size={18} />
+                                    )}
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 className="titlebar-action-icon"
-                                onClick={toggleBinder}
-                                aria-label="Toggle Pane"
-                                aria-pressed={isBinderOpen}
-                                title="Toggle Pane"
+                                onClick={() =>
+                                    setWorkspaceViewMode(
+                                        workspaceViewMode === "manuscript"
+                                            ? "timeline"
+                                            : "manuscript"
+                                    )
+                                }
+                                aria-label="Toggle View"
+                                title={
+                                    workspaceViewMode === "manuscript"
+                                        ? "Switch to Timeline"
+                                        : "Switch to Manuscript"
+                                }
                             >
-                                {isBinderOpen ? (
-                                    <PanelLeftIcon size={18} />
+                                {workspaceViewMode === "manuscript" ? (
+                                    <MapIcon size={16} />
                                 ) : (
-                                    <PanelLeftOutlineIcon size={18} />
+                                    <PenLineIcon size={16} />
                                 )}
                             </button>
                             <button
@@ -286,20 +315,23 @@ export const Titlebar: React.FC = () => {
                             >
                                 <SettingsIcon size={16} />
                             </button>
-                            <button
-                                type="button"
-                                className="titlebar-action-icon"
-                                onClick={toggleChat}
-                                aria-label="Chat"
-                                aria-pressed={isChatOpen}
-                                title="Chat"
-                            >
-                                {isChatOpen ? (
-                                    <MessageSquareFilledIcon size={16} />
-                                ) : (
-                                    <MessageSquareIcon size={16} />
-                                )}
-                            </button>
+                            {/* Hide chat toggle when in timeline view */}
+                            {workspaceViewMode === "manuscript" && (
+                                <button
+                                    type="button"
+                                    className="titlebar-action-icon"
+                                    onClick={toggleChat}
+                                    aria-label="Chat"
+                                    aria-pressed={isChatOpen}
+                                    title="Chat"
+                                >
+                                    {isChatOpen ? (
+                                        <MessageSquareFilledIcon size={16} />
+                                    ) : (
+                                        <MessageSquareIcon size={16} />
+                                    )}
+                                </button>
+                            )}
                         </div>
                     ) : stage === "projectSelect" ? (
                         <div className="titlebar-actions titlebar-no-drag">

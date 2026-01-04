@@ -41,6 +41,14 @@ export const DialogHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
     ...props
 }) => <div className={cx("dialog-header", className)} {...props} />;
 
+export const DialogFooter = ({
+    className,
+    ...props
+}: React.HTMLAttributes<HTMLDivElement>) => (
+    <div className={cx("dialog-footer", className)} {...props} />
+);
+DialogFooter.displayName = "DialogFooter";
+
 export const DialogTitle = React.forwardRef<
     React.ElementRef<typeof DialogPrimitive.Title>,
     React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>

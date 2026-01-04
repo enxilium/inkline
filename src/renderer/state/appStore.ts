@@ -30,6 +30,9 @@ import type {
     WorkspaceImageAsset,
     WorkspaceBGMAsset,
     WorkspacePlaylistAsset,
+    WorkspaceTimeline,
+    WorkspaceEvent,
+    WorkspaceViewMode,
 } from "../types";
 
 const initialAuthForm = {
@@ -213,6 +216,7 @@ export type PendingChapterEdit =
 
 type AppStore = {
     stage: AppStage;
+    previousStage: AppStage | null;
     authMode: AuthMode;
     authForm: typeof initialAuthForm;
     authError: string | null;
@@ -233,9 +237,14 @@ type AppStore = {
     locations: WorkspaceLocation[];
     organizations: WorkspaceOrganization[];
     scrapNotes: WorkspaceScrapNote[];
+    timelines: WorkspaceTimeline[];
+    selectedTimelineId: string | null;
+    events: WorkspaceEvent[];
     assets: WorkspaceAssets;
     activeDocument: WorkspaceDocumentRef | null;
     openTabs: WorkspaceDocumentRef[];
+    workspaceViewMode: WorkspaceViewMode;
+    setWorkspaceViewMode: (mode: WorkspaceViewMode) => void;
     autosaveStatus: AutosaveStatus;
     autosaveError: string | null;
     cloudSyncError: string | null;
@@ -298,6 +307,7 @@ type AppStore = {
     restoreArchivedEdit: (editId: string) => void;
     clearPendingEditsForChapter: (chapterId: string) => void;
     openSettings: () => void;
+    closeSettings: () => void;
     bootstrapSession: () => Promise<void>;
     setAuthField: (field: keyof typeof initialAuthForm, value: string) => void;
     toggleAuthMode: () => void;
@@ -398,6 +408,45 @@ type AppStore = {
     generateOrganizationImage: RendererApi["generation"]["generateOrganizationImage"];
     generateOrganizationSong: RendererApi["generation"]["generateOrganizationSong"];
     generateOrganizationPlaylist: RendererApi["generation"]["generateOrganizationPlaylist"];
+    createTimeline: (params: {
+        projectId: string;
+        name: string;
+        description: string;
+    }) => Promise<WorkspaceTimeline | null>;
+    deleteTimeline: (timelineId: string) => Promise<void>;
+    updateTimeline: (params: {
+        timelineId: string;
+        name?: string;
+        description?: string;
+        timeUnit?: string;
+        startValue?: number;
+    }) => Promise<void>;
+    setSelectedTimelineId: (timelineId: string | null) => void;
+    createEvent: (params: {
+        timelineId: string;
+        title: string;
+        description: string;
+        year: number;
+        month?: number | null;
+        day?: number | null;
+        type: "chapter" | "scrap_note" | "event";
+        associatedId: string | null;
+    }) => Promise<void>;
+    deleteEvent: (params: {
+        eventId: string;
+        timelineId: string;
+    }) => Promise<void>;
+    updateEvent: (params: {
+        eventId: string;
+        title?: string;
+        description?: string;
+        year?: number;
+        month?: number | null;
+        day?: number | null;
+        characterIds?: string[];
+        locationIds?: string[];
+        organizationIds?: string[];
+    }) => Promise<void>;
     saveUserSettings: RendererApi["logistics"]["saveUserSettings"];
     updateAccountEmail: RendererApi["auth"]["updateEmail"];
     updateAccountPassword: RendererApi["auth"]["updatePassword"];
@@ -418,6 +467,10 @@ export const useAppStore = create<AppStore>((set, get) => {
         | "locations"
         | "organizations"
         | "scrapNotes"
+        | "timelines"
+        | "selectedTimelineId"
+        | "events"
+        | "workspaceViewMode"
         | "assets"
         | "activeDocument"
         | "openTabs"
@@ -437,6 +490,10 @@ export const useAppStore = create<AppStore>((set, get) => {
         locations: [] as WorkspaceLocation[],
         organizations: [] as WorkspaceOrganization[],
         scrapNotes: [] as WorkspaceScrapNote[],
+        timelines: [] as WorkspaceTimeline[],
+        selectedTimelineId: null as string | null,
+        events: [] as WorkspaceEvent[],
+        workspaceViewMode: "manuscript",
         assets: emptyAssets,
         activeDocument: null as WorkspaceDocumentRef | null,
         openTabs: [] as WorkspaceDocumentRef[],
@@ -811,6 +868,8 @@ export const useAppStore = create<AppStore>((set, get) => {
             payload,
             preferredSelection ?? get().activeDocument
         );
+        // Default to Main timeline when opening project
+        const mainTimeline = payload.timelines.find((t) => t.name === "Main");
         set({
             projectId: payload.project.id,
             activeProjectName: payload.project.title,
@@ -820,6 +879,9 @@ export const useAppStore = create<AppStore>((set, get) => {
             locations: payload.locations,
             organizations: payload.organizations,
             scrapNotes: payload.scrapNotes,
+            timelines: payload.timelines,
+            selectedTimelineId: mainTimeline?.id ?? null,
+            events: payload.events,
             assets: indexedAssets,
             activeDocument: nextSelection,
             openTabs: nextSelection ? [nextSelection] : [],
@@ -833,6 +895,7 @@ export const useAppStore = create<AppStore>((set, get) => {
 
     return {
         stage: "checkingSession",
+        previousStage: null,
         authMode: "login",
         authForm: initialAuthForm,
         authError: null,
@@ -853,6 +916,10 @@ export const useAppStore = create<AppStore>((set, get) => {
         locations: [],
         organizations: [],
         scrapNotes: [],
+        timelines: [],
+        selectedTimelineId: null,
+        events: [],
+        workspaceViewMode: "manuscript",
         assets: emptyAssets,
         activeDocument: null,
         openTabs: [],
@@ -1196,6 +1263,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     title: "New Chapter",
                     order: insertIndex,
                     content: "",
+                    eventId: null,
                     createdAt: now,
                     updatedAt: now,
                 });
@@ -1265,6 +1333,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         title: "New Scrap Note",
                         content: "",
                         isPinned: false,
+                        eventId: null,
                         createdAt: now,
                         updatedAt: now,
                     },
@@ -2379,6 +2448,128 @@ export const useAppStore = create<AppStore>((set, get) => {
         generateOrganizationPlaylist: async (request) => {
             return rendererApi.generation.generateOrganizationPlaylist(request);
         },
+        createTimeline: async (params) => {
+            try {
+                const result = await rendererApi.timeline.createTimeline({
+                    ...params,
+                    timeUnit: "default",
+                });
+                if (result.timeline) {
+                    const createdTimeline =
+                        result.timeline as unknown as WorkspaceTimeline;
+                    set((state) => ({
+                        timelines: [...state.timelines, createdTimeline],
+                    }));
+                    return createdTimeline;
+                }
+
+                return null;
+            } catch (error) {
+                console.error("Failed to create timeline", error);
+                return null;
+            }
+        },
+        deleteTimeline: async (timelineId) => {
+            const { projectId, timelines, selectedTimelineId } = get();
+            try {
+                await rendererApi.timeline.deleteTimeline({
+                    timelineId,
+                    projectId,
+                });
+                const newTimelines = timelines.filter(
+                    (t) => t.id !== timelineId
+                );
+                set({
+                    timelines: newTimelines,
+                    // If deleted timeline was selected, switch to Main
+                    selectedTimelineId:
+                        selectedTimelineId === timelineId
+                            ? (newTimelines.find((t) => t.name === "Main")
+                                  ?.id ?? null)
+                            : selectedTimelineId,
+                });
+            } catch (error) {
+                console.error("Failed to delete timeline", error);
+                throw error;
+            }
+        },
+        updateTimeline: async (params) => {
+            const { timelines } = get();
+            try {
+                await rendererApi.timeline.updateTimeline(params);
+                // Update the local timeline state
+                set({
+                    timelines: timelines.map((t) =>
+                        t.id === params.timelineId
+                            ? {
+                                  ...t,
+                                  ...(params.name !== undefined && {
+                                      name: params.name,
+                                  }),
+                                  ...(params.description !== undefined && {
+                                      description: params.description,
+                                  }),
+                                  ...(params.timeUnit !== undefined && {
+                                      timeUnit: params.timeUnit,
+                                  }),
+                                  ...(params.startValue !== undefined && {
+                                      startValue: params.startValue,
+                                  }),
+                              }
+                            : t
+                    ),
+                });
+            } catch (error) {
+                console.error("Failed to update timeline", error);
+                throw error;
+            }
+        },
+        setSelectedTimelineId: (timelineId) => {
+            set({ selectedTimelineId: timelineId });
+        },
+        createEvent: async (params) => {
+            try {
+                const result = await rendererApi.timeline.createEvent(params);
+                if (result.event) {
+                    set((state) => ({
+                        events: [
+                            ...state.events,
+                            result.event as unknown as WorkspaceEvent,
+                        ],
+                    }));
+                }
+            } catch (error) {
+                console.error("Failed to create event", error);
+            }
+        },
+        deleteEvent: async (params) => {
+            try {
+                await rendererApi.timeline.deleteEvent(params);
+                set((state) => ({
+                    events: state.events.filter((e) => e.id !== params.eventId),
+                }));
+            } catch (error) {
+                console.error("Failed to delete event", error);
+                throw error;
+            }
+        },
+        updateEvent: async (params) => {
+            try {
+                const result = await rendererApi.timeline.updateEvent(params);
+                if (result.event) {
+                    set((state) => ({
+                        events: state.events.map((e) =>
+                            e.id === params.eventId
+                                ? (result.event as unknown as WorkspaceEvent)
+                                : e
+                        ),
+                    }));
+                }
+            } catch (error) {
+                console.error("Failed to update event", error);
+                throw error;
+            }
+        },
         saveUserSettings: async (request) => {
             return rendererApi.logistics.saveUserSettings(request);
         },
@@ -2650,8 +2841,30 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             return { replacements };
         },
+        setWorkspaceViewMode: (mode: WorkspaceViewMode) => {
+            set({ workspaceViewMode: mode });
+        },
+
         openSettings: () => {
+            const currentStage = get().stage;
+            // Don't save settings as previous stage
+            if (currentStage !== "settings") {
+                set({ previousStage: currentStage });
+            }
             set({ stage: "settings" });
+        },
+        closeSettings: () => {
+            const previousStage = get().previousStage;
+            // Default to projectSelect if no previous stage or if it was an auth-related stage
+            if (
+                previousStage &&
+                previousStage !== "checkingSession" &&
+                previousStage !== "auth"
+            ) {
+                set({ stage: previousStage, previousStage: null });
+            } else {
+                set({ stage: "projectSelect", previousStage: null });
+            }
         },
     };
 });

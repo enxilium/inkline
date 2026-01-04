@@ -227,6 +227,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
             dto.title,
             dto.order,
             JSON.stringify(dto.content),
+            null,
             new Date(dto.createdAt),
             new Date(dto.updatedAt)
         );

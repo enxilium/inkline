@@ -51,6 +51,12 @@ import type { DeleteOrganizationController } from "./world/DeleteOrganizationCon
 import type { OverwriteCharacterController } from "./world/OverwriteCharacterController";
 import type { OverwriteLocationController } from "./world/OverwriteLocationController";
 import type { OverwriteOrganizationController } from "./world/OverwriteOrganizationController";
+import type { CreateTimelineController } from "./timeline/CreateTimelineController";
+import type { UpdateTimelineController } from "./timeline/UpdateTimelineController";
+import type { DeleteTimelineController } from "./timeline/DeleteTimelineController";
+import type { CreateEventController } from "./timeline/CreateEventController";
+import type { UpdateEventController } from "./timeline/UpdateEventController";
+import type { DeleteEventController } from "./timeline/DeleteEventController";
 import type { GetSyncStateController } from "./sync/GetSyncStateController";
 
 type Handler<T> = T extends {
@@ -131,6 +137,14 @@ export interface ControllerInstanceMap {
         overwriteCharacter: OverwriteCharacterController;
         overwriteLocation: OverwriteLocationController;
         overwriteOrganization: OverwriteOrganizationController;
+    };
+    timeline: {
+        createTimeline: CreateTimelineController;
+        updateTimeline: UpdateTimelineController;
+        deleteTimeline: DeleteTimelineController;
+        createEvent: CreateEventController;
+        updateEvent: UpdateEventController;
+        deleteEvent: DeleteEventController;
     };
 }
 
@@ -222,5 +236,13 @@ export const controllerChannels: ControllerChannelMap = {
         overwriteCharacter: "world:overwriteCharacter",
         overwriteLocation: "world:overwriteLocation",
         overwriteOrganization: "world:overwriteOrganization",
+    },
+    timeline: {
+        createTimeline: "timeline:createTimeline",
+        updateTimeline: "timeline:updateTimeline",
+        deleteTimeline: "timeline:deleteTimeline",
+        createEvent: "timeline:createEvent",
+        updateEvent: "timeline:updateEvent",
+        deleteEvent: "timeline:deleteEvent",
     },
 } as const;

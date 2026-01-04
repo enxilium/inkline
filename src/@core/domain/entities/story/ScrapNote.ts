@@ -7,6 +7,7 @@ export class ScrapNote {
         public title: string,
         public content: string,
         public isPinned: boolean,
+        public eventId: string | null,
         public createdAt: Date,
         public updatedAt: Date
     ) {}

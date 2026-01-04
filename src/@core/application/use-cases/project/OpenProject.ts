@@ -14,6 +14,10 @@ import { IOrganizationRepository } from "../../../domain/repositories/IOrganizat
 import { IProjectRepository } from "../../../domain/repositories/IProjectRepository";
 import { IScrapNoteRepository } from "../../../domain/repositories/IScrapNoteRepository";
 import { IAssetRepository } from "../../../domain/repositories/IAssetRepository";
+import { ITimelineRepository } from "../../../domain/repositories/ITimelineRepository";
+import { IEventRepository } from "../../../domain/repositories/IEventRepository";
+import { Timeline } from "../../../domain/entities/story/timeline/Timeline";
+import { Event } from "../../../domain/entities/story/timeline/Event";
 
 export interface OpenProjectRequest {
     projectId: string;
@@ -26,6 +30,8 @@ export interface OpenProjectResponse {
     locations: Location[];
     organizations: Organization[];
     scrapNotes: ScrapNote[];
+    timelines: Timeline[];
+    events: Event[];
     assets: ProjectAssetBundle;
 }
 
@@ -43,7 +49,9 @@ export class OpenProject {
         private readonly locationRepository: ILocationRepository,
         private readonly scrapNoteRepository: IScrapNoteRepository,
         private readonly organizationRepository: IOrganizationRepository,
-        private readonly assetRepository: IAssetRepository
+        private readonly assetRepository: IAssetRepository,
+        private readonly timelineRepository: ITimelineRepository,
+        private readonly eventRepository: IEventRepository
     ) {}
 
     async execute(request: OpenProjectRequest): Promise<OpenProjectResponse> {
@@ -63,12 +71,14 @@ export class OpenProject {
             rawLocations,
             rawScrapNotes,
             rawOrganizations,
+            timelines,
         ] = await Promise.all([
             this.chapterRepository.findByProjectId(projectId),
             this.characterRepository.findByProjectId(projectId),
             this.locationRepository.findByProjectId(projectId),
             this.scrapNoteRepository.findByProjectId(projectId),
             this.organizationRepository.findByProjectId(projectId),
+            this.timelineRepository.findByProjectId(projectId),
         ]);
 
         chapters.sort((a, b) => a.order - b.order);
@@ -139,6 +149,13 @@ export class OpenProject {
             organizations
         );
 
+        // Fetch events for all timelines
+        const eventPromises = timelines.map((timeline) =>
+            this.eventRepository.findByTimelineId(timeline.id)
+        );
+        const eventsArrays = await Promise.all(eventPromises);
+        const events = eventsArrays.flat();
+
         return {
             project,
             chapters,
@@ -146,6 +163,8 @@ export class OpenProject {
             locations,
             organizations,
             scrapNotes,
+            timelines,
+            events,
             assets: assetBundle,
         };
     }

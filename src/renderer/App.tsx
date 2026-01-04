@@ -31,7 +31,7 @@ import "@fontsource/ibm-plex-mono/index.css";
 import "flexlayout-react/style/dark.css";
 import "./styles.css";
 
-export const App: React.FC = () => {
+const App: React.FC = () => {
     const {
         stage,
         authMode,
@@ -326,7 +326,7 @@ export const App: React.FC = () => {
                     </div>
                 );
             case "settings":
-                return <SettingsView onBack={returnToProjects} />;
+                return <SettingsView />;
             case "checkingSession":
                 return <LoadingView />;
             default:
@@ -376,3 +376,5 @@ export const App: React.FC = () => {
         </div>
     );
 };
+
+export default App;
