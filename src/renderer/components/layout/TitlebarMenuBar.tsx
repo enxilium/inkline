@@ -13,7 +13,7 @@ import { useAppStore } from "../../state/appStore";
 import { getTextStats } from "../../utils/textStats";
 import { EditChapterRangeDialog } from "../dialogs/EditChapterRangeDialog";
 
-type MenuKey = "file" | "edit" | null;
+type MenuKey = "file" | "edit" | "view" | null;
 
 export const TitlebarMenuBar: React.FC = () => {
     const {
@@ -25,6 +25,8 @@ export const TitlebarMenuBar: React.FC = () => {
         addPendingEdits,
         hasPendingEditsForChapter,
         setActiveDocument,
+        workspaceViewMode,
+        setWorkspaceViewMode,
     } = useAppStore();
     const [openMenu, setOpenMenu] = React.useState<MenuKey>(null);
     const [isRangeDialogOpen, setIsRangeDialogOpen] = React.useState(false);
@@ -199,6 +201,45 @@ export const TitlebarMenuBar: React.FC = () => {
                                 }}
                             >
                                 Analyze Selected Text
+                            </button>
+                        </div>
+                    ) : null}
+                </div>
+
+                <div className="titlebar-menubar-item">
+                    <button
+                        type="button"
+                        className={cx(
+                            "titlebar-menubar-button titlebar-no-drag",
+                            openMenu === "view" && "is-open"
+                        )}
+                        onClick={() => toggleMenu("view")}
+                        onMouseEnter={() => openOnHoverIfAnyOpen("view")}
+                    >
+                        View
+                    </button>
+
+                    {openMenu === "view" ? (
+                        <div
+                            className="titlebar-menu titlebar-no-drag"
+                            role="menu"
+                        >
+                            <button
+                                type="button"
+                                className="project-card-menu-item"
+                                role="menuitem"
+                                onClick={() => {
+                                    setOpenMenu(null);
+                                    setWorkspaceViewMode(
+                                        workspaceViewMode === "manuscript"
+                                            ? "timeline"
+                                            : "manuscript"
+                                    );
+                                }}
+                            >
+                                {workspaceViewMode === "manuscript"
+                                    ? "Switch to Timeline"
+                                    : "Switch to Manuscript"}
                             </button>
                         </div>
                     ) : null}

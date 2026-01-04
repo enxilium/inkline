@@ -6,10 +6,11 @@ import { ConnectedDocumentBinder } from "../components/layout/ConnectedDocumentB
 import { ChatPanel } from "../components/workspace/ChatPanel";
 import { WorkspaceFooter } from "../components/layout/WorkspaceFooter";
 import { ConflictResolutionDialog } from "../components/dialogs/ConflictResolutionDialog";
+import TimelineView from "./TimelineView";
 import type { WorkspaceDocumentKind } from "../types";
 
 export const WorkspaceView: React.FC = () => {
-    const { isBinderOpen, isChatOpen } = useAppStore();
+    const { isBinderOpen, isChatOpen, workspaceViewMode } = useAppStore();
     const activeDocument = useAppStore((state) => state.activeDocument);
     const closeProject = useAppStore((state) => state.closeProject);
     const deleteChapter = useAppStore((state) => state.deleteChapter);
@@ -189,51 +190,59 @@ export const WorkspaceView: React.FC = () => {
             }
         >
             <div className="workspace-container">
-                <div
-                    className={containerClass}
-                    onMouseEnter={handleMouseEnter}
-                    onMouseLeave={handleMouseLeave}
-                >
-                    {isBinderOpen ? (
-                        <>
-                            <ConnectedDocumentBinder
-                                activeKind={binderActiveKind}
-                                onActiveKindChange={setBinderActiveKind}
-                                showTabbar={false}
-                            />
-                            <div
-                                className="workspace-binder-resizer"
-                                onMouseDown={startResizingBinder}
-                                style={{
-                                    position: "absolute",
-                                    right: -4,
-                                    top: 0,
-                                    bottom: 0,
-                                    width: 8,
-                                    cursor: "col-resize",
-                                    zIndex: 100,
-                                }}
-                            />
-                        </>
-                    ) : (
-                        <>
-                            <div className="binder-peek-strip" />
-                            <div
-                                className={`binder-peek-overlay ${isPeeking ? "is-visible" : ""}`}
-                            >
-                                <div className="binder-content">
-                                    <ConnectedDocumentBinder
-                                        activeKind={binderActiveKind}
-                                        onActiveKindChange={setBinderActiveKind}
-                                        showTabbar={true}
-                                    />
+                {workspaceViewMode === "manuscript" && (
+                    <div
+                        className={containerClass}
+                        onMouseEnter={handleMouseEnter}
+                        onMouseLeave={handleMouseLeave}
+                    >
+                        {isBinderOpen ? (
+                            <>
+                                <ConnectedDocumentBinder
+                                    activeKind={binderActiveKind}
+                                    onActiveKindChange={setBinderActiveKind}
+                                    showTabbar={false}
+                                />
+                                <div
+                                    className="workspace-binder-resizer"
+                                    onMouseDown={startResizingBinder}
+                                    style={{
+                                        position: "absolute",
+                                        right: -4,
+                                        top: 0,
+                                        bottom: 0,
+                                        width: 8,
+                                        cursor: "col-resize",
+                                        zIndex: 100,
+                                    }}
+                                />
+                            </>
+                        ) : (
+                            <>
+                                <div className="binder-peek-strip" />
+                                <div
+                                    className={`binder-peek-overlay ${isPeeking ? "is-visible" : ""}`}
+                                >
+                                    <div className="binder-content">
+                                        <ConnectedDocumentBinder
+                                            activeKind={binderActiveKind}
+                                            onActiveKindChange={
+                                                setBinderActiveKind
+                                            }
+                                            showTabbar={true}
+                                        />
+                                    </div>
                                 </div>
-                            </div>
-                        </>
-                    )}
-                </div>
+                            </>
+                        )}
+                    </div>
+                )}
                 <div className="workspace-main-content">
-                    <WorkspaceLayout />
+                    {workspaceViewMode === "manuscript" ? (
+                        <WorkspaceLayout />
+                    ) : (
+                        <TimelineView />
+                    )}
                 </div>
                 <div className={chatContainerClass}>
                     {isChatOpen && (

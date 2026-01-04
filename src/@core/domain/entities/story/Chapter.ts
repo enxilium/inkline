@@ -7,6 +7,7 @@ export class Chapter {
         public title: string,
         public order: number,
         public content: string,
+        public eventId: string | null,
         public createdAt: Date,
         public updatedAt: Date
     ) {}

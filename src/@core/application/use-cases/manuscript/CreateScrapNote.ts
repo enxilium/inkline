@@ -36,7 +36,7 @@ export class CreateScrapNote {
         const now = new Date();
         const title = "New Scrap Note";
         const id = request.id?.trim() || generateId();
-        const scrapNote = new ScrapNote(id, title, "", false, now, now);
+        const scrapNote = new ScrapNote(id, title, "", false, null, now, now);
 
         await this.scrapNoteRepository.create(projectId, scrapNote);
         project.scrapNoteIds.push(id);

@@ -11,6 +11,7 @@ export class Project {
         public locationIds: string[],
         public scrapNoteIds: string[],
         public organizationIds: string[],
+        public timelineIds: string[],
         public createdAt: Date,
         public updatedAt: Date
     ) {}

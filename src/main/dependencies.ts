@@ -33,6 +33,8 @@ import { FileSystemAssetRepository } from "../@infrastructure/db/filesystem/File
 import { OfflineFirstAssetRepository } from "../@infrastructure/db/offline/OfflineFirstAssetRepository";
 import { SynchronizationService } from "../@infrastructure/services/SynchronizationService";
 import { SupabaseDeletionLogRepository } from "../@infrastructure/db/SupabaseDeletionLogRepository";
+import { SupabaseTimelineRepository } from "../@infrastructure/db/SupabaseTimelineRepository";
+import { SupabaseEventRepository } from "../@infrastructure/db/SupabaseEventRepository";
 
 export function resolveDependencies(): AppBuilderDependencies {
     const supabaseProjectRepo = new SupabaseProjectRepository();
@@ -120,6 +122,9 @@ export function resolveDependencies(): AppBuilderDependencies {
 
     const supabaseDeletionLogRepo = new SupabaseDeletionLogRepository();
 
+    const supabaseTimelineRepo = new SupabaseTimelineRepository();
+    const supabaseEventRepo = new SupabaseEventRepository();
+
     const syncService = new SynchronizationService(
         supabaseProjectRepo,
         fsProjectRepo,
@@ -146,6 +151,8 @@ export function resolveDependencies(): AppBuilderDependencies {
             chatConversation: chatConversationRepository,
             location: locationRepository,
             organization: organizationRepository,
+            timeline: supabaseTimelineRepo,
+            event: supabaseEventRepo,
             project: projectRepository,
             scrapNote: scrapNoteRepository,
             user: userRepository,

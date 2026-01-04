@@ -8,6 +8,7 @@ type ScrapNoteRow = {
     title: string;
     content: string;
     is_pinned: boolean;
+    event_id: string | null;
     created_at: string;
     updated_at: string;
 };
@@ -18,6 +19,7 @@ const mapRowToScrapNote = (row: ScrapNoteRow): ScrapNote =>
         row.title,
         row.content,
         row.is_pinned,
+        row.event_id || null,
         new Date(row.created_at),
         new Date(row.updated_at)
     );

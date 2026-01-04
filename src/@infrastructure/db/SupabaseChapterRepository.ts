@@ -8,6 +8,7 @@ type ChapterRow = {
     title: string;
     order_index: number;
     content: Record<string, unknown> | null;
+    event_id: string | null;
     created_at: string;
     updated_at: string;
 };
@@ -49,6 +50,7 @@ const mapRowToChapter = (row: ChapterRow): Chapter =>
         row.title,
         row.order_index,
         serializeChapterContent(row.content),
+        row.event_id || null,
         new Date(row.created_at),
         new Date(row.updated_at)
     );

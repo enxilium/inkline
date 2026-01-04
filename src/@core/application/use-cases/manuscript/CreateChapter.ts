@@ -51,7 +51,7 @@ export class CreateChapter {
         const now = new Date();
         const title = "New Chapter";
         const id = request.id?.trim() || generateId();
-        const chapter = new Chapter(id, title, insertIndex, "", now, now);
+        const chapter = new Chapter(id, title, insertIndex, "", null, now, now);
 
         await this.chapterRepository.create(projectId, chapter);
 

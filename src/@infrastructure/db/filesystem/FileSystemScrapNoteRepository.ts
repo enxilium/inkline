@@ -169,6 +169,7 @@ export class FileSystemScrapNoteRepository implements IScrapNoteRepository {
             dto.title,
             dto.content,
             dto.isPinned,
+            null,
             new Date(dto.createdAt),
             new Date(dto.updatedAt)
         );

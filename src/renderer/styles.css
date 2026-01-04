@@ -1586,6 +1586,7 @@ input.toolbar-color:focus {
     gap: 0;
     border-radius: 0;
     border: 1px solid var(--stroke);
+    border-right: none;
 }
 
 .editor-surface {
@@ -2667,7 +2668,6 @@ input.toolbar-color:focus {
     height: 100%;
     overflow: hidden;
     gap: 0rem;
-    margin-right: 10px;
 }
 
 .workspace-view {
@@ -2690,6 +2690,32 @@ input.toolbar-color:focus {
     padding: 0 12px 0 0;
     background: var(--surface);
     border-top: 1px solid var(--stroke);
+}
+
+/* Timeline view: simplified layout - main takes full width */
+.workspace-footer--timeline {
+    grid-template-columns: 1fr;
+    padding: 0 12px;
+}
+
+.workspace-footer--timeline .workspace-footer-main {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    padding-left: 0;
+    width: 100%;
+}
+
+.workspace-footer--timeline .workspace-footer-left {
+    justify-content: flex-start;
+}
+
+.workspace-footer--timeline .workspace-footer-center {
+    justify-content: center;
+}
+
+.workspace-footer--timeline .workspace-footer-right {
+    justify-content: flex-end;
 }
 
 .workspace-footer-binder {
@@ -2936,6 +2962,7 @@ input.toolbar-color:focus {
 .workspace-chat-container.is-open {
     width: var(--workspace-chat-width, 320px);
     min-width: var(--workspace-chat-width, 320px);
+    border-left: 1px solid var(--stroke);
 }
 
 .workspace-chat-container.is-closed {

@@ -6,7 +6,7 @@ import { useAppStore } from "../state/appStore";
 
 type SettingsSection = "theme" | "models" | "account";
 
-export const SettingsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
+export const SettingsView: React.FC = () => {
     const user = useAppStore((state) => state.user);
     const currentUserId = useAppStore((state) => state.currentUserId);
     const saveUserSettings = useAppStore((state) => state.saveUserSettings);
@@ -15,6 +15,9 @@ export const SettingsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         (state) => state.updateAccountPassword
     );
     const logout = useAppStore((state) => state.logout);
+    const closeSettings = useAppStore((state) => state.closeSettings);
+    const returnToProjects = useAppStore((state) => state.returnToProjects);
+    const previousStage = useAppStore((state) => state.previousStage);
 
     const [activeSection, setActiveSection] =
         useState<SettingsSection>("theme");
@@ -254,11 +257,22 @@ export const SettingsView: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                     <Button onClick={handleReset} variant="ghost" size="sm">
                         Reset to Defaults
                     </Button>
-                    {onBack ? (
-                        <Button onClick={onBack} variant="ghost" size="sm">
-                            Back to Projects
+                    {previousStage === "workspace" && (
+                        <Button
+                            onClick={closeSettings}
+                            variant="ghost"
+                            size="sm"
+                        >
+                            Back to Workspace
                         </Button>
-                    ) : null}
+                    )}
+                    <Button
+                        onClick={() => returnToProjects()}
+                        variant="ghost"
+                        size="sm"
+                    >
+                        Back to Projects
+                    </Button>
                 </div>
             </div>
 

@@ -17,6 +17,7 @@ type ProjectRelations = {
     locationIds: string[];
     scrapNoteIds: string[];
     organizationIds: string[];
+    timelineIds: string[];
 };
 
 const mapProjectRowToEntity = (
@@ -32,6 +33,7 @@ const mapProjectRowToEntity = (
         [...(relations?.locationIds ?? [])],
         [...(relations?.scrapNoteIds ?? [])],
         [...(relations?.organizationIds ?? [])],
+        [...(relations?.timelineIds ?? [])],
         new Date(row.created_at),
         new Date(row.updated_at)
     );
@@ -127,12 +129,14 @@ export class SupabaseProjectRepository implements IProjectRepository {
             locationIds,
             scrapNoteIds,
             organizationIds,
+            timelineIds,
         ] = await Promise.all([
             fetchIds("chapters"),
             fetchIds("characters"),
             fetchIds("locations"),
             fetchIds("scrap_notes"),
             fetchIds("organizations"),
+            fetchIds("timelines"),
         ]);
 
         return {
@@ -141,6 +145,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
             locationIds,
             scrapNoteIds,
             organizationIds,
+            timelineIds,
         };
     }
 }

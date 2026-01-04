@@ -32,6 +32,7 @@ export const WorkspaceFooter: React.FC<{
         autosaveError,
         syncStatus,
         lastSyncedAt,
+        workspaceViewMode,
     } = useAppStore();
 
     const [isHoveringCount, setIsHoveringCount] = React.useState(false);
@@ -143,32 +144,41 @@ export const WorkspaceFooter: React.FC<{
         }
     };
 
+    // Use simplified layout in timeline view (no binder/chat columns)
+    const footerClassName =
+        workspaceViewMode === "timeline"
+            ? "workspace-footer workspace-footer--timeline"
+            : "workspace-footer";
+
     return (
-        <div className="workspace-footer" role="contentinfo">
-            <div className="workspace-footer-binder">
-                {isBinderOpen ? (
-                    <div className="binder-tabbar workspace-footer-binder-tabbar">
-                        {binderSections.map((section) => (
-                            <Button
-                                key={section.kind}
-                                variant="icon"
-                                className={
-                                    "binder-tab" +
-                                    (section.kind === binderActiveKind
-                                        ? " is-active"
-                                        : "")
-                                }
-                                onClick={() =>
-                                    onBinderActiveKindChange(section.kind)
-                                }
-                                title={section.title}
-                            >
-                                {renderBinderIcon(section.kind)}
-                            </Button>
-                        ))}
-                    </div>
-                ) : null}
-            </div>
+        <div className={footerClassName} role="contentinfo">
+            {/* Only render binder column in manuscript view */}
+            {workspaceViewMode === "manuscript" && (
+                <div className="workspace-footer-binder">
+                    {isBinderOpen ? (
+                        <div className="binder-tabbar workspace-footer-binder-tabbar">
+                            {binderSections.map((section) => (
+                                <Button
+                                    key={section.kind}
+                                    variant="icon"
+                                    className={
+                                        "binder-tab" +
+                                        (section.kind === binderActiveKind
+                                            ? " is-active"
+                                            : "")
+                                    }
+                                    onClick={() =>
+                                        onBinderActiveKindChange(section.kind)
+                                    }
+                                    title={section.title}
+                                >
+                                    {renderBinderIcon(section.kind)}
+                                </Button>
+                            ))}
+                        </div>
+                    ) : null}
+                </div>
+            )}
 
             <div className="workspace-footer-main">
                 <div className="workspace-footer-left">
@@ -192,7 +202,20 @@ export const WorkspaceFooter: React.FC<{
                 </div>
 
                 <div className="workspace-footer-center">
-                    {activeChapterStats ? (
+                    {workspaceViewMode === "timeline" ? (
+                        <div
+                            className="workspace-footer-stat"
+                            style={{
+                                color: "var(--accent)",
+                                fontWeight: 500,
+                                fontSize: "0.75rem",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.05em",
+                            }}
+                        >
+                            TIMELINE (experimental feature)
+                        </div>
+                    ) : activeChapterStats ? (
                         <div
                             className="workspace-footer-stat"
                             onMouseEnter={() => setIsHoveringCount(true)}
@@ -209,13 +232,28 @@ export const WorkspaceFooter: React.FC<{
                         </div>
                     ) : null}
                 </div>
+
+                {/* In timeline view, include right section inside main for proper centering */}
+                {workspaceViewMode === "timeline" && (
+                    <div className="workspace-footer-right">
+                        <div className="workspace-footer-brand">
+                            INKLINE STUDIO
+                        </div>
+                    </div>
+                )}
             </div>
 
-            <div className="workspace-footer-chat" aria-hidden="true" />
+            {/* Only render chat column in manuscript view */}
+            {workspaceViewMode === "manuscript" && (
+                <div className="workspace-footer-chat" aria-hidden="true" />
+            )}
 
-            <div className="workspace-footer-right">
-                <div className="workspace-footer-brand">INKLINE STUDIO</div>
-            </div>
+            {/* Right section outside main for manuscript view */}
+            {workspaceViewMode === "manuscript" && (
+                <div className="workspace-footer-right">
+                    <div className="workspace-footer-brand">INKLINE STUDIO</div>
+                </div>
+            )}
         </div>
     );
 };

@@ -128,6 +128,7 @@ export class FileSystemProjectRepository implements IProjectRepository {
             dto.locationIds,
             dto.scrapNoteIds,
             dto.organizationIds,
+            [],
             new Date(dto.createdAt),
             new Date(dto.updatedAt)
         );

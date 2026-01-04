@@ -58,6 +58,12 @@ import { DeleteOrganization } from "../@core/application/use-cases/world/DeleteO
 import { OverwriteCharacter } from "../@core/application/use-cases/world/OverwriteCharacter";
 import { OverwriteLocation } from "../@core/application/use-cases/world/OverwriteLocation";
 import { OverwriteOrganization } from "../@core/application/use-cases/world/OverwriteOrganization";
+import { CreateTimeline } from "../@core/application/use-cases/timeline/CreateTimeline";
+import { UpdateTimeline } from "../@core/application/use-cases/timeline/UpdateTimeline";
+import { DeleteTimeline } from "../@core/application/use-cases/timeline/DeleteTimeline";
+import { CreateEvent } from "../@core/application/use-cases/timeline/CreateEvent";
+import { UpdateEvent } from "../@core/application/use-cases/timeline/UpdateEvent";
+import { DeleteEvent } from "../@core/application/use-cases/timeline/DeleteEvent";
 import { LoadChatHistory } from "../@core/application/use-cases/analysis/LoadChatHistory";
 import { LoadChatMessages } from "../@core/application/use-cases/analysis/LoadChatMessages";
 import { LoadChatHistoryController } from "../@interface-adapters/controllers/analysis/LoadChatHistoryController";
@@ -114,9 +120,17 @@ import { DeleteOrganizationController } from "../@interface-adapters/controllers
 import { OverwriteCharacterController } from "../@interface-adapters/controllers/world/OverwriteCharacterController";
 import { OverwriteLocationController } from "../@interface-adapters/controllers/world/OverwriteLocationController";
 import { OverwriteOrganizationController } from "../@interface-adapters/controllers/world/OverwriteOrganizationController";
+import { CreateTimelineController } from "../@interface-adapters/controllers/timeline/CreateTimelineController";
+import { UpdateTimelineController } from "../@interface-adapters/controllers/timeline/UpdateTimelineController";
+import { DeleteTimelineController } from "../@interface-adapters/controllers/timeline/DeleteTimelineController";
+import { CreateEventController } from "../@interface-adapters/controllers/timeline/CreateEventController";
+import { UpdateEventController } from "../@interface-adapters/controllers/timeline/UpdateEventController";
+import { DeleteEventController } from "../@interface-adapters/controllers/timeline/DeleteEventController";
 import type { IAssetRepository } from "../@core/domain/repositories/IAssetRepository";
 import type { IChapterRepository } from "../@core/domain/repositories/IChapterRepository";
 import type { ICharacterRepository } from "../@core/domain/repositories/ICharacterRepository";
+import type { ITimelineRepository } from "../@core/domain/repositories/ITimelineRepository";
+import type { IEventRepository } from "../@core/domain/repositories/IEventRepository";
 import type { IChatConversationRepository } from "../@core/domain/repositories/IChatConversationRepository";
 import type { ILocationRepository } from "../@core/domain/repositories/ILocationRepository";
 import type { IOrganizationRepository } from "../@core/domain/repositories/IOrganizationRepository";
@@ -144,6 +158,8 @@ export type RepositoryDependencies = {
     project: IProjectRepository;
     scrapNote: IScrapNoteRepository;
     user: IUserRepository;
+    timeline: ITimelineRepository;
+    event: IEventRepository;
 };
 
 export type ServiceDependencies = {
@@ -234,6 +250,14 @@ type UseCaseMap = {
         overwriteCharacter: OverwriteCharacter;
         overwriteLocation: OverwriteLocation;
         overwriteOrganization: OverwriteOrganization;
+    };
+    timeline: {
+        createTimeline: CreateTimeline;
+        updateTimeline: UpdateTimeline;
+        deleteTimeline: DeleteTimeline;
+        createEvent: CreateEvent;
+        updateEvent: UpdateEvent;
+        deleteEvent: DeleteEvent;
     };
 };
 
@@ -472,7 +496,11 @@ export class AppBuilder {
                 updateScrapNote: new UpdateScrapNote(repo.scrapNote),
             },
             project: {
-                createProject: new CreateProject(repo.project, repo.user),
+                createProject: new CreateProject(
+                    repo.project,
+                    repo.user,
+                    repo.timeline
+                ),
                 deleteProject: new DeleteProject(
                     repo.project,
                     repo.chapter,
@@ -494,7 +522,9 @@ export class AppBuilder {
                     repo.location,
                     repo.scrapNote,
                     repo.organization,
-                    repo.asset
+                    repo.asset,
+                    repo.timeline,
+                    repo.event
                 ),
                 reorderProjectItems: new ReorderProjectItems(repo.project),
             },
@@ -544,6 +574,24 @@ export class AppBuilder {
                 overwriteOrganization: new OverwriteOrganization(
                     repo.organization,
                     repo.location
+                ),
+            },
+            timeline: {
+                createTimeline: new CreateTimeline(repo.timeline, repo.project),
+                updateTimeline: new UpdateTimeline(repo.timeline),
+                deleteTimeline: new DeleteTimeline(repo.timeline, repo.project),
+                createEvent: new CreateEvent(
+                    repo.event,
+                    repo.timeline,
+                    repo.chapter,
+                    repo.scrapNote
+                ),
+                updateEvent: new UpdateEvent(repo.event),
+                deleteEvent: new DeleteEvent(
+                    repo.event,
+                    repo.timeline,
+                    repo.chapter,
+                    repo.scrapNote
                 ),
             },
         };
@@ -735,6 +783,26 @@ export class AppBuilder {
                 ),
                 overwriteOrganization: new OverwriteOrganizationController(
                     useCases.world.overwriteOrganization
+                ),
+            },
+            timeline: {
+                createTimeline: new CreateTimelineController(
+                    useCases.timeline.createTimeline
+                ),
+                updateTimeline: new UpdateTimelineController(
+                    useCases.timeline.updateTimeline
+                ),
+                deleteTimeline: new DeleteTimelineController(
+                    useCases.timeline.deleteTimeline
+                ),
+                createEvent: new CreateEventController(
+                    useCases.timeline.createEvent
+                ),
+                updateEvent: new UpdateEventController(
+                    useCases.timeline.updateEvent
+                ),
+                deleteEvent: new DeleteEventController(
+                    useCases.timeline.deleteEvent
                 ),
             },
         };

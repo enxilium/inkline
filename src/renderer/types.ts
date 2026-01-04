@@ -48,6 +48,11 @@ export type WorkspaceImageAsset = WorkspaceAssetBundle["images"][number];
 export type WorkspaceBGMAsset = WorkspaceAssetBundle["bgms"][number];
 export type WorkspacePlaylistAsset = WorkspaceAssetBundle["playlists"][number];
 
+export type WorkspaceTimeline = OpenProjectPayload["timelines"][number];
+export type WorkspaceEvent = OpenProjectPayload["events"][number];
+
+export type WorkspaceViewMode = "manuscript" | "timeline";
+
 export type WorkspaceAssets = {
     images: Record<string, WorkspaceImageAsset>;
     bgms: Record<string, WorkspaceBGMAsset>;

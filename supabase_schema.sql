@@ -498,3 +498,77 @@ begin
           for delete using (auth.uid() = user_id);
     end if;
 end $$;
+
+-- TIMELINES
+create table if not exists public.timelines (
+  id uuid default uuid_generate_v4() primary key,
+  project_id uuid references public.projects(id) on delete cascade not null,
+  name text not null,
+  description text,
+  time_unit text not null default 'CE',
+  start_value integer not null default 0,
+  event_ids uuid[] not null default '{}'::uuid[],
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table public.timelines enable row level security;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'timelines'
+          and policyname = 'Users can CRUD timelines of their projects'
+    ) then
+        create policy "Users can CRUD timelines of their projects" on public.timelines
+          for all using (
+            exists (
+              select 1 from public.projects
+              where projects.id = timelines.project_id
+              and projects.user_id = auth.uid()
+            )
+          );
+    end if;
+end $$;
+
+-- EVENTS
+create table if not exists public.events (
+  id uuid default uuid_generate_v4() primary key,
+  timeline_id uuid references public.timelines(id) on delete cascade not null,
+  title text not null,
+  description text,
+  time integer not null,
+  year integer not null,
+  month integer, -- 1-12 for CE/BCE, null for custom
+  day integer, -- 1-31 for CE/BCE, null for custom
+  type text not null,
+  associated_id uuid,
+  character_ids uuid[] default '{}',
+  location_ids uuid[] default '{}',
+  organization_ids uuid[] default '{}',
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  updated_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+alter table public.events enable row level security;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'events'
+          and policyname = 'Users can CRUD events of their projects'
+    ) then
+        create policy "Users can CRUD events of their projects" on public.events
+          for all using (
+            exists (
+              select 1
+              from public.timelines
+              join public.projects on projects.id = timelines.project_id
+              where timelines.id = events.timeline_id
+              and projects.user_id = auth.uid()
+            )
+          );
+    end if;
+end $$;
