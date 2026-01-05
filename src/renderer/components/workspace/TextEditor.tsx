@@ -16,8 +16,10 @@ import {
     CloseIcon,
     RefreshCwIcon,
     PlusIcon,
+    SpellCheckIcon,
 } from "../ui/Icons";
 import { LinkDialog } from "../dialogs/LinkDialog";
+import { LanguageToolPopup } from "./LanguageToolPopup";
 
 interface TextEditorProps {
     editor: Editor | null;
@@ -430,6 +432,22 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                         .run()
                                 }
                             />
+                            <div className="toolbar-divider" />
+                            <ToolbarButton
+                                label={<SpellCheckIcon size={16} />}
+                                onClick={() =>
+                                    editor.commands.toggleLanguageTool()
+                                }
+                                isActive={
+                                    (
+                                        editor.extensionStorage as unknown as Record<
+                                            string,
+                                            { active?: boolean }
+                                        >
+                                    ).languagetool?.active ?? true
+                                }
+                                title="Toggle proofreading"
+                            />
                         </div>
                         <div className="editor-surface">
                             {isFindOpen ? (
@@ -599,6 +617,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                             <div className="editor-scroll">
                                 <div
                                     className="editor-body"
+                                    style={{ position: "relative" }}
                                     onContextMenu={(e) => {
                                         e.preventDefault();
                                         window.ui.showContextMenu("editor");
@@ -612,6 +631,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                             event.preventDefault();
                                         }}
                                     />
+                                    <LanguageToolPopup editor={editor} />
                                     {children}
                                 </div>
                             </div>

@@ -8,6 +8,7 @@ type ToolbarButtonProps = {
     onClick: () => void;
     isActive?: boolean;
     disabled?: boolean;
+    title?: string;
 };
 
 export const ToolbarButton: React.FC<ToolbarButtonProps> = ({
@@ -15,6 +16,7 @@ export const ToolbarButton: React.FC<ToolbarButtonProps> = ({
     onClick,
     isActive,
     disabled,
+    title,
 }) => (
     <Button
         type="button"
@@ -23,6 +25,7 @@ export const ToolbarButton: React.FC<ToolbarButtonProps> = ({
         onClick={onClick}
         disabled={disabled}
         aria-pressed={isActive}
+        title={title}
     >
         {label}
     </Button>

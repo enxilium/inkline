@@ -240,6 +240,43 @@ const windowControls = {
 
 contextBridge.exposeInMainWorld("windowControls", windowControls);
 
+// LanguageTool API - all HTTP calls are made from main process to avoid CORS
+interface GrammarCheckRequest {
+    text: string;
+    language: string;
+}
+
+interface LanguageToolMatch {
+    message: string;
+    shortMessage?: string;
+    offset: number;
+    length: number;
+    replacements: { value: string }[];
+    context: { text: string; offset: number; length: number };
+    rule: {
+        id: string;
+        description: string;
+        category: { id: string; name: string };
+        issueType?: string;
+    };
+}
+
+interface LanguageToolResponse {
+    language: { name: string; code: string };
+    matches: LanguageToolMatch[];
+}
+
+const languageTool = {
+    checkGrammar: (
+        request: GrammarCheckRequest
+    ): Promise<LanguageToolResponse> =>
+        ipcRenderer.invoke("languageTool:checkGrammar", request),
+    isUsingLocalServer: (): Promise<boolean> =>
+        ipcRenderer.invoke("languageTool:isUsingLocalServer"),
+};
+
+contextBridge.exposeInMainWorld("languageTool", languageTool);
+
 declare global {
     interface Window {
         api: typeof api;
@@ -248,5 +285,6 @@ declare global {
         syncEvents: typeof syncEvents;
         generationEvents: typeof generationEvents;
         windowControls: typeof windowControls;
+        languageTool: typeof languageTool;
     }
 }

@@ -1524,6 +1524,115 @@ html {
     box-shadow: 0 0 0 1px var(--accent-transparent2);
 }
 
+/* LanguageTool Proofreading Styles */
+.lt {
+    border-bottom: 2px solid #e86a69;
+    transition: background 0.25s ease-in-out;
+    cursor: pointer;
+}
+
+.lt:hover {
+    background: rgba(232, 106, 105, 0.2);
+}
+
+.lt-misspelling {
+    border-bottom-color: #e86a69;
+}
+
+.lt-misspelling:hover {
+    background: rgba(232, 106, 105, 0.2);
+}
+
+.lt-style {
+    border-bottom-color: #9d8eff;
+}
+
+.lt-style:hover {
+    background: rgba(157, 142, 255, 0.2);
+}
+
+.lt-typographical,
+.lt-grammar {
+    border-bottom-color: #eeb55c;
+}
+
+.lt-typographical:hover,
+.lt-grammar:hover {
+    background: rgba(238, 181, 92, 0.2);
+}
+
+.lt-popup {
+    background: var(--surface);
+    border: 1px solid var(--stroke);
+    border-radius: 8px;
+    box-shadow: var(--shadow);
+    max-width: 350px;
+    padding: 12px;
+    font-size: 0.875rem;
+}
+
+.lt-popup-message {
+    color: var(--text);
+    margin-bottom: 10px;
+    line-height: 1.4;
+}
+
+.lt-popup-suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.lt-popup-suggestion {
+    background: var(--accent);
+    color: var(--text-dark);
+    border: none;
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.lt-popup-suggestion:hover {
+    opacity: 0.85;
+}
+
+.lt-popup-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.lt-popup-ignore {
+    background: transparent;
+    color: var(--text-subtle);
+    border: 1px solid var(--stroke);
+    border-radius: 4px;
+    padding: 4px 10px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition:
+        background 0.2s ease,
+        color 0.2s ease;
+}
+
+.lt-popup-ignore:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--text);
+}
+
+/* LanguageTool Toggle Button */
+.btn-proofread {
+    gap: 6px;
+}
+
+.btn-proofread.is-active {
+    background: var(--accent-transparent);
+    color: var(--accent);
+}
+
 .btn.is-loading {
     opacity: 0.65;
 }

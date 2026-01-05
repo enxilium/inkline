@@ -1,0 +1,90 @@
+{
+    "3": {
+        "inputs": {
+            "seed": 942500763821827,
+            "steps": 30,
+            "cfg": 4,
+            "sampler_name": "res_multistep",
+            "scheduler": "simple",
+            "denoise": 1,
+            "model": ["11", 0],
+            "positive": ["6", 0],
+            "negative": ["7", 0],
+            "latent_image": ["13", 0]
+        },
+        "class_type": "KSampler",
+        "_meta": {
+            "title": "KSampler"
+        }
+    },
+    "4": {
+        "inputs": {
+            "ckpt_name": "NetaYumev35_pretrained_all_in_one.safetensors"
+        },
+        "class_type": "CheckpointLoaderSimple",
+        "_meta": {
+            "title": "Load Checkpoint"
+        }
+    },
+    "6": {
+        "inputs": {
+            "text": "You are an assistant designed to generate high quality anime images based on textual prompts. <Prompt Start> @inkline, ",
+            "clip": ["4", 1]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": {
+            "title": "CLIP Text Encode (Positive Prompt)"
+        }
+    },
+    "7": {
+        "inputs": {
+            "text": "You are an assistant designed to generate low-quality images based on textual prompts <Prompt Start> blurry, worst quality, low quality, jpeg artifacts, signature, watermark, username, error, deformed hands, bad anatomy, extra limbs, poorly drawn hands, poorly drawn face, mutation, deformed, extra eyes, extra arms, extra legs, malformed limbs, fused fingers, too many fingers, long neck, cross-eyed, bad proportions, missing arms, missing legs, extra digit, fewer digits, cropped",
+            "clip": ["4", 1]
+        },
+        "class_type": "CLIPTextEncode",
+        "_meta": {
+            "title": "CLIP Text Encode (Negative Prompt)"
+        }
+    },
+    "8": {
+        "inputs": {
+            "samples": ["3", 0],
+            "vae": ["4", 2]
+        },
+        "class_type": "VAEDecode",
+        "_meta": {
+            "title": "VAE Decode"
+        }
+    },
+    "9": {
+        "inputs": {
+            "filename_prefix": "NetaYume_Lumina_3.5",
+            "images": ["8", 0]
+        },
+        "class_type": "SaveImage",
+        "_meta": {
+            "title": "Save Image"
+        }
+    },
+    "11": {
+        "inputs": {
+            "shift": 4,
+            "model": ["4", 0]
+        },
+        "class_type": "ModelSamplingAuraFlow",
+        "_meta": {
+            "title": "ModelSamplingAuraFlow"
+        }
+    },
+    "13": {
+        "inputs": {
+            "width": 1024,
+            "height": 1024,
+            "batch_size": 1
+        },
+        "class_type": "EmptySD3LatentImage",
+        "_meta": {
+            "title": "EmptySD3LatentImage"
+        }
+    }
+}
