@@ -85,11 +85,6 @@ export class ComfyAssetGenerationService
         }
 
         try {
-            const port = await portfinder.getPortPromise({ port: 8188 });
-            console.log(
-                `[ComfyAssetGenerationService] Found free port: ${port}`
-            );
-
             this.basePath = app.isPackaged
                 ? path.join(process.resourcesPath, "server")
                 : path.join(app.getAppPath(), "server");
@@ -101,12 +96,18 @@ export class ComfyAssetGenerationService
             );
             const mainScript = path.join(this.basePath, "ComfyUI", "main.py");
 
-            if (!fs.existsSync(pythonPath)) {
-                console.error(
-                    `[ComfyAssetGenerationService] Python not found at: ${pythonPath}`
+            // Check if ComfyUI is installed (downloaded during setup)
+            if (!fs.existsSync(pythonPath) || !fs.existsSync(mainScript)) {
+                console.warn(
+                    "[ComfyAssetGenerationService] ComfyUI not installed. Local AI features will be unavailable until setup is completed."
                 );
                 return;
             }
+
+            const port = await portfinder.getPortPromise({ port: 8188 });
+            console.log(
+                `[ComfyAssetGenerationService] Found free port: ${port}`
+            );
 
             console.log(
                 `[ComfyAssetGenerationService] Launching ComfyUI from ${this.basePath}...`

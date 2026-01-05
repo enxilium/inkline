@@ -10,6 +10,7 @@ import CommentExtension from "@sereneinserenade/tiptap-comment-extension";
 import { useAppStore } from "../../state/appStore";
 import { TextEditor } from "../workspace/TextEditor";
 import { SearchAndReplace } from "../../tiptap/searchAndReplace";
+import { LanguageTool } from "../../tiptap/languageTool";
 import {
     DocumentReference,
     createDocumentReferenceSuggestion,
@@ -261,6 +262,10 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 searchResultClass: "inkline-editor-search-result",
                 selectedResultClass: "inkline-editor-search-result-selected",
                 disableRegex: true,
+            }),
+            LanguageTool.configure({
+                language: "auto",
+                automaticMode: true,
             }),
             StarterKit.configure({
                 heading: { levels: [1, 2, 3] },

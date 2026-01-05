@@ -1,8 +1,4 @@
 import type { ForgeConfig } from "@electron-forge/shared-types";
-import { MakerSquirrel } from "@electron-forge/maker-squirrel";
-import { MakerZIP } from "@electron-forge/maker-zip";
-import { MakerDeb } from "@electron-forge/maker-deb";
-import { MakerRpm } from "@electron-forge/maker-rpm";
 import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-natives";
 import { WebpackPlugin } from "@electron-forge/plugin-webpack";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
@@ -14,21 +10,42 @@ import { rendererConfig } from "./webpack.renderer.config";
 const config: ForgeConfig = {
     packagerConfig: {
         asar: true,
-        extraResource: ["./server"],
+        // Workflow files are bundled separately (server/ComfyUI downloaded at runtime)
+        extraResource: ["./assets/workflows"],
+        icon: "./assets/app-icon",
     },
     rebuildConfig: {},
     makers: [
-        new MakerSquirrel({}),
-        new MakerZIP({}, ["darwin"]),
-        new MakerRpm({}),
-        new MakerDeb({}),
+        {
+            name: "@electron-forge/maker-squirrel",
+            config: {
+                iconUrl:
+                    "https://github.com/enxilium/inkline/blob/main/assets/app-icon.ico",
+                setupIcon: "./assets/installer.ico",
+            },
+        },
+        {
+            name: "@electron-forge/maker-deb",
+            config: {
+                options: {
+                    icon: "./assets/app-icon.png",
+                },
+            },
+        },
+        {
+            // Path to the icon to use for the app in the DMG window
+            name: "@electron-forge/maker-dmg",
+            config: {
+                icon: "./assets/app-icon.icns",
+            },
+        },
     ],
     plugins: [
         new AutoUnpackNativesPlugin({}),
         new WebpackPlugin({
             mainConfig,
             devContentSecurityPolicy:
-                "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co;",
+                "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co https://api.languagetool.org http://127.0.0.1:* http://localhost:*;",
             renderer: {
                 config: rendererConfig,
                 entryPoints: [
@@ -46,6 +63,14 @@ const config: ForgeConfig = {
                         name: "loading_window",
                         preload: {
                             js: "./src/@interface-adapters/preload/preload.ts",
+                        },
+                    },
+                    {
+                        html: "./src/renderer/views/initialization/setup.html",
+                        js: "./src/renderer/views/initialization/setup.tsx",
+                        name: "setup_window",
+                        preload: {
+                            js: "./src/@interface-adapters/preload/setupPreload.ts",
                         },
                     },
                 ],
