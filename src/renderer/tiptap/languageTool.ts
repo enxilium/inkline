@@ -255,7 +255,7 @@ const createProofreader = (
             // Use IPC to call main process - avoids CORS issues
             const ltRes = await window.languageTool.checkGrammar({
                 text,
-                language: "auto",
+                language: "en-US",
             });
 
             const decorations: Decoration[] = [];
