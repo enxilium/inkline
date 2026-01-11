@@ -137,6 +137,7 @@ export interface LanguageToolStorage {
     match?: Match;
     loading: boolean;
     matchRange?: { from: number; to: number };
+    currentMatchId?: string;
     active: boolean;
 }
 
@@ -158,11 +159,49 @@ export enum LanguageToolHelpingWords {
     LoadingTransactionName = "languageToolLoading",
 }
 
-// Shared database for ignored words
-const db = new Dexie("LanguageToolIgnoredSuggestions");
-db.version(1).stores({
-    ignoredWords: `++id, &value, documentId`,
-});
+// Shared database for ignored suggestions
+// Schema stores context around the ignored text to detect modifications
+interface IgnoredSuggestion {
+    id?: number;
+    documentId: string;
+    ruleId: string;
+    content: string; // The actual text that was flagged
+    contextBefore: string; // Text before the flagged content (for modification detection)
+    contextAfter: string; // Text after the flagged content
+}
+
+// Extend Dexie with typed table
+class LanguageToolDB extends Dexie {
+    ignoredSuggestions!: Dexie.Table<IgnoredSuggestion, number>;
+
+    constructor() {
+        super("LanguageToolIgnoredSuggestions");
+        this.version(1).stores({
+            ignoredWords: `++id, &value, documentId`,
+        });
+        this.version(2).stores({
+            ignoredWords: null, // Remove old table
+            ignoredSuggestions: `++id, [documentId+ruleId+content], documentId`,
+        });
+    }
+}
+
+const db = new LanguageToolDB();
+
+// Helper to create a context signature for modification detection
+const CONTEXT_LENGTH = 20;
+const getContextSignature = (
+    text: string,
+    offset: number,
+    length: number
+): { before: string; after: string } => {
+    const beforeStart = Math.max(0, offset - CONTEXT_LENGTH);
+    const afterEnd = Math.min(text.length, offset + length + CONTEXT_LENGTH);
+    return {
+        before: text.substring(beforeStart, offset),
+        after: text.substring(offset + length, afterEnd),
+    };
+};
 
 // Plugin key - each plugin instance is uniquely identified
 export const languageToolPluginKey = new PluginKey<LanguageToolPluginState>(
@@ -176,12 +215,24 @@ export const getLanguageToolState = (
     return languageToolPluginKey.getState(editor.state);
 };
 
-const gimmeDecoration = (from: number, to: number, match: Match) =>
-    Decoration.inline(from, to, {
-        class: `lt lt-${match.rule.issueType}`,
-        nodeName: "span",
-        "data-match": JSON.stringify({ match, from, to }),
-    });
+// Generate a unique ID for each decoration to track it reliably
+let decorationIdCounter = 0;
+const generateMatchId = () => `lt-${Date.now()}-${++decorationIdCounter}`;
+
+const gimmeDecoration = (from: number, to: number, match: Match) => {
+    const matchId = generateMatchId();
+    return Decoration.inline(
+        from,
+        to,
+        {
+            class: `lt lt-${match.rule.issueType}`,
+            nodeName: "span",
+            // Store all data in DOM attribute - survives hot reload
+            "data-match": JSON.stringify({ match, matchId }),
+        },
+        { matchId } // Store matchId in spec for filtering
+    );
+};
 
 const moreThan500Words = (s: string) => s.trim().split(/\s+/).length >= 500;
 
@@ -192,7 +243,8 @@ const createProofreader = (
     getPluginState: () => LanguageToolPluginState | undefined,
     updateStorage: (
         match?: Match,
-        matchRange?: { from: number; to: number }
+        matchRange?: { from: number; to: number },
+        matchId?: string
     ) => void
 ) => {
     let textNodesWithPosition: TextNodesWithPosition[] = [];
@@ -201,35 +253,88 @@ const createProofreader = (
     const setupDelegatedListener = () => {
         if (delegatedListenerAttached) return;
         delegatedListenerAttached = true;
+        console.log(
+            "[LanguageTool] Setting up delegated listener on",
+            view.dom
+        );
 
         const handleEvent = (e: Event) => {
             const target = e.target as HTMLElement;
+            console.log("[LanguageTool] handleEvent triggered", e.type, target);
 
             // Find the closest .lt element (decoration)
             const ltElement = target.closest(".lt") as HTMLElement | null;
-            if (!ltElement) return;
+            if (!ltElement) {
+                console.log("[LanguageTool] No .lt element found");
+                return;
+            }
 
-            const matchString = (
-                ltElement.getAttribute("data-match") ||
-                ltElement.getAttribute("match")
-            )?.trim();
-
+            const matchString = ltElement.getAttribute("data-match");
+            console.log(
+                "[LanguageTool] matchString:",
+                matchString?.substring(0, 100)
+            );
             if (!matchString) return;
 
             try {
-                const { match, from, to } = JSON.parse(matchString);
+                const { match, matchId } = JSON.parse(matchString) as {
+                    match: Match;
+                    matchId: string;
+                };
+                console.log("[LanguageTool] Parsed match, matchId:", matchId);
 
-                // Update plugin state
+                // Get current positions from actual decoration
                 const state = getPluginState();
-                if (state) {
-                    state.match = match;
-                    state.matchRange = { from, to };
+                console.log(
+                    "[LanguageTool] Plugin state:",
+                    state ? "found" : "null"
+                );
+                if (!state) return;
+
+                // Find decoration to get current from/to positions
+                const allDecorations = state.decorationSet.find();
+                console.log(
+                    "[LanguageTool] All decorations count:",
+                    allDecorations.length
+                );
+                const decoration = allDecorations.find(
+                    (d) => d.spec?.matchId === matchId
+                );
+                console.log(
+                    "[LanguageTool] Found decoration:",
+                    decoration ? "yes" : "no"
+                );
+
+                // Get positions from decoration if found, otherwise compute from DOM
+                let from: number;
+                let to: number;
+
+                if (decoration) {
+                    from = decoration.from;
+                    to = decoration.to;
+                } else {
+                    // Fallback: compute position from DOM element
+                    const pos = view.posAtDOM(ltElement, 0);
+                    console.log("[LanguageTool] Fallback pos:", pos);
+                    if (pos === undefined || pos === null) return;
+                    from = pos;
+                    to = pos + (ltElement.textContent?.length ?? 0);
                 }
 
+                console.log(
+                    "[LanguageTool] Calling updateStorage with from:",
+                    from,
+                    "to:",
+                    to
+                );
                 // Update storage to trigger React re-render
-                updateStorage(match, { from, to });
+                updateStorage(match, { from, to }, matchId);
+                console.log("[LanguageTool] updateStorage called successfully");
             } catch (error) {
-                console.error("[LanguageTool] Error parsing match:", error);
+                console.error(
+                    "[LanguageTool] Error handling decoration event:",
+                    error
+                );
             }
         };
 
@@ -285,17 +390,38 @@ const createProofreader = (
                 const docTo = docFrom + match.length;
 
                 if (documentId) {
+                    // Check if this suggestion was previously ignored
                     const content = text.substring(
-                        match.offset - 1,
-                        match.offset + match.length - 1
+                        match.offset,
+                        match.offset + match.length
                     );
-                    const result = await (db as any).ignoredWords.get({
-                        value: content,
-                    });
-                    if (!result)
+                    const context = getContextSignature(
+                        text,
+                        match.offset,
+                        match.length
+                    );
+
+                    // Look for a matching ignored suggestion
+                    const storedIgnores = await db.ignoredSuggestions
+                        .where({
+                            documentId: `${documentId}`,
+                            ruleId: match.rule.id,
+                            content,
+                        })
+                        .toArray();
+
+                    // Check if any stored ignore is still valid (context matches)
+                    const isIgnored = storedIgnores.some(
+                        (stored) =>
+                            stored.contextBefore === context.before &&
+                            stored.contextAfter === context.after
+                    );
+
+                    if (!isIgnored) {
                         decorations.push(
                             gimmeDecoration(docFrom, docTo, match)
                         );
+                    }
                 } else {
                     decorations.push(gimmeDecoration(docFrom, docTo, match));
                 }
@@ -308,6 +434,7 @@ const createProofreader = (
                 originalFrom,
                 originalFrom + text.length
             );
+
             let newDecorationSet =
                 currentState.decorationSet.remove(decorationsToRemove);
             newDecorationSet = newDecorationSet.add(doc, decorations);
@@ -489,9 +616,10 @@ export const LanguageTool = Extension.create<
                             editor.view,
                             this.options.documentId,
                             () => languageToolPluginKey.getState(editor.state),
-                            (match, matchRange) => {
+                            (match, matchRange, matchId) => {
                                 this.storage.match = match;
                                 this.storage.matchRange = matchRange;
+                                this.storage.currentMatchId = matchId;
                             }
                         );
                         proofreader.proofreadAndDecorateWholeDoc(tr.doc);
@@ -502,37 +630,150 @@ export const LanguageTool = Extension.create<
             ignoreLanguageToolSuggestion:
                 () =>
                 ({ editor }) => {
+                    console.log(
+                        "[LanguageTool] ignoreLanguageToolSuggestion called"
+                    );
+                    console.log(
+                        "[LanguageTool] documentId:",
+                        this.options.documentId
+                    );
+
                     if (this.options.documentId === undefined) {
-                        throw new Error(
-                            "Please provide a unique Document ID(number|string)"
+                        console.error(
+                            "[LanguageTool] documentId is undefined! Cannot ignore."
                         );
+                        // Don't throw - just return false so it doesn't crash
+                        return false;
                     }
 
-                    const { selection, doc } = editor.state;
-                    const { from, to } = selection;
+                    const { doc } = editor.state;
                     const pluginState = languageToolPluginKey.getState(
                         editor.state
                     );
+                    console.log(
+                        "[LanguageTool] Plugin state exists:",
+                        !!pluginState
+                    );
 
+                    // Get the match and range from storage
+                    const currentMatch = this.storage.match;
+                    const currentMatchRange = this.storage.matchRange;
+                    const currentMatchId = this.storage.currentMatchId;
+
+                    console.log("[LanguageTool] Storage state:", {
+                        hasMatch: !!currentMatch,
+                        matchRange: currentMatchRange,
+                        matchId: currentMatchId,
+                    });
+
+                    if (!currentMatch || !currentMatchRange) {
+                        console.warn("[LanguageTool] No match found to ignore");
+                        return false;
+                    }
+
+                    const { from, to } = currentMatchRange;
+
+                    // Remove the decoration for this match
                     if (pluginState) {
-                        const newDecorationSet =
-                            pluginState.decorationSet.remove(
-                                pluginState.decorationSet.find(from, to)
+                        // Get all decorations and filter out the one we want to ignore
+                        const allDecorations = pluginState.decorationSet.find();
+                        console.log(
+                            "[LanguageTool] All decorations count:",
+                            allDecorations.length
+                        );
+                        console.log(
+                            "[LanguageTool] Looking for matchId:",
+                            currentMatchId
+                        );
+
+                        // Log all decoration matchIds for debugging
+                        allDecorations.forEach((d, i) => {
+                            console.log(
+                                `[LanguageTool] Decoration ${i}: matchId=${d.spec?.matchId}, from=${d.from}, to=${d.to}`
                             );
+                        });
+
+                        const filteredDecorations = allDecorations.filter(
+                            (decoration) => {
+                                // Filter by matchId if available (most reliable)
+                                if (
+                                    currentMatchId &&
+                                    decoration.spec?.matchId
+                                ) {
+                                    const keep =
+                                        decoration.spec.matchId !==
+                                        currentMatchId;
+                                    console.log(
+                                        `[LanguageTool] Comparing ${decoration.spec.matchId} !== ${currentMatchId}: keep=${keep}`
+                                    );
+                                    return keep;
+                                }
+                                // Fallback to position matching
+                                const keep = !(
+                                    decoration.from === from &&
+                                    decoration.to === to
+                                );
+                                console.log(
+                                    `[LanguageTool] Position fallback: from=${decoration.from}/${from}, to=${decoration.to}/${to}: keep=${keep}`
+                                );
+                                return keep;
+                            }
+                        );
+
+                        console.log(
+                            "[LanguageTool] Filtered decorations count:",
+                            filteredDecorations.length
+                        );
+
+                        // Create a new decoration set without the ignored decoration
+                        const newDecorationSet = DecorationSet.create(
+                            doc,
+                            filteredDecorations
+                        );
+
+                        console.log(
+                            "[LanguageTool] Dispatching transaction with new decoration set"
+                        );
                         const tr = editor.state.tr.setMeta(
                             LanguageToolHelpingWords.LanguageToolTransactionName,
                             newDecorationSet
                         );
                         editor.view.dispatch(tr);
+                        console.log("[LanguageTool] Transaction dispatched");
+                    } else {
+                        console.warn(
+                            "[LanguageTool] No plugin state, cannot remove decoration"
+                        );
                     }
 
+                    // Get the full document text for context extraction
+                    const fullText = doc.textContent;
                     const content = doc.textBetween(from, to);
-                    (db as any).ignoredWords.add({
-                        value: content,
+
+                    // Calculate offset within full text
+                    // 'from' is 1-based position in ProseMirror, textContent is 0-based
+                    const textOffset = from - 1;
+                    const context = getContextSignature(
+                        fullText,
+                        textOffset,
+                        to - from
+                    );
+
+                    // Store the ignore with context for modification detection
+                    db.ignoredSuggestions.add({
                         documentId: `${this.options.documentId}`,
+                        ruleId: currentMatch.rule.id,
+                        content: content,
+                        contextBefore: context.before,
+                        contextAfter: context.after,
                     });
 
-                    return false;
+                    // Clear the current match from storage immediately
+                    this.storage.match = undefined;
+                    this.storage.matchRange = undefined;
+                    this.storage.currentMatchId = undefined;
+
+                    return true;
                 },
 
             resetLanguageToolMatch:
@@ -540,6 +781,7 @@ export const LanguageTool = Extension.create<
                 ({ editor }) => {
                     this.storage.match = undefined;
                     this.storage.matchRange = undefined;
+                    this.storage.currentMatchId = undefined;
 
                     const pluginState = languageToolPluginKey.getState(
                         editor.state
@@ -586,7 +828,9 @@ export const LanguageTool = Extension.create<
     },
 
     addProseMirrorPlugins() {
-        const extensionThis = this;
+        // Extract references to extension properties that we need inside the plugin
+        // This avoids aliasing 'this' which ESLint disallows
+        const extensionStorage = this.storage;
         const { documentId, automaticMode } = this.options;
 
         return [
@@ -612,7 +856,7 @@ export const LanguageTool = Extension.create<
                         newState
                     ): LanguageToolPluginState => {
                         // Handle deactivation
-                        if (!extensionThis.storage.active) {
+                        if (!extensionStorage.active) {
                             return {
                                 ...pluginState,
                                 decorationSet: DecorationSet.empty,
@@ -625,7 +869,7 @@ export const LanguageTool = Extension.create<
                             LanguageToolHelpingWords.LoadingTransactionName
                         );
                         if (loading !== undefined) {
-                            extensionThis.storage.loading = loading;
+                            extensionStorage.loading = loading;
                             return { ...pluginState, loading };
                         }
 
@@ -638,10 +882,10 @@ export const LanguageTool = Extension.create<
                         );
 
                         if (matchUpdated) {
-                            extensionThis.storage.match = pluginState.match;
+                            extensionStorage.match = pluginState.match;
                         }
                         if (matchRangeUpdated) {
-                            extensionThis.storage.matchRange =
+                            extensionStorage.matchRange =
                                 pluginState.matchRange;
                         }
 
@@ -681,7 +925,8 @@ export const LanguageTool = Extension.create<
                     attributes: {
                         spellcheck: "false",
                     },
-                    handlePaste(view, event, slice) {
+                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                    handlePaste(view, _event, _slice) {
                         // Re-proofread after paste
                         setTimeout(() => {
                             if (!automaticMode) return;
@@ -690,10 +935,10 @@ export const LanguageTool = Extension.create<
                                 documentId,
                                 () =>
                                     languageToolPluginKey.getState(view.state),
-                                (match, matchRange) => {
-                                    extensionThis.storage.match = match;
-                                    extensionThis.storage.matchRange =
-                                        matchRange;
+                                (match, matchRange, matchId) => {
+                                    extensionStorage.match = match;
+                                    extensionStorage.matchRange = matchRange;
+                                    extensionStorage.currentMatchId = matchId;
                                 }
                             );
                             proofreader.debouncedProofreadAndDecorate(
@@ -710,23 +955,17 @@ export const LanguageTool = Extension.create<
                         view,
                         documentId,
                         () => languageToolPluginKey.getState(view.state),
-                        (match, matchRange) => {
-                            extensionThis.storage.match = match;
-                            extensionThis.storage.matchRange = matchRange;
-
-                            // Dispatch update to trigger any listeners
-                            const tr = view.state.tr
-                                .setMeta(
-                                    LanguageToolHelpingWords.MatchUpdatedTransactionName,
-                                    true
-                                )
-                                .setMeta(
-                                    LanguageToolHelpingWords.MatchRangeUpdatedTransactionName,
-                                    true
-                                );
-                            view.dispatch(tr);
+                        (match, matchRange, matchId) => {
+                            // Set storage directly - React polls this
+                            extensionStorage.match = match;
+                            extensionStorage.matchRange = matchRange;
+                            extensionStorage.currentMatchId = matchId;
+                            // No need to dispatch transaction - React polls storage
                         }
                     );
+
+                    // Set up event listeners immediately
+                    proofreader.addEventListenersToDecorations();
 
                     // Initial proofreading
                     if (automaticMode) {
@@ -741,12 +980,8 @@ export const LanguageTool = Extension.create<
 
                     return {
                         update: (view, prevState) => {
-                            // Add event listeners after each update
-                            setTimeout(
-                                () =>
-                                    proofreader.addEventListenersToDecorations(),
-                                100
-                            );
+                            // Ensure event listeners are set up
+                            proofreader.addEventListenersToDecorations();
 
                             // Re-proofread on document changes
                             if (

@@ -212,11 +212,8 @@ export const LanguageToolPopup: React.FC<LanguageToolPopupProps> = ({
     const handleIgnore = () => {
         if (!editor) return;
 
-        if (matchRange) {
-            editor.chain().focus().setTextSelection(matchRange).run();
-        }
-
         try {
+            // The command uses the stored matchRange, no need to set selection
             editor.commands.ignoreLanguageToolSuggestion();
         } catch {
             // Ignore errors if documentId isn't set
@@ -276,13 +273,6 @@ export const LanguageToolPopup: React.FC<LanguageToolPopupProps> = ({
                     type="button"
                 >
                     Ignore
-                </button>
-                <button
-                    className="lt-popup-ignore"
-                    onClick={handleDismiss}
-                    type="button"
-                >
-                    Dismiss
                 </button>
             </div>
         </div>

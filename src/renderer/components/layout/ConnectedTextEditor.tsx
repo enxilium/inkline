@@ -266,6 +266,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             LanguageTool.configure({
                 language: "auto",
                 automaticMode: true,
+                documentId: documentId,
             }),
             StarterKit.configure({
                 heading: { levels: [1, 2, 3] },
