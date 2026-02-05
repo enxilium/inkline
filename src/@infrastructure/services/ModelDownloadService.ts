@@ -56,6 +56,10 @@ export class ModelDownloadService extends EventEmitter {
     private serverBasePath: string;
     private modelsBasePath: string;
     private activeDownloads: Map<string, { abort: () => void }> = new Map();
+    // Track paths that need cleanup on cancel (temp files, archives, extraction dirs)
+    private cleanupPaths: Map<string, string[]> = new Map();
+    // Track active extraction processes for cancellation
+    private activeExtractions: Map<string, { kill: () => void }> = new Map();
 
     constructor() {
         super();
@@ -63,7 +67,7 @@ export class ModelDownloadService extends EventEmitter {
         this.modelsBasePath = path.join(
             this.serverBasePath,
             "ComfyUI",
-            "models"
+            "models",
         );
     }
 
@@ -81,7 +85,7 @@ export class ModelDownloadService extends EventEmitter {
         const pythonPath = path.join(
             this.serverBasePath,
             "python_embeded",
-            "python.exe"
+            "python.exe",
         );
         const mainScript = path.join(this.serverBasePath, "ComfyUI", "main.py");
 
@@ -102,12 +106,12 @@ export class ModelDownloadService extends EventEmitter {
             this.serverBasePath,
             "java_embeded",
             "bin",
-            "java.exe"
+            "java.exe",
         );
         const serverJar = path.join(
             this.serverBasePath,
             "language",
-            "languagetool-server.jar"
+            "languagetool-server.jar",
         );
 
         try {
@@ -127,7 +131,7 @@ export class ModelDownloadService extends EventEmitter {
         const modelPath = path.join(
             this.modelsBasePath,
             model.subfolder,
-            model.filename
+            model.filename,
         );
 
         try {
@@ -153,7 +157,7 @@ export class ModelDownloadService extends EventEmitter {
      * Download and extract ComfyUI portable
      */
     async downloadComfyUI(
-        onProgress: (progress: DownloadProgress) => void
+        onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
         // Check if already installed
         const installed = await this.isComfyUIInstalled();
@@ -173,15 +177,26 @@ export class ModelDownloadService extends EventEmitter {
 
         const archivePath = path.join(
             this.serverBasePath,
-            "ComfyUI_portable.7z"
+            "ComfyUI_portable.7z",
         );
+        const extractedDir = path.join(
+            this.serverBasePath,
+            "ComfyUI_windows_portable",
+        );
+
+        // Track paths for cleanup on cancel
+        this.cleanupPaths.set("comfyui", [
+            archivePath,
+            archivePath + ".download",
+            extractedDir,
+        ]);
 
         // Download the 7z archive
         await this.downloadFile(
             COMFYUI_DOWNLOAD_URL,
             archivePath,
             "comfyui",
-            onProgress
+            onProgress,
         );
 
         // Extract the archive
@@ -197,11 +212,6 @@ export class ModelDownloadService extends EventEmitter {
 
         // The archive extracts to a subfolder like "ComfyUI_windows_portable"
         // We need to move contents up one level
-        const extractedDir = path.join(
-            this.serverBasePath,
-            "ComfyUI_windows_portable"
-        );
-
         try {
             const extractedExists = await fsPromises
                 .access(extractedDir)
@@ -240,7 +250,7 @@ export class ModelDownloadService extends EventEmitter {
         } catch (err) {
             console.warn(
                 "[ModelDownloadService] Error reorganizing extracted files:",
-                err
+                err,
             );
         }
 
@@ -249,6 +259,9 @@ export class ModelDownloadService extends EventEmitter {
 
         // Copy bundled workflow files to server directory
         await this.copyBundledWorkflows();
+
+        // Clear cleanup tracking on success
+        this.cleanupPaths.delete("comfyui");
 
         onProgress({
             downloadType: "comfyui",
@@ -276,7 +289,7 @@ export class ModelDownloadService extends EventEmitter {
             } catch (err) {
                 console.warn(
                     `[ModelDownloadService] Could not copy workflow ${file}:`,
-                    err
+                    err,
                 );
             }
         }
@@ -312,7 +325,8 @@ export class ModelDownloadService extends EventEmitter {
     private async extract7z(
         archivePath: string,
         destPath: string,
-        onProgress: (progress: DownloadProgress) => void
+        onProgress: (progress: DownloadProgress) => void,
+        downloadType: "comfyui" | "languagetool" = "comfyui",
     ): Promise<void> {
         return new Promise((resolve, reject) => {
             // PowerShell script to find and use 7z
@@ -358,6 +372,17 @@ export class ModelDownloadService extends EventEmitter {
                 psScript,
             ]);
 
+            // Track this extraction process for cancellation
+            this.activeExtractions.set(downloadType, {
+                kill: () => {
+                    try {
+                        ps.kill();
+                    } catch {
+                        // Process may already be dead
+                    }
+                },
+            });
+
             let stdout = "";
             let stderr = "";
 
@@ -381,18 +406,23 @@ export class ModelDownloadService extends EventEmitter {
             });
 
             ps.on("close", (code) => {
+                this.activeExtractions.delete(downloadType);
                 if (code === 0) {
                     resolve();
+                } else if (code === null) {
+                    // Process was killed (cancelled)
+                    reject(new Error("Extraction cancelled"));
                 } else {
                     reject(
                         new Error(
-                            `7z extraction failed (code ${code}): ${stderr || stdout}`
-                        )
+                            `7z extraction failed (code ${code}): ${stderr || stdout}`,
+                        ),
                     );
                 }
             });
 
             ps.on("error", (err) => {
+                this.activeExtractions.delete(downloadType);
                 reject(new Error(`Failed to run extraction: ${err.message}`));
             });
         });
@@ -405,7 +435,7 @@ export class ModelDownloadService extends EventEmitter {
         url: string,
         destPath: string,
         downloadType: "comfyui" | "image" | "audio" | "languagetool",
-        onProgress: (progress: DownloadProgress) => void
+        onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
         const tempPath = destPath + ".download";
 
@@ -430,7 +460,7 @@ export class ModelDownloadService extends EventEmitter {
 
             const downloadWithRedirect = (
                 currentUrl: string,
-                redirectCount = 0
+                redirectCount = 0,
             ) => {
                 if (redirectCount > 10) {
                     progress.status = "error";
@@ -456,7 +486,7 @@ export class ModelDownloadService extends EventEmitter {
                             response.destroy();
                             downloadWithRedirect(
                                 response.headers.location,
-                                redirectCount + 1
+                                redirectCount + 1,
                             );
                             return;
                         }
@@ -467,25 +497,33 @@ export class ModelDownloadService extends EventEmitter {
                             onProgress(progress);
                             reject(
                                 new Error(
-                                    `Failed to download: HTTP ${response.statusCode}`
-                                )
+                                    `Failed to download: HTTP ${response.statusCode}`,
+                                ),
                             );
                             return;
                         }
 
                         const totalBytes = parseInt(
                             response.headers["content-length"] || "0",
-                            10
+                            10,
                         );
                         progress.totalBytes = totalBytes;
 
                         const fileStream = fs.createWriteStream(tempPath);
+                        let streamClosed = false;
+
+                        const closeAndCleanup = () => {
+                            if (streamClosed) return;
+                            streamClosed = true;
+                            response.unpipe(fileStream);
+                            response.destroy();
+                            fileStream.destroy();
+                            fsPromises.unlink(tempPath).catch(() => {});
+                        };
 
                         response.on("data", (chunk: Buffer) => {
                             if (aborted) {
-                                response.destroy();
-                                fileStream.close();
-                                fsPromises.unlink(tempPath).catch(() => {});
+                                closeAndCleanup();
                                 return;
                             }
 
@@ -493,7 +531,7 @@ export class ModelDownloadService extends EventEmitter {
                             progress.percentage = totalBytes
                                 ? Math.round(
                                       (progress.downloadedBytes / totalBytes) *
-                                          100
+                                          100,
                                   )
                                 : 0;
                             onProgress(progress);
@@ -502,6 +540,7 @@ export class ModelDownloadService extends EventEmitter {
                         response.pipe(fileStream);
 
                         fileStream.on("finish", async () => {
+                            if (streamClosed) return;
                             fileStream.close();
 
                             if (aborted) {
@@ -525,13 +564,20 @@ export class ModelDownloadService extends EventEmitter {
                         });
 
                         fileStream.on("error", async (err) => {
+                            if (streamClosed || aborted) return;
                             await fsPromises.unlink(tempPath).catch(() => {});
                             progress.status = "error";
                             progress.error = err.message;
                             onProgress(progress);
                             reject(err);
                         });
-                    }
+
+                        fileStream.on("close", () => {
+                            if (aborted && !streamClosed) {
+                                reject(new Error("Download cancelled"));
+                            }
+                        });
+                    },
                 );
 
                 request.on("error", (err: Error) => {
@@ -559,11 +605,14 @@ export class ModelDownloadService extends EventEmitter {
      */
     async downloadModel(
         modelType: "image" | "audio",
-        onProgress: (progress: DownloadProgress) => void
+        onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
         const model = MODELS[modelType];
         const modelDir = path.join(this.modelsBasePath, model.subfolder);
         const modelPath = path.join(modelDir, model.filename);
+
+        // Track paths for cleanup on cancel
+        this.cleanupPaths.set(modelType, [modelPath, modelPath + ".download"]);
 
         // Ensure directory exists
         await fsPromises.mkdir(modelDir, { recursive: true });
@@ -583,6 +632,9 @@ export class ModelDownloadService extends EventEmitter {
 
         await this.downloadFile(model.url, modelPath, modelType, onProgress);
 
+        // Clear cleanup tracking on success
+        this.cleanupPaths.delete(modelType);
+
         onProgress({
             downloadType: modelType,
             downloadedBytes: 0,
@@ -596,7 +648,7 @@ export class ModelDownloadService extends EventEmitter {
      * Download and install LanguageTool server with embedded Java JRE
      */
     async downloadLanguageTool(
-        onProgress: (progress: DownloadProgress) => void
+        onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
         // Check if already installed
         const installed = await this.isLanguageToolInstalled();
@@ -614,9 +666,19 @@ export class ModelDownloadService extends EventEmitter {
         // Ensure server directory exists
         await fsPromises.mkdir(this.serverBasePath, { recursive: true });
 
+        // Track paths for cleanup on cancel
+        const jreZipPath = path.join(this.serverBasePath, "java_jre.zip");
+        const ltZipPath = path.join(this.serverBasePath, "languagetool.zip");
+        this.cleanupPaths.set("languagetool", [
+            jreZipPath,
+            jreZipPath + ".download",
+            ltZipPath,
+            ltZipPath + ".download",
+            // Extracted dirs will be added dynamically when found
+        ]);
+
         // Step 1: Download and extract Java JRE
         console.log("[ModelDownloadService] Downloading Java JRE...");
-        const jreZipPath = path.join(this.serverBasePath, "java_jre.zip");
 
         await this.downloadFile(
             JAVA_JRE_URL,
@@ -628,7 +690,7 @@ export class ModelDownloadService extends EventEmitter {
                     ...progress,
                     percentage: Math.round(progress.percentage * 0.4),
                 });
-            }
+            },
         );
 
         // Extract Java JRE
@@ -646,12 +708,17 @@ export class ModelDownloadService extends EventEmitter {
         // The Adoptium zip extracts to something like "jdk-21.0.5+11-jre"
         const jreExtractedDir = await this.findExtractedDir(
             this.serverBasePath,
-            /^jdk-.*-jre$/
+            /^jdk-.*-jre$/,
         );
         if (jreExtractedDir) {
+            // Track extracted dir for cleanup
+            const currentPaths = this.cleanupPaths.get("languagetool") || [];
+            currentPaths.push(jreExtractedDir);
+            this.cleanupPaths.set("languagetool", currentPaths);
+
             const javaEmbededPath = path.join(
                 this.serverBasePath,
-                "java_embeded"
+                "java_embeded",
             );
             // Remove existing if present
             await fsPromises.rm(javaEmbededPath, {
@@ -666,9 +733,8 @@ export class ModelDownloadService extends EventEmitter {
 
         // Step 2: Download and extract LanguageTool
         console.log(
-            "[ModelDownloadService] Downloading LanguageTool server..."
+            "[ModelDownloadService] Downloading LanguageTool server...",
         );
-        const ltZipPath = path.join(this.serverBasePath, "languagetool.zip");
 
         await this.downloadFile(
             LANGUAGETOOL_SERVER_URL,
@@ -680,7 +746,7 @@ export class ModelDownloadService extends EventEmitter {
                     ...progress,
                     percentage: 40 + Math.round(progress.percentage * 0.5),
                 });
-            }
+            },
         );
 
         // Extract LanguageTool
@@ -698,9 +764,14 @@ export class ModelDownloadService extends EventEmitter {
         // The zip extracts to something like "LanguageTool-6.6-SNAPSHOT"
         const ltExtractedDir = await this.findExtractedDir(
             this.serverBasePath,
-            /^LanguageTool-/
+            /^LanguageTool-/,
         );
         if (ltExtractedDir) {
+            // Track extracted dir for cleanup
+            const currentPaths = this.cleanupPaths.get("languagetool") || [];
+            currentPaths.push(ltExtractedDir);
+            this.cleanupPaths.set("languagetool", currentPaths);
+
             const languagePath = path.join(this.serverBasePath, "language");
             // Remove existing if present
             await fsPromises.rm(languagePath, { recursive: true, force: true });
@@ -709,6 +780,9 @@ export class ModelDownloadService extends EventEmitter {
 
         // Clean up LanguageTool zip
         await fsPromises.unlink(ltZipPath).catch(() => {});
+
+        // Clear cleanup tracking on success
+        this.cleanupPaths.delete("languagetool");
 
         onProgress({
             downloadType: "languagetool",
@@ -719,7 +793,7 @@ export class ModelDownloadService extends EventEmitter {
         });
 
         console.log(
-            "[ModelDownloadService] LanguageTool installation complete."
+            "[ModelDownloadService] LanguageTool installation complete.",
         );
     }
 
@@ -728,7 +802,7 @@ export class ModelDownloadService extends EventEmitter {
      */
     private async findExtractedDir(
         basePath: string,
-        pattern: RegExp
+        pattern: RegExp,
     ): Promise<string | null> {
         try {
             const entries = await fsPromises.readdir(basePath, {
@@ -750,7 +824,8 @@ export class ModelDownloadService extends EventEmitter {
      */
     private async extractZip(
         archivePath: string,
-        destPath: string
+        destPath: string,
+        downloadType: "comfyui" | "languagetool" = "languagetool",
     ): Promise<void> {
         return new Promise((resolve, reject) => {
             const psScript = `
@@ -767,6 +842,17 @@ export class ModelDownloadService extends EventEmitter {
                 psScript,
             ]);
 
+            // Track this extraction process for cancellation
+            this.activeExtractions.set(downloadType, {
+                kill: () => {
+                    try {
+                        ps.kill();
+                    } catch {
+                        // Process may already be dead
+                    }
+                },
+            });
+
             let stderr = "";
 
             ps.stderr?.on("data", (data) => {
@@ -774,39 +860,100 @@ export class ModelDownloadService extends EventEmitter {
             });
 
             ps.on("close", (code) => {
+                this.activeExtractions.delete(downloadType);
                 if (code === 0) {
                     resolve();
+                } else if (code === null) {
+                    // Process was killed (cancelled)
+                    reject(new Error("Extraction cancelled"));
                 } else {
                     reject(
                         new Error(
-                            `ZIP extraction failed (code ${code}): ${stderr}`
-                        )
+                            `ZIP extraction failed (code ${code}): ${stderr}`,
+                        ),
                     );
                 }
             });
 
             ps.on("error", (err) => {
+                this.activeExtractions.delete(downloadType);
                 reject(new Error(`Failed to run extraction: ${err.message}`));
             });
         });
     }
 
     cancelDownload(
-        downloadType: "comfyui" | "image" | "audio" | "languagetool"
+        downloadType: "comfyui" | "image" | "audio" | "languagetool",
     ): void {
+        // Abort active download
         const download = this.activeDownloads.get(downloadType);
         if (download) {
             download.abort();
             this.activeDownloads.delete(downloadType);
         }
+        // Kill active extraction process
+        const extraction = this.activeExtractions.get(downloadType);
+        if (extraction) {
+            extraction.kill();
+            this.activeExtractions.delete(downloadType);
+        }
+        // Clean up partial files for this download type
+        this.cleanupPartialDownload(downloadType);
     }
 
     cancelAllDownloads(): void {
         for (const [type] of this.activeDownloads) {
             this.cancelDownload(
-                type as "comfyui" | "image" | "audio" | "languagetool"
+                type as "comfyui" | "image" | "audio" | "languagetool",
             );
         }
+    }
+
+    /**
+     * Clean up partial downloads, archives, and extracted directories for a download type
+     */
+    private async cleanupPartialDownload(
+        downloadType: "comfyui" | "image" | "audio" | "languagetool",
+    ): Promise<void> {
+        const paths = this.cleanupPaths.get(downloadType);
+        if (!paths || paths.length === 0) {
+            return;
+        }
+
+        console.log(
+            `[ModelDownloadService] Cleaning up partial ${downloadType} download...`,
+        );
+
+        for (const filePath of paths) {
+            try {
+                const stats = await fsPromises
+                    .stat(filePath)
+                    .catch((): null => null);
+                if (stats) {
+                    if (stats.isDirectory()) {
+                        await fsPromises.rm(filePath, {
+                            recursive: true,
+                            force: true,
+                        });
+                        console.log(
+                            `[ModelDownloadService] Removed directory: ${filePath}`,
+                        );
+                    } else {
+                        await fsPromises.unlink(filePath);
+                        console.log(
+                            `[ModelDownloadService] Removed file: ${filePath}`,
+                        );
+                    }
+                }
+            } catch (err) {
+                console.warn(
+                    `[ModelDownloadService] Failed to clean up ${filePath}:`,
+                    err,
+                );
+            }
+        }
+
+        this.cleanupPaths.delete(downloadType);
     }
 }
 

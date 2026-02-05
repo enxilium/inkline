@@ -20,8 +20,10 @@ const setupApi = {
         return ipcRenderer.invoke(SETUP_CHANNELS.START_DOWNLOADS, request);
     },
 
-    cancelDownloads: (): Promise<void> => {
-        return ipcRenderer.invoke(SETUP_CHANNELS.CANCEL_DOWNLOADS);
+    cancelDownloads: (
+        types?: ("comfyui" | "image" | "audio" | "languagetool")[],
+    ): Promise<void> => {
+        return ipcRenderer.invoke(SETUP_CHANNELS.CANCEL_DOWNLOADS, types);
     },
 
     checkModelStatus: (): Promise<ModelStatus> => {
@@ -46,7 +48,7 @@ const setupEvents = {
     onDownloadProgress: (listener: (progress: DownloadProgress) => void) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            progress: DownloadProgress
+            progress: DownloadProgress,
         ) => {
             listener(progress);
         };
@@ -54,7 +56,7 @@ const setupEvents = {
         return () =>
             ipcRenderer.removeListener(
                 SETUP_CHANNELS.DOWNLOAD_PROGRESS,
-                handler
+                handler,
             );
     },
 };
