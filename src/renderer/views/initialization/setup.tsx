@@ -28,7 +28,13 @@ interface PlatformInfo {
     isWindows: boolean;
 }
 
-type SetupStep = "welcome" | "features" | "downloads" | "theme" | "complete";
+type SetupStep =
+    | "welcome"
+    | "features"
+    | "downloads"
+    | "finalizing"
+    | "theme"
+    | "complete";
 
 const ACCENT_COLORS = [
     { name: "Blue", value: "#4a90e2" },
@@ -266,46 +272,33 @@ const DownloadsStep: React.FC<{
     onBack: () => void;
 }> = ({ config, onNext, onBack }) => {
     const [comfyProgress, setComfyProgress] = useState<DownloadProgress | null>(
-        null
+        null,
     );
     const [imageProgress, setImageProgress] = useState<DownloadProgress | null>(
-        null
+        null,
     );
     const [audioProgress, setAudioProgress] = useState<DownloadProgress | null>(
-        null
+        null,
     );
-    const [languagetoolProgress, setLanguagetoolProgress] =
-        useState<DownloadProgress | null>(null);
     const [isDownloading, setIsDownloading] = useState(false);
     const [downloadStarted, setDownloadStarted] = useState(false);
     const [comfyUIInstalled, setComfyUIInstalled] = useState(false);
-    const [languageToolInstalled, setLanguageToolInstalled] = useState(false);
-    const [isWindows, setIsWindows] = useState(false);
+    const [wasCancelled, setWasCancelled] = useState(false);
 
     const needsImageDownload = config.features.imageGeneration;
     const needsAudioDownload = config.features.audioGeneration;
     const needsLocalAI = needsImageDownload || needsAudioDownload;
-    // LanguageTool is auto-enabled for Windows users
-    const needsLanguageTool = isWindows && !languageToolInstalled;
 
-    // Check platform and installation status
+    // Check ComfyUI installation status
     useEffect(() => {
         const checkStatus = async () => {
             try {
-                const [comfyStatus, ltStatus, platformInfo] = await Promise.all(
-                    [
-                        (window as any).setupApi.checkComfyUIStatus(),
-                        (window as any).setupApi.checkLanguageToolStatus(),
-                        (window as any).setupApi.checkPlatform(),
-                    ]
-                );
+                const comfyStatus = await (
+                    window as any
+                ).setupApi.checkComfyUIStatus();
                 setComfyUIInstalled(comfyStatus.installed);
-                setLanguageToolInstalled(ltStatus.installed);
-                setIsWindows(platformInfo.isWindows);
             } catch {
                 setComfyUIInstalled(false);
-                setLanguageToolInstalled(false);
-                setIsWindows(false);
             }
         };
         checkStatus();
@@ -324,13 +317,8 @@ const DownloadsStep: React.FC<{
                     setImageProgress(progress);
                 } else if (progress.downloadType === "audio") {
                     setAudioProgress(progress);
-                } else if (progress.downloadType === "languagetool") {
-                    setLanguagetoolProgress(progress);
-                    if (progress.status === "completed") {
-                        setLanguageToolInstalled(true);
-                    }
                 }
-            }
+            },
         );
 
         return () => {
@@ -341,6 +329,7 @@ const DownloadsStep: React.FC<{
     const startDownloads = async () => {
         setIsDownloading(true);
         setDownloadStarted(true);
+        setWasCancelled(false);
 
         try {
             // Initialize ComfyUI progress if needed
@@ -372,24 +361,35 @@ const DownloadsStep: React.FC<{
                     status: "pending",
                 });
             }
-            if (needsLanguageTool) {
-                setLanguagetoolProgress({
-                    downloadType: "languagetool",
-                    downloadedBytes: 0,
-                    totalBytes: 0,
-                    percentage: 0,
-                    status: "pending",
-                });
-            }
 
             await (window as any).setupApi.startDownloads({
                 comfyui: needsLocalAI && !comfyUIInstalled,
                 image: needsImageDownload,
                 audio: needsAudioDownload,
-                languagetool: needsLanguageTool,
+                languagetool: false,
             });
         } catch (error) {
             console.error("Download error:", error);
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    const cancelDownloads = async () => {
+        try {
+            // Only cancel AI downloads, not LanguageTool (which downloads in background)
+            await (window as any).setupApi.cancelDownloads([
+                "comfyui",
+                "image",
+                "audio",
+            ]);
+            // Reset progress states to show cancellation
+            setComfyProgress(null);
+            setImageProgress(null);
+            setAudioProgress(null);
+            setWasCancelled(true);
+        } catch (error) {
+            console.error("Cancel error:", error);
         } finally {
             setIsDownloading(false);
         }
@@ -400,20 +400,26 @@ const DownloadsStep: React.FC<{
             comfyUIInstalled ||
             comfyProgress?.status === "completed") &&
         (!needsImageDownload || imageProgress?.status === "completed") &&
-        (!needsAudioDownload || audioProgress?.status === "completed") &&
-        (!needsLanguageTool ||
-            languageToolInstalled ||
-            languagetoolProgress?.status === "completed");
+        (!needsAudioDownload || audioProgress?.status === "completed");
 
     const hasError =
         comfyProgress?.status === "error" ||
         imageProgress?.status === "error" ||
-        audioProgress?.status === "error" ||
-        languagetoolProgress?.status === "error";
+        audioProgress?.status === "error";
+
+    // Check if any download is actively in progress (pending, downloading, or extracting)
+    const isActivelyDownloading =
+        comfyProgress?.status === "pending" ||
+        comfyProgress?.status === "downloading" ||
+        comfyProgress?.status === "extracting" ||
+        imageProgress?.status === "pending" ||
+        imageProgress?.status === "downloading" ||
+        audioProgress?.status === "pending" ||
+        audioProgress?.status === "downloading";
 
     const renderProgress = (
         progress: DownloadProgress | null,
-        label: string
+        label: string,
     ) => {
         if (!progress) return null;
 
@@ -459,7 +465,7 @@ const DownloadsStep: React.FC<{
     };
 
     // Skip this step if no downloads needed
-    if (!needsImageDownload && !needsAudioDownload && !needsLanguageTool) {
+    if (!needsImageDownload && !needsAudioDownload) {
         return (
             <div style={styles.stepContainer}>
                 <h2 style={styles.stepTitle}>No Downloads Required</h2>
@@ -495,17 +501,12 @@ const DownloadsStep: React.FC<{
                 {needsImageDownload &&
                     renderProgress(
                         imageProgress,
-                        "Image Generation Model (~10 GB)"
+                        "Image Generation Model (~10 GB)",
                     )}
                 {needsAudioDownload &&
                     renderProgress(
                         audioProgress,
-                        "Audio Generation Model (~7.5 GB)"
-                    )}
-                {needsLanguageTool &&
-                    renderProgress(
-                        languagetoolProgress,
-                        "Grammar Checker (Java + LanguageTool ~350 MB)"
+                        "Audio Generation Model (~7.5 GB)",
                     )}
             </div>
 
@@ -540,10 +541,34 @@ const DownloadsStep: React.FC<{
                     <button
                         style={styles.secondaryButton}
                         onClick={onBack}
-                        disabled={isDownloading}
+                        disabled={isActivelyDownloading}
                     >
                         Back
                     </button>
+                    {isActivelyDownloading && (
+                        <button
+                            style={styles.dangerButton}
+                            onClick={cancelDownloads}
+                        >
+                            Cancel
+                        </button>
+                    )}
+                    {wasCancelled && (
+                        <>
+                            <button
+                                style={styles.secondaryButton}
+                                onClick={startDownloads}
+                            >
+                                Retry
+                            </button>
+                            <button
+                                style={styles.primaryButton}
+                                onClick={onNext}
+                            >
+                                Skip
+                            </button>
+                        </>
+                    )}
                     {hasError && (
                         <button
                             style={styles.primaryButton}
@@ -560,12 +585,212 @@ const DownloadsStep: React.FC<{
                 </div>
             )}
 
-            {isDownloading && (
+            {isActivelyDownloading && (
                 <p style={styles.downloadNote}>
                     Please keep this window open while downloading. You can use
                     other applications.
                 </p>
             )}
+
+            {wasCancelled && (
+                <p style={styles.downloadNote}>
+                    Downloads have been cancelled. You can retry or skip this
+                    step.
+                </p>
+            )}
+        </div>
+    );
+};
+
+// Friendly messages for the finalizing spinner
+const FINALIZING_MESSAGES = [
+    "Adding final touches...",
+    "Setting up your writing tools...",
+    "Preparing your workspace...",
+    "Almost ready...",
+    "Configuring grammar checker...",
+    "Just a moment...",
+];
+
+const FinalizingStep: React.FC<{
+    onNext: () => void;
+}> = ({ onNext }) => {
+    const [currentMessageIndex, setCurrentMessageIndex] = useState(0);
+    const [status, setStatus] = useState<"loading" | "complete" | "error">(
+        "loading",
+    );
+    const [error, setError] = useState<string | null>(null);
+    const [downloadProgress, setDownloadProgress] =
+        useState<DownloadProgress | null>(null);
+    const onNextRef = React.useRef(onNext);
+    onNextRef.current = onNext;
+
+    // Single consolidated effect: check status, set up listener, handle completion
+    useEffect(() => {
+        let isSubscribed = true;
+
+        // Set up progress listener FIRST (before any async checks)
+        const unsubscribe = (window as any).setupEvents?.onDownloadProgress(
+            (progress: DownloadProgress) => {
+                if (!isSubscribed) return;
+                if (progress.downloadType === "languagetool") {
+                    setDownloadProgress(progress);
+                    if (progress.status === "completed") {
+                        setStatus("complete");
+                    } else if (progress.status === "error") {
+                        setError(progress.error || "Download failed");
+                        setStatus("error");
+                    }
+                }
+            },
+        );
+
+        // Check current status (download was already started at wizard open)
+        const checkStatus = async () => {
+            try {
+                const [platformInfo, ltStatus] = await Promise.all([
+                    (window as any).setupApi.checkPlatform(),
+                    (window as any).setupApi.checkLanguageToolStatus(),
+                ]);
+
+                if (!isSubscribed) return;
+
+                // If not Windows or already installed, we're done
+                if (!platformInfo.isWindows || ltStatus.installed) {
+                    setStatus("complete");
+                }
+                // Otherwise, wait for the background download to complete via listener
+            } catch (err) {
+                if (!isSubscribed) return;
+                console.error("Finalization check error:", err);
+                setError(err instanceof Error ? err.message : "Unknown error");
+                setStatus("error");
+            }
+        };
+
+        checkStatus();
+
+        return () => {
+            isSubscribed = false;
+            if (unsubscribe) unsubscribe();
+        };
+    }, []);
+
+    // Rotate through messages while loading
+    useEffect(() => {
+        if (status !== "loading") return;
+
+        const interval = setInterval(() => {
+            setCurrentMessageIndex(
+                (prev) => (prev + 1) % FINALIZING_MESSAGES.length,
+            );
+        }, 2500);
+
+        return () => clearInterval(interval);
+    }, [status]);
+
+    // Auto-advance when complete (use ref to avoid dependency on onNext)
+    useEffect(() => {
+        if (status === "complete") {
+            const timeout = setTimeout(() => onNextRef.current(), 500);
+            return () => clearTimeout(timeout);
+        }
+    }, [status]);
+
+    return (
+        <div style={styles.stepContainer}>
+            <div style={styles.finalizingContent}>
+                {status === "loading" && (
+                    <>
+                        <div style={styles.spinner}>
+                            <svg
+                                width="48"
+                                height="48"
+                                viewBox="0 0 48 48"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                                style={{ animation: "spin 1s linear infinite" }}
+                            >
+                                <circle
+                                    cx="24"
+                                    cy="24"
+                                    r="20"
+                                    stroke="#3a3b3e"
+                                    strokeWidth="4"
+                                    fill="none"
+                                />
+                                <path
+                                    d="M24 4C12.954 4 4 12.954 4 24"
+                                    stroke="#4a90e2"
+                                    strokeWidth="4"
+                                    strokeLinecap="round"
+                                    fill="none"
+                                />
+                            </svg>
+                        </div>
+                        <h2 style={styles.stepTitle}>
+                            {FINALIZING_MESSAGES[currentMessageIndex]}
+                        </h2>
+                        <p style={styles.stepDescription}>
+                            This will only take a moment.
+                        </p>
+                        {downloadProgress &&
+                            (downloadProgress.status === "downloading" ||
+                                downloadProgress.status === "extracting") && (
+                                <div style={styles.finalizingProgressContainer}>
+                                    <div style={styles.progressBarContainer}>
+                                        <div
+                                            style={{
+                                                ...styles.progressBar,
+                                                width: `${downloadProgress.percentage}%`,
+                                                backgroundColor:
+                                                    downloadProgress.status ===
+                                                    "extracting"
+                                                        ? "#f39c12"
+                                                        : "#4a90e2",
+                                            }}
+                                        />
+                                    </div>
+                                    <div style={styles.finalizingProgressText}>
+                                        {downloadProgress.status ===
+                                        "extracting"
+                                            ? `Extracting... ${downloadProgress.percentage}%`
+                                            : `${downloadProgress.percentage}%`}
+                                    </div>
+                                </div>
+                            )}
+                    </>
+                )}
+
+                {status === "complete" && (
+                    <>
+                        <div style={styles.successIcon}>✨</div>
+                        <h2 style={styles.stepTitle}>All set!</h2>
+                    </>
+                )}
+
+                {status === "error" && (
+                    <>
+                        <div style={styles.errorIcon}>⚠️</div>
+                        <h2 style={styles.stepTitle}>Something went wrong</h2>
+                        <p style={styles.stepDescription}>
+                            {error ||
+                                "Failed to complete setup. You can continue anyway."}
+                        </p>
+                        <button style={styles.primaryButton} onClick={onNext}>
+                            Continue Anyway
+                        </button>
+                    </>
+                )}
+            </div>
+
+            {/* CSS animation for spinner */}
+            <style>{`
+                @keyframes spin {
+                    from { transform: rotate(0deg); }
+                    to { transform: rotate(360deg); }
+                }
+            `}</style>
         </div>
     );
 };
@@ -753,20 +978,48 @@ const SetupWizard: React.FC = () => {
         },
     });
 
-    // Check platform on mount
+    // Check platform and start LanguageTool download in background on mount
     useEffect(() => {
-        const checkPlatform = async () => {
+        let isSubscribed = true;
+
+        const initializeWizard = async () => {
             try {
-                const platformInfo: PlatformInfo = await (
-                    window as any
-                ).setupApi.checkPlatform();
+                const [platformInfo, ltStatus] = await Promise.all([
+                    (window as any).setupApi.checkPlatform(),
+                    (window as any).setupApi.checkLanguageToolStatus(),
+                ]);
+
+                if (!isSubscribed) return;
                 setIsWindows(platformInfo.isWindows);
+
+                // Start LanguageTool download in background if needed (Windows only)
+                if (platformInfo.isWindows && !ltStatus.installed) {
+                    // Fire and forget - don't await, let it download in background
+                    (window as any).setupApi
+                        .startDownloads({
+                            comfyui: false,
+                            image: false,
+                            audio: false,
+                            languagetool: true,
+                        })
+                        .catch((err: Error) => {
+                            console.error(
+                                "Background LanguageTool download failed:",
+                                err,
+                            );
+                        });
+                }
             } catch {
                 // Default to true if check fails
-                setIsWindows(true);
+                if (isSubscribed) setIsWindows(true);
             }
         };
-        checkPlatform();
+
+        initializeWizard();
+
+        return () => {
+            isSubscribed = false;
+        };
     }, []);
 
     const updateConfig = useCallback((updates: Partial<SetupConfig>) => {
@@ -796,24 +1049,25 @@ const SetupWizard: React.FC = () => {
         "welcome",
         "features",
         "downloads",
+        "finalizing",
         "theme",
         "complete",
     ];
     const currentIndex = steps.indexOf(currentStep);
 
-    const goNext = () => {
-        const nextIndex = currentIndex + 1;
-        if (nextIndex < steps.length) {
-            setCurrentStep(steps[nextIndex]);
-        }
-    };
+    const goNext = useCallback(() => {
+        setCurrentStep((prev) => {
+            const idx = steps.indexOf(prev);
+            return idx < steps.length - 1 ? steps[idx + 1] : prev;
+        });
+    }, []);
 
-    const goBack = () => {
-        const prevIndex = currentIndex - 1;
-        if (prevIndex >= 0) {
-            setCurrentStep(steps[prevIndex]);
-        }
-    };
+    const goBack = useCallback(() => {
+        setCurrentStep((prev) => {
+            const idx = steps.indexOf(prev);
+            return idx > 0 ? steps[idx - 1] : prev;
+        });
+    }, []);
 
     return (
         <div style={styles.container}>
@@ -861,6 +1115,9 @@ const SetupWizard: React.FC = () => {
                         onNext={goNext}
                         onBack={goBack}
                     />
+                )}
+                {currentStep === "finalizing" && (
+                    <FinalizingStep onNext={goNext} />
                 )}
                 {currentStep === "theme" && (
                     <ThemeStep
@@ -974,6 +1231,17 @@ const styles: Record<string, React.CSSProperties> = {
         fontWeight: 500,
         cursor: "pointer",
         transition: "all 0.2s ease",
+    },
+    dangerButton: {
+        backgroundColor: "#e74c3c",
+        color: "#fff",
+        border: "none",
+        padding: "12px 32px",
+        borderRadius: "8px",
+        fontSize: "16px",
+        fontWeight: 500,
+        cursor: "pointer",
+        transition: "background-color 0.2s ease",
     },
     buttonRow: {
         display: "flex",
@@ -1216,6 +1484,32 @@ const styles: Record<string, React.CSSProperties> = {
     link: {
         color: "#4a90e2",
         textDecoration: "underline",
+    },
+    // Finalizing step styles
+    finalizingContent: {
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        minHeight: "200px",
+    },
+    spinner: {
+        marginBottom: "24px",
+    },
+    errorIcon: {
+        fontSize: "64px",
+        marginBottom: "24px",
+    },
+    finalizingProgressContainer: {
+        width: "100%",
+        maxWidth: "300px",
+        marginTop: "16px",
+    },
+    finalizingProgressText: {
+        fontSize: "12px",
+        color: "#6a6b6e",
+        marginTop: "8px",
+        textAlign: "center",
     },
 };
 

@@ -35,8 +35,94 @@ declare const LOADING_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 declare const SETUP_WINDOW_WEBPACK_ENTRY: string;
 declare const SETUP_WINDOW_PRELOAD_WEBPACK_ENTRY: string;
 
+// Handle Squirrel events for Windows installer (install/uninstall/update)
+const handleSquirrelEvent = (): boolean => {
+    if (process.platform !== "win32") {
+        return false;
+    }
+
+    const squirrelCommand = process.argv[1];
+    if (!squirrelCommand) {
+        return false;
+    }
+
+    const { spawn } = require("child_process");
+    const fs = require("fs");
+    const appFolder = path.resolve(process.execPath, "..");
+    const rootFolder = path.resolve(appFolder, "..");
+    const updateExe = path.resolve(rootFolder, "Update.exe");
+    const exeName = path.basename(process.execPath);
+
+    const spawnUpdate = (args: string[]) => {
+        try {
+            spawn(updateExe, args, { detached: true });
+        } catch {
+            // Ignore spawn errors
+        }
+    };
+
+    // Squirrel passes version as argument: --squirrel-uninstall 1.0.0
+    if (
+        squirrelCommand === "--squirrel-install" ||
+        squirrelCommand === "--squirrel-updated"
+    ) {
+        // Create shortcuts
+        spawnUpdate(["--createShortcut", exeName]);
+        setTimeout(() => app.quit(), 1000);
+        return true;
+    }
+
+    if (squirrelCommand === "--squirrel-uninstall") {
+        // Remove shortcuts
+        spawnUpdate(["--removeShortcut", exeName]);
+
+        // Clean up downloaded AI files and user data
+        try {
+            const userDataPath = app.getPath("userData");
+            const serverPath = path.join(process.resourcesPath || "", "server");
+
+            // Delete setup config
+            const configPath = path.join(userDataPath, "inkline-setup.json");
+            if (fs.existsSync(configPath)) {
+                fs.unlinkSync(configPath);
+                console.log("[Uninstall] Removed setup config");
+            }
+
+            // Delete server directory (contains ComfyUI, models, LanguageTool)
+            if (fs.existsSync(serverPath)) {
+                fs.rmSync(serverPath, { recursive: true, force: true });
+                console.log("[Uninstall] Removed server directory");
+            }
+
+            // Delete any cached data in userData
+            const cachePaths = ["Cache", "GPUCache", "logs"];
+            for (const cachePath of cachePaths) {
+                const fullPath = path.join(userDataPath, cachePath);
+                if (fs.existsSync(fullPath)) {
+                    fs.rmSync(fullPath, { recursive: true, force: true });
+                }
+            }
+            console.log("[Uninstall] Cleanup complete");
+        } catch (err) {
+            console.error("[Uninstall] Cleanup error:", err);
+        }
+
+        setTimeout(() => app.quit(), 1000);
+        return true;
+    }
+
+    if (squirrelCommand === "--squirrel-obsolete") {
+        app.quit();
+        return true;
+    }
+
+    return false;
+};
+
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
-if (require("electron-squirrel-startup")) {
+if (handleSquirrelEvent()) {
+    // Squirrel event handled, don't continue with normal startup
+} else if (require("electron-squirrel-startup")) {
     app.quit();
 }
 
@@ -100,6 +186,14 @@ const createSetupWindow = (): Promise<void> => {
         // Setup IPC handlers for this window
         setupSetupIpcHandlers(resolve);
 
+        // Cancel any in-progress AI downloads when window is closing
+        // Don't cancel LanguageTool - it downloads in background and should complete
+        setupWindow.on("close", () => {
+            modelDownloadService.cancelDownload("comfyui");
+            modelDownloadService.cancelDownload("image");
+            modelDownloadService.cancelDownload("audio");
+        });
+
         setupWindow.on("closed", () => {
             setupWindow = null;
         });
@@ -119,7 +213,7 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
                     audioGeneration: boolean;
                 };
                 theme: { colorScheme: "dark" | "light"; accentColor: string };
-            }
+            },
         ) => {
             await setupService.saveConfig({
                 setupCompleted: true,
@@ -133,7 +227,7 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
             }
 
             onComplete();
-        }
+        },
     );
 
     // Check platform for Windows-only features
@@ -166,13 +260,13 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
                 image: boolean;
                 audio: boolean;
                 languagetool: boolean;
-            }
+            },
         ) => {
             const sendProgress = (progress: DownloadProgress) => {
                 if (setupWindow && !setupWindow.isDestroyed()) {
                     setupWindow.webContents.send(
                         SETUP_CHANNELS.DOWNLOAD_PROGRESS,
-                        progress
+                        progress,
                     );
                 }
             };
@@ -197,11 +291,11 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
                     modelDownloadService
                         .downloadModel("image", sendProgress)
                         .then(() =>
-                            setupService.markModelDownloaded("image", true)
+                            setupService.markModelDownloaded("image", true),
                         )
                         .catch((err) => {
                             console.error("Image model download failed:", err);
-                        })
+                        }),
                 );
             }
 
@@ -210,11 +304,11 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
                     modelDownloadService
                         .downloadModel("audio", sendProgress)
                         .then(() =>
-                            setupService.markModelDownloaded("audio", true)
+                            setupService.markModelDownloaded("audio", true),
                         )
                         .catch((err) => {
                             console.error("Audio model download failed:", err);
-                        })
+                        }),
                 );
             }
 
@@ -225,7 +319,7 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
             if (request.languagetool) {
                 try {
                     await modelDownloadService.downloadLanguageTool(
-                        sendProgress
+                        sendProgress,
                     );
                     await setupService.markLanguageToolInstalled(true);
                 } catch (err) {
@@ -233,13 +327,27 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
                     // Non-fatal - app can use public API fallback
                 }
             }
-        }
+        },
     );
 
     // Cancel downloads
-    ipcMain.handle(SETUP_CHANNELS.CANCEL_DOWNLOADS, async () => {
-        modelDownloadService.cancelAllDownloads();
-    });
+    ipcMain.handle(
+        SETUP_CHANNELS.CANCEL_DOWNLOADS,
+        async (
+            _,
+            types?: ("comfyui" | "image" | "audio" | "languagetool")[],
+        ) => {
+            if (types && types.length > 0) {
+                // Cancel only specific download types
+                for (const type of types) {
+                    modelDownloadService.cancelDownload(type);
+                }
+            } else {
+                // Cancel all if no types specified
+                modelDownloadService.cancelAllDownloads();
+            }
+        },
+    );
 
     // Check model status
     ipcMain.handle(SETUP_CHANNELS.CHECK_MODEL_STATUS, async () => {
@@ -301,7 +409,7 @@ const setupContextMenu = (): void => {
                 { role: "copy" },
                 { role: "paste" },
                 { type: "separator" },
-                { role: "selectAll" }
+                { role: "selectAll" },
             );
         } else if (type === "binder_chapter") {
             template.push(
@@ -322,7 +430,7 @@ const setupContextMenu = (): void => {
                             data,
                         });
                     },
-                }
+                },
             );
         } else if (type === "binder_project") {
             template.push({
@@ -355,7 +463,7 @@ const bootstrap = async (): Promise<void> => {
         const url = new URL(request.url);
         const relativePath = decodeURIComponent(url.pathname).replace(
             /^\//,
-            ""
+            "",
         );
         const basePath = fileSystemService.getBasePath();
         const filePath = path.join(basePath, relativePath);
@@ -363,7 +471,7 @@ const bootstrap = async (): Promise<void> => {
         // Security check: Ensure the resolved path is still within the base path
         if (!filePath.startsWith(basePath)) {
             console.error(
-                `[Security] Blocked path traversal attempt: ${relativePath}`
+                `[Security] Blocked path traversal attempt: ${relativePath}`,
             );
             return new Response("Access Denied", { status: 403 });
         }
@@ -405,7 +513,7 @@ const bootstrap = async (): Promise<void> => {
     try {
         await languageToolService.waitForReady();
         console.log(
-            `[Main] LanguageTool ready - using ${languageToolService.isUsingLocalServer() ? "local server" : "public API"}`
+            `[Main] LanguageTool ready - using ${languageToolService.isUsingLocalServer() ? "local server" : "public API"}`,
         );
     } catch (error) {
         console.error("Failed to initialize LanguageTool service:", error);
@@ -434,7 +542,7 @@ ipcMain.handle(
             color: string;
             symbolColor?: string;
             height?: number;
-        }
+        },
     ) => {
         if (process.platform === "darwin") {
             return;
@@ -453,7 +561,7 @@ ipcMain.handle(
         }
 
         setOverlay(overlay);
-    }
+    },
 );
 
 // LanguageTool IPC handlers - all HTTP calls are made from main process to avoid CORS
@@ -461,7 +569,7 @@ ipcMain.handle(
     "languageTool:checkGrammar",
     async (_event, request: { text: string; language: string }) => {
         return languageToolService.checkGrammar(request);
-    }
+    },
 );
 
 ipcMain.handle("languageTool:isUsingLocalServer", async () => {
@@ -484,7 +592,3 @@ app.on("activate", () => {
         createWindow();
     }
 });
-
-if (require("electron-squirrel-startup")) {
-    app.quit();
-}
