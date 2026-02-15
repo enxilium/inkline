@@ -86,7 +86,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     const [autosaveStatus, setAutosaveStatus] =
         React.useState<AutosaveStatus>("idle");
     const [autosaveError, setAutosaveError] = React.useState<string | null>(
-        null
+        null,
     );
 
     const isActiveEditor =
@@ -110,17 +110,17 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     const autosaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
 
     const pendingEditsByChapterId = useAppStore(
-        (state) => state.pendingEditsByChapterId
+        (state) => state.pendingEditsByChapterId,
     );
     const pendingEditsById = useAppStore((state) => state.pendingEditsById);
     const archivedEditsById = useAppStore((state) => state.archivedEditsById);
     const archivePendingEdit = useAppStore((state) => state.archivePendingEdit);
     const restoreArchivedEdit = useAppStore(
-        (state) => state.restoreArchivedEdit
+        (state) => state.restoreArchivedEdit,
     );
 
     const [activeCommentId, setActiveCommentId] = React.useState<string | null>(
-        null
+        null,
     );
 
     const warnedEditsRef = React.useRef<Set<string>>(new Set());
@@ -187,7 +187,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         (ref: DocumentRef) => {
             setActiveDocument({ kind: ref.kind, id: ref.id });
         },
-        [setActiveDocument]
+        [setActiveDocument],
     );
 
     // Create document reference suggestion with current available docs
@@ -197,7 +197,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 availableDocuments,
                 onReferenceClick: handleReferenceClick,
             }),
-        [availableDocuments, handleReferenceClick]
+        [availableDocuments, handleReferenceClick],
     );
 
     // If undo brings back a highlight, restore its edit payload from archive.
@@ -224,7 +224,10 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     const editor = useEditor({
         onUpdate: ({ editor }) => {
             // Snapshot non-empty textStyle attrs so we can restore after Ctrl+A ⌫
-            const attrs = editor.getAttributes("textStyle") as Record<string, string>;
+            const attrs = editor.getAttributes("textStyle") as Record<
+                string,
+                string
+            >;
             const active: Record<string, string> = {};
             for (const [k, v] of Object.entries(attrs)) {
                 if (v) active[k] = v;
@@ -344,7 +347,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
         const words = extractWordsWithPositions(editor.state.doc);
         const rangeComments = bucket.comments.filter(
-            (c) => c.wordNumberStart && c.wordNumberEnd
+            (c) => c.wordNumberStart && c.wordNumberEnd,
         );
 
         const rangeEdits = [...rangeComments, ...bucket.replacements];
@@ -375,7 +378,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                             wordNumberStart,
                             wordNumberEnd,
                             totalWords: words.length,
-                        }
+                        },
                     );
                     warnedEditsRef.current.add(edit.id);
                 }
@@ -403,10 +406,10 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                                 expectedOriginalText: edit.originalText,
                                 actualText,
                                 normalizedExpected: normalizeEditText(
-                                    edit.originalText
+                                    edit.originalText,
                                 ),
                                 normalizedActual: normalizeEditText(actualText),
-                            }
+                            },
                         );
                         warnedEditsRef.current.add(edit.id);
                     }
@@ -423,7 +426,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             const tr = editor.state.tr.addMark(
                 from,
                 to,
-                commentMarkType.create({ commentId: edit.id })
+                commentMarkType.create({ commentId: edit.id }),
             );
             editor.view.dispatch(tr);
         }
@@ -619,7 +622,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     const chapterBucket =
         kind === "chapter" ? pendingEditsByChapterId[documentId] : null;
     const chapterLevelComments = (chapterBucket?.comments ?? []).filter(
-        (c) => !c.wordNumberStart || !c.wordNumberEnd
+        (c) => !c.wordNumberStart || !c.wordNumberEnd,
     );
 
     const activeEdit =
@@ -678,7 +681,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                     (mark) =>
                         mark.type === commentMarkType &&
                         typeof (mark.attrs as { commentId?: unknown })
-                            ?.commentId === "string"
+                            ?.commentId === "string",
                 );
 
                 if (!commentMark) {
@@ -726,7 +729,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 setActiveCommentId(null);
             }
         },
-        [editor, kind]
+        [editor, kind],
     );
 
     const dismissComment = React.useCallback(
@@ -745,7 +748,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             // After dismiss/reject, jump to next edit highlight.
             jumpToNextHighlightedEdit(afterPos);
         },
-        [archivePendingEdit, editor, jumpToNextHighlightedEdit]
+        [archivePendingEdit, editor, jumpToNextHighlightedEdit],
     );
 
     const acceptReplacement = React.useCallback(
@@ -759,7 +762,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             if (!sanitizedReplacementText) {
                 console.warn(
                     "[EditChapters] Skipping accept (empty replacement after sanitization)",
-                    { editId }
+                    { editId },
                 );
                 return;
             }
@@ -786,7 +789,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                             (mark) =>
                                 mark.type === commentMarkType &&
                                 (mark.attrs as { commentId?: string })
-                                    ?.commentId === editId
+                                    ?.commentId === editId,
                         );
 
                         if (!has) {
@@ -810,7 +813,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                     tr.replaceWith(
                         from,
                         to,
-                        state.schema.text(sanitizedReplacementText)
+                        state.schema.text(sanitizedReplacementText),
                     );
 
                     // Remove any remaining marks for this commentId (in case text inherits marks).
@@ -851,7 +854,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             // After accept, jump to next edit highlight.
             jumpToNextHighlightedEdit(afterPos);
         },
-        [archivePendingEdit, editor, jumpToNextHighlightedEdit]
+        [archivePendingEdit, editor, jumpToNextHighlightedEdit],
     );
 
     // Listen for document reference clicks from the editor
@@ -868,13 +871,13 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
         editorElement.addEventListener(
             "document-reference-click",
-            handleDocRefClick
+            handleDocRefClick,
         );
 
         return () => {
             editorElement.removeEventListener(
                 "document-reference-click",
-                handleDocRefClick
+                handleDocRefClick,
             );
         };
     }, [editor, handleReferenceClick]);
@@ -948,7 +951,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                                     with{" "}
                                     <span className="chapter-edit-bubble-quote">
                                         {sanitizeReplacementText(
-                                            activeEdit.replacementText
+                                            activeEdit.replacementText,
                                         ) || activeEdit.replacementText}
                                     </span>
                                 </div>
@@ -970,7 +973,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                                         onClick={() =>
                                             acceptReplacement(
                                                 activeEdit.id,
-                                                activeEdit.replacementText
+                                                activeEdit.replacementText,
                                             )
                                         }
                                     >
