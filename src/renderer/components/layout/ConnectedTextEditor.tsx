@@ -124,7 +124,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     );
 
     const warnedEditsRef = React.useRef<Set<string>>(new Set());
-    const lastFontFamilyRef = React.useRef<string>("");
+    const lastTextStyleRef = React.useRef<Record<string, string>>({});
 
     // Build available documents for slash-command references
     const availableDocuments: DocumentRef[] = React.useMemo(() => {
@@ -223,22 +223,29 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     // 3. Initialize Editor
     const editor = useEditor({
         onUpdate: ({ editor }) => {
-            // Track the last-used font so we can restore it after Ctrl+A ⌫
-            const font = editor.getAttributes("textStyle").fontFamily;
-            if (font) {
-                lastFontFamilyRef.current = font;
+            // Snapshot non-empty textStyle attrs so we can restore after Ctrl+A ⌫
+            const attrs = editor.getAttributes("textStyle") as Record<string, string>;
+            const active: Record<string, string> = {};
+            for (const [k, v] of Object.entries(attrs)) {
+                if (v) active[k] = v;
+            }
+            if (Object.keys(active).length) {
+                lastTextStyleRef.current = active;
             }
         },
         onTransaction: ({ editor, transaction }) => {
-            // When all content is deleted, re-apply the last font as a stored mark
+            // When all content is deleted, re-apply last text style as stored marks
+            const saved = lastTextStyleRef.current;
             if (
                 transaction.docChanged &&
                 editor.isEmpty &&
-                lastFontFamilyRef.current
+                Object.keys(saved).length
             ) {
-                // Defer to avoid conflicting with the current transaction
                 queueMicrotask(() => {
-                    editor.commands.setFontFamily(lastFontFamilyRef.current);
+                    const chain = editor.chain();
+                    if (saved.fontFamily) chain.setFontFamily(saved.fontFamily);
+                    if (saved.color) chain.setColor(saved.color);
+                    chain.run();
                 });
             }
         },
