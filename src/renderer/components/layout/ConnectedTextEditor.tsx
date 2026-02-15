@@ -124,6 +124,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     );
 
     const warnedEditsRef = React.useRef<Set<string>>(new Set());
+    const lastFontFamilyRef = React.useRef<string>("");
 
     // Build available documents for slash-command references
     const availableDocuments: DocumentRef[] = React.useMemo(() => {
@@ -221,6 +222,26 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
     // 3. Initialize Editor
     const editor = useEditor({
+        onUpdate: ({ editor }) => {
+            // Track the last-used font so we can restore it after Ctrl+A ⌫
+            const font = editor.getAttributes("textStyle").fontFamily;
+            if (font) {
+                lastFontFamilyRef.current = font;
+            }
+        },
+        onTransaction: ({ editor, transaction }) => {
+            // When all content is deleted, re-apply the last font as a stored mark
+            if (
+                transaction.docChanged &&
+                editor.isEmpty &&
+                lastFontFamilyRef.current
+            ) {
+                // Defer to avoid conflicting with the current transaction
+                queueMicrotask(() => {
+                    editor.commands.setFontFamily(lastFontFamilyRef.current);
+                });
+            }
+        },
         onSelectionUpdate: ({ editor }) => {
             const { from, to, empty } = editor.state.selection;
             if (empty) {
