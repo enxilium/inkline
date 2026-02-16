@@ -1,31 +1,241 @@
-import * as fs from "fs";
-import PDFDocument from "pdfkit";
-import {
-    Document,
-    Packer,
-    Paragraph,
-    TextRun,
-    HeadingLevel,
-    AlignmentType,
-} from "docx";
 import EPub from "epub-gen";
 
 import { IExportService } from "../../@core/domain/services/IExportService";
 import { IProjectRepository } from "../../@core/domain/repositories/IProjectRepository";
 import { IChapterRepository } from "../../@core/domain/repositories/IChapterRepository";
-import { Project } from "../../@core/domain/entities/story/Project";
 import { Chapter } from "../../@core/domain/entities/story/Chapter";
+
+// ─── Tiptap JSON types ───────────────────────────────────────────────────────
+
+interface TiptapMark {
+    type: string;
+    attrs?: Record<string, unknown>;
+}
+
+interface TiptapNode {
+    type: string;
+    text?: string;
+    attrs?: Record<string, unknown>;
+    marks?: TiptapMark[];
+    content?: TiptapNode[];
+}
+
+// ─── Tiptap JSON → HTML converter ───────────────────────────────────────────
+
+/**
+ * Recursively converts a Tiptap JSON document tree into semantic HTML
+ * suitable for EPUB readers.
+ *
+ * Supported nodes: doc, paragraph, heading (1-3), bulletList, orderedList,
+ * listItem, blockquote, codeBlock, hardBreak, horizontalRule.
+ *
+ * Supported marks: bold, italic, underline, strike, code, link,
+ * textStyle (color, fontFamily).
+ */
+function renderMarks(text: string, marks: TiptapMark[] | undefined): string {
+    if (!marks || marks.length === 0) {
+        return escapeHtml(text);
+    }
+
+    let html = escapeHtml(text);
+
+    for (const mark of marks) {
+        switch (mark.type) {
+            case "bold":
+                html = `<strong>${html}</strong>`;
+                break;
+            case "italic":
+                html = `<em>${html}</em>`;
+                break;
+            case "underline":
+                html = `<u>${html}</u>`;
+                break;
+            case "strike":
+                html = `<s>${html}</s>`;
+                break;
+            case "code":
+                html = `<code>${html}</code>`;
+                break;
+            case "link": {
+                const href = (mark.attrs?.href as string) || "#";
+                html = `<a href="${escapeAttr(href)}">${html}</a>`;
+                break;
+            }
+            case "textStyle": {
+                const styles: string[] = [];
+                if (mark.attrs?.color) {
+                    styles.push(`color: ${mark.attrs.color}`);
+                }
+                if (mark.attrs?.fontFamily) {
+                    styles.push(`font-family: ${mark.attrs.fontFamily}`);
+                }
+                if (styles.length > 0) {
+                    html = `<span style="${escapeAttr(styles.join("; "))}">${html}</span>`;
+                }
+                break;
+            }
+            // Silently skip unknown marks (e.g. comment marks)
+        }
+    }
+
+    return html;
+}
+
+function renderNode(node: TiptapNode): string {
+    switch (node.type) {
+        case "doc":
+            return renderChildren(node);
+
+        case "paragraph": {
+            const align = node.attrs?.textAlign as string | undefined;
+            const style =
+                align && align !== "left"
+                    ? ` style="text-align: ${escapeAttr(align)}"`
+                    : "";
+            return `<p${style}>${renderChildren(node) || "&nbsp;"}</p>\n`;
+        }
+
+        case "heading": {
+            const level = Math.min(
+                Math.max(Number(node.attrs?.level) || 1, 1),
+                6,
+            );
+            const align = node.attrs?.textAlign as string | undefined;
+            const style =
+                align && align !== "left"
+                    ? ` style="text-align: ${escapeAttr(align)}"`
+                    : "";
+            return `<h${level}${style}>${renderChildren(node)}</h${level}>\n`;
+        }
+
+        case "bulletList":
+            return `<ul>\n${renderChildren(node)}</ul>\n`;
+
+        case "orderedList": {
+            const start = node.attrs?.start as number | undefined;
+            const attr = start && start !== 1 ? ` start="${start}"` : "";
+            return `<ol${attr}>\n${renderChildren(node)}</ol>\n`;
+        }
+
+        case "listItem":
+            return `<li>${renderChildren(node)}</li>\n`;
+
+        case "blockquote":
+            return `<blockquote>\n${renderChildren(node)}</blockquote>\n`;
+
+        case "codeBlock": {
+            const language = node.attrs?.language as string | undefined;
+            const cls = language
+                ? ` class="language-${escapeAttr(language)}"`
+                : "";
+            return `<pre><code${cls}>${renderChildren(node)}</code></pre>\n`;
+        }
+
+        case "hardBreak":
+            return "<br/>";
+
+        case "horizontalRule":
+            return "<hr/>\n";
+
+        case "text":
+            return renderMarks(node.text || "", node.marks);
+
+        default:
+            // Unknown node type – render children if any to avoid data loss
+            return renderChildren(node);
+    }
+}
+
+function renderChildren(node: TiptapNode): string {
+    if (!node.content || node.content.length === 0) {
+        return "";
+    }
+    return node.content.map(renderNode).join("");
+}
+
+function escapeHtml(text: string): string {
+    return text
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;");
+}
+
+function escapeAttr(value: string): string {
+    return value
+        .replace(/&/g, "&amp;")
+        .replace(/"/g, "&quot;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+}
+
+// ─── EPUB-specific CSS for a clean reading experience ────────────────────────
+
+const EPUB_CSS = `
+body {
+    font-family: Georgia, "Times New Roman", serif;
+    line-height: 1.6;
+    margin: 1em;
+    color: #1a1a1a;
+}
+h1, h2, h3 {
+    font-family: Georgia, "Times New Roman", serif;
+    margin-top: 1.5em;
+    margin-bottom: 0.5em;
+}
+h1 { font-size: 1.6em; text-align: center; }
+h2 { font-size: 1.3em; }
+h3 { font-size: 1.15em; }
+p {
+    text-indent: 1.5em;
+    margin: 0 0 0.3em 0;
+}
+blockquote {
+    margin: 1em 2em;
+    padding-left: 1em;
+    border-left: 3px solid #999;
+    font-style: italic;
+}
+pre {
+    background: #f4f4f4;
+    padding: 0.8em;
+    overflow-x: auto;
+    font-size: 0.9em;
+}
+code {
+    font-family: "Courier New", Courier, monospace;
+    font-size: 0.9em;
+}
+ul, ol {
+    margin: 0.5em 0;
+    padding-left: 2em;
+}
+li {
+    margin-bottom: 0.2em;
+}
+hr {
+    border: none;
+    border-top: 1px solid #ccc;
+    margin: 1.5em 0;
+}
+a {
+    color: #2a6496;
+    text-decoration: underline;
+}
+`.trim();
+
+// ─── ExportService ───────────────────────────────────────────────────────────
 
 export class ExportService implements IExportService {
     constructor(
         private readonly projectRepository: IProjectRepository,
-        private readonly chapterRepository: IChapterRepository
+        private readonly chapterRepository: IChapterRepository,
     ) {}
 
     async exportProject(
         projectId: string,
-        format: "pdf" | "epub" | "docx",
-        destinationPath: string
+        _format: "epub",
+        destinationPath: string,
     ): Promise<void> {
         const project = await this.projectRepository.findById(projectId);
         if (!project) {
@@ -36,19 +246,7 @@ export class ExportService implements IExportService {
             await this.chapterRepository.findByProjectId(projectId);
         const chapters = this.sortChapters(allChapters, project.chapterIds);
 
-        switch (format) {
-            case "pdf":
-                await this.exportToPdf(project, chapters, destinationPath);
-                break;
-            case "docx":
-                await this.exportToDocx(project, chapters, destinationPath);
-                break;
-            case "epub":
-                await this.exportToEpub(project, chapters, destinationPath);
-                break;
-            default:
-                throw new Error(`Unsupported export format: ${format}`);
-        }
+        await this.exportToEpub(project.title, chapters, destinationPath);
     }
 
     private sortChapters(chapters: Chapter[], orderIds: string[]): Chapter[] {
@@ -63,174 +261,69 @@ export class ExportService implements IExportService {
         return sorted;
     }
 
-    private async exportToPdf(
-        project: Project,
+    private async exportToEpub(
+        title: string,
         chapters: Chapter[],
-        outputPath: string
+        outputPath: string,
     ): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const doc = new PDFDocument();
-            const stream = fs.createWriteStream(outputPath);
-
-            doc.pipe(stream);
-
-            // Title Page
-            doc.fontSize(24).text(project.title, { align: "center" });
-            doc.moveDown();
-
-            for (const chapter of chapters) {
-                doc.addPage();
-                doc.fontSize(18).text(chapter.title, { align: "center" });
-                doc.moveDown();
-
-                const plainText = this.convertContentToText(chapter.content);
-                doc.fontSize(12).text(plainText, {
-                    align: "justify",
-                    indent: 20,
-                    lineGap: 5,
-                });
-            }
-
-            doc.end();
-
-            stream.on("finish", () => resolve());
-            stream.on("error", reject);
-        });
-    }
-
-    private async exportToDocx(
-        project: Project,
-        chapters: Chapter[],
-        outputPath: string
-    ): Promise<void> {
-        const children = [];
-
-        // Title
-        children.push(
-            new Paragraph({
-                text: project.title,
-                heading: HeadingLevel.TITLE,
-                alignment: AlignmentType.CENTER,
+        const content = chapters
+            .filter((chapter) => {
+                // Skip chapters with no meaningful content
+                const html = this.convertContentToHtml(chapter.content);
+                const stripped = html.replace(/<[^>]*>/g, "").trim();
+                return stripped.length > 0;
             })
-        );
+            .map((chapter) => ({
+                title: chapter.title,
+                data: this.convertContentToHtml(chapter.content),
+            }));
 
-        for (const chapter of chapters) {
-            children.push(
-                new Paragraph({
-                    text: chapter.title,
-                    heading: HeadingLevel.HEADING_1,
-                    pageBreakBefore: true,
-                    alignment: AlignmentType.CENTER,
-                })
+        if (content.length === 0) {
+            throw new Error(
+                "No chapters with content to export. Write some content first.",
             );
-
-            const plainText = this.convertContentToText(chapter.content);
-            const paragraphs = plainText.split("\n");
-
-            for (const para of paragraphs) {
-                if (para.trim()) {
-                    children.push(
-                        new Paragraph({
-                            children: [new TextRun(para.trim())],
-                            alignment: AlignmentType.JUSTIFIED,
-                            indent: { firstLine: 720 }, // 0.5 inch
-                        })
-                    );
-                }
-            }
         }
 
-        const doc = new Document({
-            sections: [
-                {
-                    properties: {},
-                    children: children,
-                },
-            ],
-        });
-
-        const buffer = await Packer.toBuffer(doc);
-        fs.writeFileSync(outputPath, buffer);
-    }
-
-    private async exportToEpub(
-        project: Project,
-        chapters: Chapter[],
-        outputPath: string
-    ): Promise<void> {
-        const content = chapters.map((chapter) => {
-            const text = this.convertContentToText(chapter.content);
-            return {
-                title: chapter.title,
-                data: this.convertTextToHtml(text),
-            };
-        });
-
         const options = {
-            title: project.title,
+            title,
             author: "Unknown",
             output: outputPath,
-            content: content,
+            css: EPUB_CSS,
+            appendChapterTitles: true,
+            content,
+            verbose: false,
         };
 
         await new EPub(options, outputPath).promise;
     }
 
-    private convertContentToText(content: string): string {
+    /**
+     * Converts chapter content (stored as Tiptap JSON or fallback HTML/text)
+     * into semantic HTML suitable for EPUB.
+     */
+    private convertContentToHtml(content: string): string {
+        if (!content || !content.trim()) {
+            return "";
+        }
+
         try {
-            const json = JSON.parse(content);
+            const json = JSON.parse(content) as TiptapNode;
             if (json.type === "doc" && Array.isArray(json.content)) {
-                return this.extractTextFromTiptap(json).trim();
+                return renderNode(json);
             }
-        } catch (e) {
-            // Not JSON, fall back to HTML/Text handling
+        } catch {
+            // Not JSON – treat as raw HTML/text
         }
 
-        return this.convertHtmlToText(content);
-    }
-
-    private extractTextFromTiptap(node: Record<string, unknown>): string {
-        if (node.type === "text" && typeof node.text === "string") {
-            return node.text || "";
+        // Fallback: if it looks like HTML, return as-is; otherwise wrap in <p>
+        if (content.includes("<")) {
+            return content;
         }
 
-        if (node.type === "hardBreak") {
-            return "\n";
-        }
-
-        let text = "";
-        if (Array.isArray(node.content)) {
-            text = node.content
-                .map((child) =>
-                    this.extractTextFromTiptap(child as Record<string, unknown>)
-                )
-                .join("");
-        }
-
-        if (node.type === "paragraph" || node.type === "heading") {
-            return text + "\n\n";
-        }
-
-        return text;
-    }
-
-    private convertTextToHtml(text: string): string {
-        return text
+        return content
             .split("\n\n")
-            .map((p) => `<p>${p.replace(/\n/g, "<br/>")}</p>`)
-            .join("");
-    }
-
-    private convertHtmlToText(html: string): string {
-        // Simple conversion for Tiptap HTML
-        let text = html;
-        text = text.replace(/<\/p>/gi, "\n\n");
-        text = text.replace(/<br\s*\/?>/gi, "\n");
-        text = text.replace(/<[^>]+>/g, ""); // Strip tags
-        text = text.replace(/&nbsp;/g, " ");
-        text = text.replace(/&lt;/g, "<");
-        text = text.replace(/&gt;/g, ">");
-        text = text.replace(/&amp;/g, "&");
-        return text.trim();
+            .filter((p) => p.trim())
+            .map((p) => `<p>${escapeHtml(p.trim())}</p>`)
+            .join("\n");
     }
 }

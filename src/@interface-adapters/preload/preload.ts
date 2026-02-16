@@ -28,7 +28,7 @@ type ControllerInvoker<THandler extends AsyncHandler> = (
 ) => ReturnType<THandler>;
 
 const bindController = <THandler extends AsyncHandler>(
-    channel: string
+    channel: string,
 ): ControllerInvoker<THandler> => {
     return ((...args: Parameters<THandler>) =>
         ipcRenderer.invoke(channel, ...args)) as ControllerInvoker<THandler>;
@@ -54,7 +54,7 @@ const createRendererApi = (): RendererApi => {
 
     for (const category of Object.keys(controllerChannels)) {
         bindings[category] = createCategoryBindings(
-            category as keyof RendererApi
+            category as keyof RendererApi,
         );
     }
 
@@ -65,11 +65,11 @@ const ui = {
     showContextMenu: (type: string, data?: any) =>
         ipcRenderer.send("ui:show-context-menu", type, data),
     onContextMenuCommand: (
-        listener: (payload: { command: string; data: any }) => void
+        listener: (payload: { command: string; data: any }) => void,
     ) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            payload: { command: string; data: any }
+            payload: { command: string; data: any },
         ) => {
             listener(payload);
         };
@@ -91,7 +91,7 @@ const createAuthEvents = () => {
     const onStateChanged = (listener: AuthStateListener) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            payload: AuthStatePayload
+            payload: AuthStatePayload,
         ) => {
             listener(payload);
         };
@@ -118,7 +118,7 @@ const createSyncEvents = () => {
     const onStateChanged = (listener: SyncStateListener) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            payload: SyncStatePayload
+            payload: SyncStatePayload,
         ) => {
             listener(payload);
         };
@@ -130,7 +130,7 @@ const createSyncEvents = () => {
     const onRemoteChange = (listener: RemoteChangeListener) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            payload: RemoteChangePayload
+            payload: RemoteChangePayload,
         ) => {
             listener(payload);
         };
@@ -142,7 +142,7 @@ const createSyncEvents = () => {
     const onConflict = (listener: ConflictListener) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            payload: ConflictPayload
+            payload: ConflictPayload,
         ) => {
             listener(payload);
         };
@@ -153,7 +153,7 @@ const createSyncEvents = () => {
     const onEntityUpdated = (listener: EntityUpdatedListener) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            payload: EntityUpdatedPayload
+            payload: EntityUpdatedPayload,
         ) => {
             listener(payload);
         };
@@ -165,7 +165,7 @@ const createSyncEvents = () => {
     const onEntityDeleted = (listener: EntityDeletedListener) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            payload: EntityDeletedPayload
+            payload: EntityDeletedPayload,
         ) => {
             listener(payload);
         };
@@ -178,14 +178,14 @@ const createSyncEvents = () => {
         entityType: string,
         entityId: string,
         projectId: string,
-        resolution: "accept-remote" | "keep-local"
+        resolution: "accept-remote" | "keep-local",
     ) => {
         return ipcRenderer.invoke(
             "sync:resolveConflict",
             entityType,
             entityId,
             projectId,
-            resolution
+            resolution,
         );
     };
 
@@ -211,7 +211,7 @@ const createGenerationEvents = () => {
     const onProgress = (listener: GenerationProgressListener) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            payload: { type: "audio" | "image"; progress: number }
+            payload: { type: "audio" | "image"; progress: number },
         ) => {
             listener(payload);
         };
@@ -234,7 +234,7 @@ const windowControls = {
     setTitleBarOverlay: (options: TitleBarOverlayOptions) =>
         ipcRenderer.invoke(
             "window:setTitleBarOverlay",
-            options
+            options,
         ) as Promise<void>,
 };
 
@@ -268,7 +268,7 @@ interface LanguageToolResponse {
 
 const languageTool = {
     checkGrammar: (
-        request: GrammarCheckRequest
+        request: GrammarCheckRequest,
     ): Promise<LanguageToolResponse> =>
         ipcRenderer.invoke("languageTool:checkGrammar", request),
     isUsingLocalServer: (): Promise<boolean> =>
@@ -276,6 +276,26 @@ const languageTool = {
 };
 
 contextBridge.exposeInMainWorld("languageTool", languageTool);
+
+interface ShowSaveDialogOptions {
+    title?: string;
+    defaultPath?: string;
+    filters?: { name: string; extensions: string[] }[];
+}
+
+interface ShowSaveDialogResult {
+    canceled: boolean;
+    filePath?: string;
+}
+
+const fileDialog = {
+    showSaveDialog: (
+        options: ShowSaveDialogOptions,
+    ): Promise<ShowSaveDialogResult> =>
+        ipcRenderer.invoke("dialog:showSaveDialog", options),
+};
+
+contextBridge.exposeInMainWorld("fileDialog", fileDialog);
 
 declare global {
     interface Window {
@@ -286,5 +306,6 @@ declare global {
         generationEvents: typeof generationEvents;
         windowControls: typeof windowControls;
         languageTool: typeof languageTool;
+        fileDialog: typeof fileDialog;
     }
 }

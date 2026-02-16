@@ -2,7 +2,7 @@ import { IExportService } from "../../../domain/services/IExportService";
 
 export interface ExportManuscriptRequest {
     projectId: string;
-    format: "pdf" | "epub" | "docx";
+    format: "epub";
     destinationPath: string;
 }
 
@@ -13,7 +13,7 @@ export class ExportManuscript {
         await this.exportService.exportProject(
             request.projectId,
             request.format,
-            request.destinationPath
+            request.destinationPath,
         );
     }
 }

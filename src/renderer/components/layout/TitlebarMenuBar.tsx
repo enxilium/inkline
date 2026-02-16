@@ -85,7 +85,7 @@ export const TitlebarMenuBar: React.FC = () => {
                         type="button"
                         className={cx(
                             "titlebar-menubar-button titlebar-no-drag",
-                            openMenu === "file" && "is-open"
+                            openMenu === "file" && "is-open",
                         )}
                         onClick={() => toggleMenu("file")}
                         onMouseEnter={() => openOnHoverIfAnyOpen("file")}
@@ -108,7 +108,7 @@ export const TitlebarMenuBar: React.FC = () => {
                                         alert(
                                             "Unable to leave project: " +
                                                 ((error as Error)?.message ??
-                                                    "Unknown error")
+                                                    "Unknown error"),
                                         );
                                     });
                                 }}
@@ -119,29 +119,48 @@ export const TitlebarMenuBar: React.FC = () => {
                                 type="button"
                                 className="project-card-menu-item"
                                 role="menuitem"
-                                onClick={() => {
+                                onClick={async () => {
                                     setOpenMenu(null);
-                                    const destinationPath = window.prompt(
-                                        "Enter destination path (e.g. C:\\Users\\Name\\Desktop\\story.pdf):"
-                                    );
-                                    if (!destinationPath) return;
 
-                                    exportManuscript({
-                                        projectId,
-                                        format: "pdf",
-                                        destinationPath,
-                                    })
-                                        .then(() => {
-                                            alert("Export complete!");
-                                        })
-                                        .catch((error) => {
-                                            alert(
-                                                "Export failed: " +
-                                                    ((error as Error)
-                                                        ?.message ??
-                                                        "Unknown error")
+                                    try {
+                                        const result =
+                                            await window.fileDialog.showSaveDialog(
+                                                {
+                                                    title: "Export Manuscript as EPUB",
+                                                    defaultPath:
+                                                        "manuscript.epub",
+                                                    filters: [
+                                                        {
+                                                            name: "EPUB",
+                                                            extensions: [
+                                                                "epub",
+                                                            ],
+                                                        },
+                                                    ],
+                                                },
                                             );
+
+                                        if (
+                                            result.canceled ||
+                                            !result.filePath
+                                        ) {
+                                            return;
+                                        }
+
+                                        await exportManuscript({
+                                            projectId,
+                                            format: "epub",
+                                            destinationPath: result.filePath,
                                         });
+
+                                        alert("Export complete!");
+                                    } catch (error) {
+                                        alert(
+                                            "Export failed: " +
+                                                ((error as Error)?.message ??
+                                                    "Unknown error"),
+                                        );
+                                    }
                                 }}
                             >
                                 Export Manuscript...
@@ -167,7 +186,7 @@ export const TitlebarMenuBar: React.FC = () => {
                         type="button"
                         className={cx(
                             "titlebar-menubar-button titlebar-no-drag",
-                            openMenu === "edit" && "is-open"
+                            openMenu === "edit" && "is-open",
                         )}
                         onClick={() => toggleMenu("edit")}
                         onMouseEnter={() => openOnHoverIfAnyOpen("edit")}
@@ -211,7 +230,7 @@ export const TitlebarMenuBar: React.FC = () => {
                         type="button"
                         className={cx(
                             "titlebar-menubar-button titlebar-no-drag",
-                            openMenu === "view" && "is-open"
+                            openMenu === "view" && "is-open",
                         )}
                         onClick={() => toggleMenu("view")}
                         onMouseEnter={() => openOnHoverIfAnyOpen("view")}
@@ -233,7 +252,7 @@ export const TitlebarMenuBar: React.FC = () => {
                                     setWorkspaceViewMode(
                                         workspaceViewMode === "manuscript"
                                             ? "timeline"
-                                            : "manuscript"
+                                            : "manuscript",
                                     );
                                 }}
                             >
@@ -284,11 +303,11 @@ export const TitlebarMenuBar: React.FC = () => {
 
                     const chapterIds = selected.map((c) => c.id);
                     const blocked = chapterIds.find((id) =>
-                        hasPendingEditsForChapter(id)
+                        hasPendingEditsForChapter(id),
                     );
                     if (blocked) {
                         alert(
-                            "One or more chapters already have pending edits. Resolve or dismiss them before editing that range again."
+                            "One or more chapters already have pending edits. Resolve or dismiss them before editing that range again.",
                         );
                         return;
                     }
@@ -313,7 +332,7 @@ export const TitlebarMenuBar: React.FC = () => {
                             alert(
                                 "Edit failed: " +
                                     ((error as Error)?.message ??
-                                        "Unknown error")
+                                        "Unknown error"),
                             );
                         })
                         .finally(() => {

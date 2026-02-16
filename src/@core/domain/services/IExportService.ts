@@ -1,7 +1,7 @@
 export interface IExportService {
     exportProject(
         projectId: string,
-        format: "pdf" | "epub" | "docx",
-        path: string
+        format: "epub",
+        path: string,
     ): Promise<void>;
 }
