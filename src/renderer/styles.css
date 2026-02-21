@@ -4199,3 +4199,106 @@ input.toolbar-color:focus {
     background: rgba(77, 208, 225, 0.1);
     box-shadow: 0 0 8px rgba(77, 208, 225, 0.2);
 }
+
+/* ── Export Dialog ─────────────────────────────────────── */
+.export-dialog-content {
+    width: min(480px, calc(100vw - 2rem));
+}
+
+.export-dialog-summary {
+    color: var(--text-subtle);
+    font-size: 0.8rem;
+    letter-spacing: 0.02em;
+}
+
+.export-dialog-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 0.75rem;
+}
+
+.export-dialog-footer .dialog-actions {
+    margin-top: 0;
+}
+
+.export-dialog-filename-row {
+    display: flex;
+    align-items: center;
+    gap: 0;
+}
+
+.export-dialog-filename-row .input {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right: none;
+}
+
+.export-dialog-filename-row .input {
+    flex: 1;
+    min-width: 0;
+}
+
+.export-dialog-ext {
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    padding: 0 0.6rem;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-left: none;
+    border-radius: 0 6px 6px 0;
+    color: var(--text-subtle);
+    font-size: 0.9rem;
+    user-select: none;
+    white-space: nowrap;
+}
+
+.export-dialog-location-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    padding: 0.4rem 0.6rem;
+    font-size: 0.95rem;
+    color: var(--text-subtle);
+    cursor: pointer;
+    text-align: left;
+    font-family: inherit;
+    transition:
+        border-color 120ms ease,
+        background 120ms ease;
+}
+
+.export-dialog-location-btn:hover:not(:disabled) {
+    border-color: var(--accent);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.export-dialog-location-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.export-dialog-location-btn svg {
+    flex-shrink: 0;
+    opacity: 0.6;
+}
+
+.export-dialog-location-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    direction: rtl;
+    text-align: left;
+}
+
+.export-dialog-error {
+    color: #ef5350;
+    font-size: 0.85rem;
+    padding: 0.25rem 0;
+}

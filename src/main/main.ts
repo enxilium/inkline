@@ -2,6 +2,7 @@ import "dotenv/config";
 import {
     app,
     BrowserWindow,
+    dialog,
     ipcMain,
     Menu,
     MenuItemConstructorOptions,
@@ -575,6 +576,27 @@ ipcMain.handle(
 ipcMain.handle("languageTool:isUsingLocalServer", async () => {
     return languageToolService.isUsingLocalServer();
 });
+
+// Native file dialog for export
+ipcMain.handle(
+    "dialog:showSaveDialog",
+    async (
+        event,
+        options: {
+            title?: string;
+            defaultPath?: string;
+            filters?: { name: string; extensions: string[] }[];
+        },
+    ) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const result = await dialog.showSaveDialog(win!, {
+            title: options.title,
+            defaultPath: options.defaultPath,
+            filters: options.filters,
+        });
+        return result;
+    },
+);
 
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
