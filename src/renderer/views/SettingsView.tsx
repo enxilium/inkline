@@ -1,10 +1,27 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
+import { showDownloadToast } from "../components/ui/DownloadToast";
 import { useAppStore } from "../state/appStore";
 
-type SettingsSection = "theme" | "models" | "account";
+type SettingsSection = "theme" | "features" | "models" | "account";
+
+interface FeatureDownloadProgress {
+    downloadType: string;
+    percentage: number;
+    status: "pending" | "downloading" | "extracting" | "completed" | "error";
+    error?: string;
+}
+
+/** Helper to format bytes into a human-readable string. */
+const formatBytes = (bytes: number): string => {
+    if (bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+};
 
 export const SettingsView: React.FC = () => {
     const user = useAppStore((state) => state.user);
@@ -12,7 +29,7 @@ export const SettingsView: React.FC = () => {
     const saveUserSettings = useAppStore((state) => state.saveUserSettings);
     const updateAccountEmail = useAppStore((state) => state.updateAccountEmail);
     const updateAccountPassword = useAppStore(
-        (state) => state.updateAccountPassword
+        (state) => state.updateAccountPassword,
     );
     const logout = useAppStore((state) => state.logout);
     const closeSettings = useAppStore((state) => state.closeSettings);
@@ -37,6 +54,23 @@ export const SettingsView: React.FC = () => {
     const [newPassword, setNewPassword] = useState("");
     const [accountStatus, setAccountStatus] = useState<string | null>(null);
     const [isSubmittingAccount, setIsSubmittingAccount] = useState(false);
+
+    // Feature management
+    const [featureConfig, setFeatureConfig] = useState<{
+        features: {
+            aiChat: boolean;
+            imageGeneration: boolean;
+            audioGeneration: boolean;
+        };
+        modelsDownloaded: { image: boolean; audio: boolean };
+        comfyuiInstalled: boolean;
+        isWindows: boolean;
+    } | null>(null);
+    const [imageProgress, setImageProgress] =
+        useState<FeatureDownloadProgress | null>(null);
+    const [audioProgress, setAudioProgress] =
+        useState<FeatureDownloadProgress | null>(null);
+    const [togglingFeature, setTogglingFeature] = useState<string | null>(null);
 
     useEffect(() => {
         const styles = getComputedStyle(document.documentElement);
@@ -71,6 +105,170 @@ export const SettingsView: React.FC = () => {
         // Seed fields with current values (without exposing secrets).
         setNewEmail(user.email);
     }, [user]);
+
+    // Load feature config on mount
+    useEffect(() => {
+        window.featureApi
+            .getConfig()
+            .then((config) => {
+                setFeatureConfig(config);
+                // If a feature is enabled but its model isn't downloaded,
+                // a download is likely in-flight (started by the startup
+                // prompt). Pre-populate the progress bar so it picks up
+                // incoming events.
+                if (
+                    config.isWindows &&
+                    config.features.imageGeneration &&
+                    !config.modelsDownloaded.image
+                ) {
+                    setImageProgress({
+                        downloadType: "image",
+                        percentage: 0,
+                        status: "downloading",
+                    });
+                }
+                if (
+                    config.isWindows &&
+                    config.features.audioGeneration &&
+                    !config.modelsDownloaded.audio
+                ) {
+                    setAudioProgress({
+                        downloadType: "audio",
+                        percentage: 0,
+                        status: "downloading",
+                    });
+                }
+            })
+            .catch(() => {});
+    }, []);
+
+    // Listen for download progress events (from settings toggles OR startup prompt)
+    useEffect(() => {
+        if (!window.featureEvents?.onDownloadProgress) return;
+
+        const unsubscribe = window.featureEvents.onDownloadProgress(
+            (progress) => {
+                const p: FeatureDownloadProgress = {
+                    downloadType: progress.downloadType,
+                    percentage: progress.percentage,
+                    status: progress.status,
+                    error: progress.error,
+                };
+
+                // Route progress to the right feature bar.
+                // ComfyUI is a shared prerequisite – show its progress on
+                // whichever feature(s) is being downloaded.
+                if (progress.downloadType === "comfyui") {
+                    // Always show ComfyUI progress; we can't tell which
+                    // feature triggered it so show on both when ambiguous.
+                    setImageProgress((prev) => (prev !== null ? p : prev));
+                    setAudioProgress((prev) => (prev !== null ? p : prev));
+                    // If nothing is shown yet, default to whichever feature is toggling
+                    if (togglingFeature === "imageGeneration") {
+                        setImageProgress(p);
+                    } else if (togglingFeature === "audioGeneration") {
+                        setAudioProgress(p);
+                    }
+                } else if (progress.downloadType === "image") {
+                    setImageProgress(p);
+                } else if (progress.downloadType === "audio") {
+                    setAudioProgress(p);
+                }
+
+                // On completion / error: clear progress bar + refresh config.
+                // Toasts are handled by the code that initiated the download
+                // (handleToggleFeature or FeaturePromptDialog) to avoid dupes.
+                if (
+                    progress.status === "completed" ||
+                    progress.status === "error"
+                ) {
+                    if (progress.downloadType === "image") {
+                        setTimeout(() => setImageProgress(null), 1500);
+                    }
+                    if (progress.downloadType === "audio") {
+                        setTimeout(() => setAudioProgress(null), 1500);
+                    }
+
+                    // Refresh config
+                    window.featureApi
+                        .getConfig()
+                        .then((c) => {
+                            setFeatureConfig(c);
+                            setTogglingFeature(null);
+                        })
+                        .catch(() => {});
+                }
+            },
+        );
+
+        return () => {
+            unsubscribe();
+        };
+    }, [togglingFeature]);
+
+    const handleToggleFeature = useCallback(
+        async (feature: "imageGeneration" | "audioGeneration") => {
+            if (!featureConfig || togglingFeature) return;
+            const isEnabled = featureConfig.features[feature];
+            const label = feature === "imageGeneration" ? "Image" : "Audio";
+
+            setTogglingFeature(feature);
+
+            // Set initial progress bar so ComfyUI progress is shown
+            if (!isEnabled) {
+                const setter =
+                    feature === "imageGeneration"
+                        ? setImageProgress
+                        : setAudioProgress;
+                setter({
+                    downloadType:
+                        feature === "imageGeneration" ? "image" : "audio",
+                    percentage: 0,
+                    status: "pending",
+                });
+            }
+
+            if (isEnabled) {
+                // Disable – deletes model files (sync path)
+                try {
+                    await window.featureApi.disableFeature(feature);
+                    showDownloadToast(
+                        `${label} generation disabled. Files cleaned up.`,
+                    );
+                } catch {
+                    showDownloadToast(`${label} disable failed.`, "error");
+                } finally {
+                    // Always refresh config and unlock buttons after disable
+                    try {
+                        const c = await window.featureApi.getConfig();
+                        setFeatureConfig(c);
+                    } catch {
+                        /* noop */
+                    }
+                    setTogglingFeature(null);
+                }
+            } else {
+                // Enable – triggers background downloads (async path).
+                // enableFeature resolves once the full download+extraction
+                // finishes on the main process side.
+                window.featureApi
+                    .enableFeature(feature)
+                    .then(() => {
+                        showDownloadToast(`${label} generation is ready!`);
+                    })
+                    .catch(() => {
+                        showDownloadToast(`${label} download failed.`, "error");
+                    });
+
+                // Refresh config so the UI reflects the enabled flag
+                window.featureApi
+                    .getConfig()
+                    .then((c) => setFeatureConfig(c))
+                    .catch(() => {});
+            }
+        },
+        [featureConfig, togglingFeature],
+    );
 
     const updateCssVar = (name: string, value: string) => {
         document.documentElement.style.setProperty(name, value);
@@ -117,7 +315,7 @@ export const SettingsView: React.FC = () => {
     };
 
     const handleSurfaceStrongChange = (
-        e: React.ChangeEvent<HTMLInputElement>
+        e: React.ChangeEvent<HTMLInputElement>,
     ) => {
         const val = e.target.value;
         setSurfaceStrong(val);
@@ -164,6 +362,11 @@ export const SettingsView: React.FC = () => {
                     subtitle: "Colors and UI appearance",
                 },
                 {
+                    id: "features" as const,
+                    title: "AI Features",
+                    subtitle: "Image & audio generation",
+                },
+                {
                     id: "models" as const,
                     title: "Model Configuration",
                     subtitle: "Gemini API key",
@@ -178,7 +381,7 @@ export const SettingsView: React.FC = () => {
                 title: string;
                 subtitle: string;
             }>,
-        []
+        [],
     );
 
     const handleSaveGeminiKey = async () => {
@@ -213,11 +416,11 @@ export const SettingsView: React.FC = () => {
             }
             await updateAccountEmail({ newEmail: nextEmail });
             setAccountStatus(
-                "Email update requested. Check your inbox if confirmation is required."
+                "Email update requested. Check your inbox if confirmation is required.",
             );
         } catch (error) {
             setAccountStatus(
-                (error as Error)?.message ?? "Failed to update email."
+                (error as Error)?.message ?? "Failed to update email.",
             );
         } finally {
             setIsSubmittingAccount(false);
@@ -237,7 +440,7 @@ export const SettingsView: React.FC = () => {
             setAccountStatus("Password updated.");
         } catch (error) {
             setAccountStatus(
-                (error as Error)?.message ?? "Failed to update password."
+                (error as Error)?.message ?? "Failed to update password.",
             );
         } finally {
             setIsSubmittingAccount(false);
@@ -414,6 +617,190 @@ export const SettingsView: React.FC = () => {
                             </>
                         ) : null}
 
+                        {activeSection === "features" ? (
+                            <>
+                                <h2>AI Features</h2>
+                                <p className="panel-subtitle">
+                                    Enable or disable local AI generation.
+                                    Downloads happen in the background.
+                                </p>
+
+                                {featureConfig && !featureConfig.isWindows && (
+                                    <div className="feature-platform-warning">
+                                        Local AI features (Image & Audio
+                                        Generation) are only available on
+                                        Windows.
+                                    </div>
+                                )}
+
+                                <div className="settings-section">
+                                    {/* Image Generation */}
+                                    <div className="feature-toggle-card">
+                                        <div className="feature-toggle-icon">
+                                            🎨
+                                        </div>
+                                        <div className="feature-toggle-info">
+                                            <h3 className="feature-toggle-name">
+                                                Image Generation
+                                            </h3>
+                                            <p className="feature-toggle-desc">
+                                                Generate character portraits,
+                                                location art, and scene
+                                                illustrations locally.
+                                            </p>
+                                            {featureConfig?.isWindows && (
+                                                <p className="feature-toggle-note">
+                                                    {featureConfig.features
+                                                        .imageGeneration &&
+                                                    featureConfig
+                                                        .modelsDownloaded.image
+                                                        ? "Installed"
+                                                        : "Requires ~10 GB download"}
+                                                </p>
+                                            )}
+                                            {!featureConfig?.isWindows && (
+                                                <p className="feature-toggle-note feature-toggle-note--disabled">
+                                                    Windows only
+                                                </p>
+                                            )}
+                                            {imageProgress && (
+                                                <div className="feature-progress">
+                                                    <div className="feature-progress-label">
+                                                        {imageProgress.status ===
+                                                        "extracting"
+                                                            ? "Extracting..."
+                                                            : imageProgress.status ===
+                                                                "completed"
+                                                              ? "Complete!"
+                                                              : imageProgress.status ===
+                                                                  "error"
+                                                                ? `Error: ${imageProgress.error}`
+                                                                : `Downloading... ${imageProgress.percentage}%`}
+                                                    </div>
+                                                    <div className="feature-progress-bar">
+                                                        <div
+                                                            className="feature-progress-fill"
+                                                            style={{
+                                                                width: `${imageProgress.percentage}%`,
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <Button
+                                            variant={
+                                                featureConfig?.features
+                                                    .imageGeneration
+                                                    ? "secondary"
+                                                    : "primary"
+                                            }
+                                            size="sm"
+                                            disabled={
+                                                !featureConfig?.isWindows ||
+                                                !!togglingFeature ||
+                                                !!imageProgress
+                                            }
+                                            onClick={() =>
+                                                handleToggleFeature(
+                                                    "imageGeneration",
+                                                )
+                                            }
+                                        >
+                                            {imageProgress
+                                                ? "Downloading..."
+                                                : featureConfig?.features
+                                                        .imageGeneration
+                                                  ? "Disable"
+                                                  : "Enable"}
+                                        </Button>
+                                    </div>
+
+                                    {/* Audio Generation */}
+                                    <div className="feature-toggle-card">
+                                        <div className="feature-toggle-icon">
+                                            🎵
+                                        </div>
+                                        <div className="feature-toggle-info">
+                                            <h3 className="feature-toggle-name">
+                                                Audio Generation
+                                            </h3>
+                                            <p className="feature-toggle-desc">
+                                                Create character themes,
+                                                location ambience, and
+                                                background music locally.
+                                            </p>
+                                            {featureConfig?.isWindows && (
+                                                <p className="feature-toggle-note">
+                                                    {featureConfig.features
+                                                        .audioGeneration &&
+                                                    featureConfig
+                                                        .modelsDownloaded.audio
+                                                        ? "Installed"
+                                                        : "Requires ~7.5 GB download"}
+                                                </p>
+                                            )}
+                                            {!featureConfig?.isWindows && (
+                                                <p className="feature-toggle-note feature-toggle-note--disabled">
+                                                    Windows only
+                                                </p>
+                                            )}
+                                            {audioProgress && (
+                                                <div className="feature-progress">
+                                                    <div className="feature-progress-label">
+                                                        {audioProgress.status ===
+                                                        "extracting"
+                                                            ? "Extracting..."
+                                                            : audioProgress.status ===
+                                                                "completed"
+                                                              ? "Complete!"
+                                                              : audioProgress.status ===
+                                                                  "error"
+                                                                ? `Error: ${audioProgress.error}`
+                                                                : `Downloading... ${audioProgress.percentage}%`}
+                                                    </div>
+                                                    <div className="feature-progress-bar">
+                                                        <div
+                                                            className="feature-progress-fill"
+                                                            style={{
+                                                                width: `${audioProgress.percentage}%`,
+                                                            }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                        <Button
+                                            variant={
+                                                featureConfig?.features
+                                                    .audioGeneration
+                                                    ? "secondary"
+                                                    : "primary"
+                                            }
+                                            size="sm"
+                                            disabled={
+                                                !featureConfig?.isWindows ||
+                                                !!togglingFeature ||
+                                                !!audioProgress
+                                            }
+                                            onClick={() =>
+                                                handleToggleFeature(
+                                                    "audioGeneration",
+                                                )
+                                            }
+                                        >
+                                            {audioProgress
+                                                ? "Downloading..."
+                                                : featureConfig?.features
+                                                        .audioGeneration
+                                                  ? "Disable"
+                                                  : "Enable"}
+                                        </Button>
+                                    </div>
+                                </div>
+                            </>
+                        ) : null}
+
                         {activeSection === "models" ? (
                             <>
                                 <h2>Model Configuration</h2>
@@ -434,7 +821,7 @@ export const SettingsView: React.FC = () => {
                                                 placeholder="Paste your key"
                                                 onChange={(e) =>
                                                     setGeminiApiKey(
-                                                        e.target.value
+                                                        e.target.value,
                                                     )
                                                 }
                                                 style={{ flex: 1 }}
@@ -506,7 +893,7 @@ export const SettingsView: React.FC = () => {
                                                 value={newPassword}
                                                 onChange={(e) =>
                                                     setNewPassword(
-                                                        e.target.value
+                                                        e.target.value,
                                                     )
                                                 }
                                                 style={{ flex: 1 }}

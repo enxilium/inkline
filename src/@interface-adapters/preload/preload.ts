@@ -9,6 +9,12 @@ import {
     type AuthStatePayload,
 } from "../controllers/auth/AuthStateGateway";
 import {
+    FEATURE_CHANNELS,
+    type FeatureConfig,
+    type FeatureKind,
+    type DownloadProgress,
+} from "../controllers/setup/setupChannels";
+import {
     SYNC_STATE_CHANGED_CHANNEL,
     SYNC_REMOTE_CHANGE_CHANNEL,
     SYNC_CONFLICT_CHANNEL,
@@ -297,6 +303,41 @@ const fileDialog = {
 
 contextBridge.exposeInMainWorld("fileDialog", fileDialog);
 
+// ── Feature management (Settings screen) ──
+
+const featureApi = {
+    getConfig: (): Promise<FeatureConfig> =>
+        ipcRenderer.invoke(FEATURE_CHANNELS.GET_FEATURE_CONFIG),
+    enableFeature: (feature: FeatureKind): Promise<void> =>
+        ipcRenderer.invoke(FEATURE_CHANNELS.ENABLE_FEATURE, feature),
+    disableFeature: (feature: FeatureKind): Promise<void> =>
+        ipcRenderer.invoke(FEATURE_CHANNELS.DISABLE_FEATURE, feature),
+    cancelDownload: (feature: FeatureKind): Promise<void> =>
+        ipcRenderer.invoke(FEATURE_CHANNELS.CANCEL_FEATURE_DOWNLOAD, feature),
+};
+
+type FeatureDownloadProgressListener = (progress: DownloadProgress) => void;
+
+const featureEvents = {
+    onDownloadProgress: (listener: FeatureDownloadProgressListener) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            progress: DownloadProgress,
+        ) => {
+            listener(progress);
+        };
+        ipcRenderer.on(FEATURE_CHANNELS.FEATURE_DOWNLOAD_PROGRESS, handler);
+        return () =>
+            ipcRenderer.removeListener(
+                FEATURE_CHANNELS.FEATURE_DOWNLOAD_PROGRESS,
+                handler,
+            );
+    },
+};
+
+contextBridge.exposeInMainWorld("featureApi", featureApi);
+contextBridge.exposeInMainWorld("featureEvents", featureEvents);
+
 declare global {
     interface Window {
         api: typeof api;
@@ -307,5 +348,7 @@ declare global {
         windowControls: typeof windowControls;
         languageTool: typeof languageTool;
         fileDialog: typeof fileDialog;
+        featureApi: typeof featureApi;
+        featureEvents: typeof featureEvents;
     }
 }

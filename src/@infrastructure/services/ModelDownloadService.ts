@@ -329,18 +329,25 @@ export class ModelDownloadService extends EventEmitter {
         downloadType: "comfyui" | "languagetool" = "comfyui",
     ): Promise<void> {
         return new Promise((resolve, reject) => {
-            // PowerShell script to find and use 7z
+            // Use single-quoted PowerShell strings so backslashes are literal
+            // (PowerShell only treats backtick as escape, not backslash).
+            const safeArchive = archivePath.replace(/'/g, "''");
+            const safeDest = destPath.replace(/'/g, "''");
+
+            // Build 7z search paths outside the template to avoid JS template
+            // literal interpreting PowerShell ${} syntax.
+            const pf86 = "${env:ProgramFiles(x86)}";
             const psScript = `
-                $7zPath = "${archivePath.replace(/\\/g, "\\\\")}"
-                $destPath = "${destPath.replace(/\\/g, "\\\\")}"
+                $archivePath = '${safeArchive}'
+                $destPath = '${safeDest}'
                 
                 # Try to find 7z executable
                 $7zExe = $null
                 
                 # Check common locations
                 $locations = @(
-                    "C:\\Program Files\\7-Zip\\7z.exe",
-                    "C:\\Program Files (x86)\\7-Zip\\7z.exe"
+                    (Join-Path (Join-Path $env:ProgramFiles '7-Zip') '7z.exe'),
+                    (Join-Path (Join-Path ${pf86} '7-Zip') '7z.exe')
                 )
                 
                 foreach ($loc in $locations) {
@@ -356,10 +363,10 @@ export class ModelDownloadService extends EventEmitter {
                 }
                 
                 if ($7zExe) {
-                    & "$7zExe" x "$7zPath" -o"$destPath" -y
+                    & $7zExe x $archivePath ('-o' + $destPath) -y
                     exit $LASTEXITCODE
                 } else {
-                    Write-Error "7-Zip not found. Please install 7-Zip from https://7-zip.org to continue."
+                    Write-Error '7-Zip not found. Please install 7-Zip from https://7-zip.org to continue.'
                     exit 1
                 }
             `;
@@ -828,10 +835,11 @@ export class ModelDownloadService extends EventEmitter {
         downloadType: "comfyui" | "languagetool" = "languagetool",
     ): Promise<void> {
         return new Promise((resolve, reject) => {
+            const safeArchive = archivePath.replace(/'/g, "''");
+            const safeDest = destPath.replace(/'/g, "''");
+
             const psScript = `
-                $archivePath = "${archivePath.replace(/\\/g, "\\\\")}"
-                $destPath = "${destPath.replace(/\\/g, "\\\\")}"
-                Expand-Archive -Path "$archivePath" -DestinationPath "$destPath" -Force
+                Expand-Archive -Path '${safeArchive}' -DestinationPath '${safeDest}' -Force
             `;
 
             const ps = spawn("powershell.exe", [
@@ -880,6 +888,78 @@ export class ModelDownloadService extends EventEmitter {
                 reject(new Error(`Failed to run extraction: ${err.message}`));
             });
         });
+    }
+
+    /**
+     * Delete ComfyUI installation (python_embeded, ComfyUI folder, workflow files)
+     */
+    async deleteComfyUI(): Promise<void> {
+        // Directories created by the ComfyUI portable archive
+        const comfyDirs = ["python_embeded", "ComfyUI", "advanced", "update"];
+
+        // Loose files created by the ComfyUI portable archive
+        const comfyFiles = [
+            "run_cpu.bat",
+            "run_nvidia_gpu.bat",
+            "run_nvidia_gpu_fast_fp16_accumulation.bat",
+            "README_VERY_IMPORTANT.txt",
+            ...WORKFLOW_FILES,
+        ];
+
+        for (const name of comfyDirs) {
+            const dirPath = path.join(this.serverBasePath, name);
+            try {
+                const stats = await fsPromises
+                    .stat(dirPath)
+                    .catch((): null => null);
+                if (stats?.isDirectory()) {
+                    await fsPromises.rm(dirPath, {
+                        recursive: true,
+                        force: true,
+                    });
+                    console.log(`[ModelDownloadService] Deleted: ${dirPath}`);
+                }
+            } catch (err) {
+                console.warn(
+                    `[ModelDownloadService] Failed to delete ${dirPath}:`,
+                    err,
+                );
+            }
+        }
+
+        for (const name of comfyFiles) {
+            const filePath = path.join(this.serverBasePath, name);
+            await fsPromises.unlink(filePath).catch(() => {});
+        }
+    }
+
+    /**
+     * Delete a specific model file
+     */
+    async deleteModel(modelType: "image" | "audio"): Promise<void> {
+        const model = MODELS[modelType];
+        const modelPath = path.join(
+            this.modelsBasePath,
+            model.subfolder,
+            model.filename,
+        );
+
+        try {
+            const stats = await fsPromises
+                .stat(modelPath)
+                .catch((): null => null);
+            if (stats) {
+                await fsPromises.unlink(modelPath);
+                console.log(
+                    `[ModelDownloadService] Deleted model: ${modelPath}`,
+                );
+            }
+        } catch (err) {
+            console.warn(
+                `[ModelDownloadService] Failed to delete model ${modelPath}:`,
+                err,
+            );
+        }
     }
 
     cancelDownload(
