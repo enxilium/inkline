@@ -12,6 +12,31 @@ export const SETUP_CHANNELS = {
     DOWNLOAD_PROGRESS: "setup:downloadProgress",
 } as const;
 
+/** Channels for managing features from the main renderer (settings screen). */
+export const FEATURE_CHANNELS = {
+    GET_FEATURE_CONFIG: "features:getConfig",
+    ENABLE_FEATURE: "features:enable",
+    DISABLE_FEATURE: "features:disable",
+    CANCEL_FEATURE_DOWNLOAD: "features:cancelDownload",
+    FEATURE_DOWNLOAD_PROGRESS: "features:downloadProgress",
+} as const;
+
+export type FeatureKind = "imageGeneration" | "audioGeneration";
+
+export interface FeatureConfig {
+    features: {
+        aiChat: boolean;
+        imageGeneration: boolean;
+        audioGeneration: boolean;
+    };
+    modelsDownloaded: {
+        image: boolean;
+        audio: boolean;
+    };
+    comfyuiInstalled: boolean;
+    isWindows: boolean;
+}
+
 export interface SetupConfig {
     features: {
         aiChat: boolean;

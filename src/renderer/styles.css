@@ -964,6 +964,234 @@ html {
     }
 }
 
+/* ── Feature toggle cards (Settings > AI Features) ── */
+
+.feature-platform-warning {
+    background: rgba(255, 200, 50, 0.1);
+    border: 1px solid rgba(255, 200, 50, 0.25);
+    border-radius: var(--radius);
+    padding: 0.75rem 1rem;
+    font-size: 0.85rem;
+    color: #f5c842;
+    margin-top: 0.5rem;
+}
+
+.feature-toggle-card {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius);
+    background: var(--surface);
+    transition: border-color 0.15s ease;
+}
+
+.feature-toggle-card:hover {
+    border-color: var(--accent-transparent2);
+}
+
+.feature-toggle-icon {
+    font-size: 1.5rem;
+    flex-shrink: 0;
+    padding-top: 2px;
+}
+
+.feature-toggle-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.feature-toggle-name {
+    font-size: 0.95rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem 0;
+    color: var(--text);
+}
+
+.feature-toggle-desc {
+    font-size: 0.82rem;
+    color: var(--text-subtle);
+    margin: 0 0 0.35rem 0;
+    line-height: 1.4;
+}
+
+.feature-toggle-note {
+    font-size: 0.78rem;
+    color: var(--text-subtle);
+    margin: 0;
+}
+
+.feature-toggle-note--disabled {
+    color: #f5c842;
+}
+
+.feature-progress {
+    margin-top: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3rem;
+}
+
+.feature-progress-label {
+    font-size: 0.78rem;
+    color: var(--accent);
+    font-weight: 500;
+}
+
+.feature-progress-bar {
+    height: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 3px;
+    overflow: hidden;
+}
+
+.feature-progress-fill {
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.25s ease;
+    border-radius: 3px;
+}
+
+/* ── Download toast (bottom-right stack) ── */
+
+.download-toast-container {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    z-index: 1001;
+    pointer-events: none;
+}
+
+.download-toast {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    padding: 0.75rem 1rem;
+    min-width: 260px;
+    border-radius: var(--radius);
+    background: var(--surface-strong);
+    border: 1px solid var(--stroke);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(10px);
+    animation: slideIn 0.3s ease-out;
+    pointer-events: auto;
+}
+
+.download-toast--success .download-toast-icon {
+    color: var(--accent);
+    font-weight: 700;
+}
+
+.download-toast--error .download-toast-icon {
+    color: #e74c3c;
+    font-weight: 700;
+}
+
+.download-toast-message {
+    font-size: 0.85rem;
+    color: var(--text);
+}
+
+/* ── Feature prompt dialog (startup missing-packages check) ── */
+
+.feature-prompt-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(4px);
+    animation: featurePromptFadeIn 0.2s ease;
+}
+
+@keyframes featurePromptFadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+.feature-prompt-dialog {
+    background: var(--surface-strong);
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: 1.75rem 2rem;
+    max-width: 460px;
+    width: 90vw;
+    animation: slideIn 0.25s ease-out;
+}
+
+.feature-prompt-title {
+    margin: 0 0 0.75rem 0;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+}
+
+.feature-prompt-body {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--text);
+}
+
+.feature-prompt-note {
+    margin: 0 0 1.25rem 0;
+    font-size: 0.78rem;
+    color: var(--text-subtle);
+}
+
+.feature-prompt-actions {
+    display: flex;
+    gap: 0.6rem;
+    justify-content: flex-end;
+}
+
+.feature-prompt-btn {
+    padding: 0.5rem 1.1rem;
+    border-radius: var(--radius);
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition:
+        background 0.15s ease,
+        border-color 0.15s ease;
+}
+
+.feature-prompt-btn:disabled {
+    opacity: 0.55;
+    cursor: default;
+}
+
+.feature-prompt-btn--primary {
+    background: var(--accent);
+    color: #000;
+}
+
+.feature-prompt-btn--primary:hover:not(:disabled) {
+    filter: brightness(1.1);
+}
+
+.feature-prompt-btn--secondary {
+    background: transparent;
+    color: var(--text);
+    border-color: var(--stroke);
+}
+
+.feature-prompt-btn--secondary:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.05);
+}
+
 .auth-card {
     max-width: 460px;
     margin: 0 auto;

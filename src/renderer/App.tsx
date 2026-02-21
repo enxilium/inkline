@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 
 import { Titlebar } from "./components/layout/Titlebar";
 import { GenerationProgressToast } from "./components/ui/GenerationProgressToast";
+import { DownloadToast } from "./components/ui/DownloadToast";
+import { FeaturePromptDialog } from "./components/ui/FeaturePromptDialog";
 import { useAppStore } from "./state/appStore";
 import type { ProjectSummary } from "./types";
 import { AuthView } from "./views/AuthView";
@@ -143,11 +145,11 @@ const App: React.FC = () => {
                               };
                               addEventListener?: (
                                   type: string,
-                                  listener: () => void
+                                  listener: () => void,
                               ) => void;
                               removeEventListener?: (
                                   type: string,
-                                  listener: () => void
+                                  listener: () => void,
                               ) => void;
                           };
                       }
@@ -169,7 +171,7 @@ const App: React.FC = () => {
             const leftInset = Math.max(0, Math.round(rect.x));
             const rightInset = Math.max(
                 0,
-                Math.round(window.innerWidth - (rect.x + rect.width))
+                Math.round(window.innerWidth - (rect.x + rect.width)),
             );
 
             const gutter = 10;
@@ -181,11 +183,11 @@ const App: React.FC = () => {
             const minRight = 140;
             root.style.setProperty(
                 "--titlebar-content-padding-left",
-                `${Math.max(leftInset + gutter, minLeft)}px`
+                `${Math.max(leftInset + gutter, minLeft)}px`,
             );
             root.style.setProperty(
                 "--titlebar-content-padding-right",
-                `${Math.max(rightInset + gutter, minRight)}px`
+                `${Math.max(rightInset + gutter, minRight)}px`,
             );
         };
 
@@ -205,7 +207,7 @@ const App: React.FC = () => {
                 /* noop */
             });
         },
-        [submitAuth]
+        [submitAuth],
     );
 
     const handleAuthFieldChange = React.useCallback(
@@ -213,7 +215,7 @@ const App: React.FC = () => {
             (event: React.ChangeEvent<HTMLInputElement>) => {
                 setAuthField(field, event.target.value);
             },
-        [setAuthField]
+        [setAuthField],
     );
 
     const handleToggleAuthMode = React.useCallback(() => {
@@ -234,7 +236,7 @@ const App: React.FC = () => {
 
             await createProject({ title: trimmed });
         },
-        [createProject, setProjectsError, user]
+        [createProject, setProjectsError, user],
     );
 
     const handleRefreshProjects = React.useCallback(() => {
@@ -252,7 +254,7 @@ const App: React.FC = () => {
                 /* noop */
             });
         },
-        [openProject]
+        [openProject],
     );
 
     const handleDeleteProject = React.useCallback(
@@ -261,7 +263,7 @@ const App: React.FC = () => {
                 /* noop */
             });
         },
-        [deleteProject]
+        [deleteProject],
     );
 
     const handleUploadCover = React.useCallback(
@@ -280,7 +282,7 @@ const App: React.FC = () => {
                 },
             });
         },
-        [importAsset]
+        [importAsset],
     );
 
     const titlebarHost = React.useMemo(() => {
@@ -373,6 +375,11 @@ const App: React.FC = () => {
 
             <div className="app-shell">{renderStage()}</div>
             <GenerationProgressToast />
+            <DownloadToast />
+            {/* Show once per launch after user has signed in */}
+            {(stage === "projectSelect" ||
+                stage === "workspace" ||
+                stage === "settings") && <FeaturePromptDialog />}
         </div>
     );
 };
