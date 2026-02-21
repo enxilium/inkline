@@ -18,4 +18,11 @@ export const mainConfig: Configuration = {
     resolve: {
         extensions: [".js", ".ts", ".jsx", ".tsx", ".css", ".json"],
     },
+    // epub-gen uses __dirname-relative paths to load EJS templates and CSS at
+    // runtime. Bundling it with Webpack rewrites __dirname and breaks those
+    // lookups ("Custom file to OPF template not found"). Keeping it external
+    // lets Node require() resolve the real node_modules path.
+    externals: {
+        "epub-gen": "commonjs epub-gen",
+    },
 };

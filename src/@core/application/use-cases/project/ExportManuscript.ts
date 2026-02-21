@@ -4,6 +4,7 @@ export interface ExportManuscriptRequest {
     projectId: string;
     format: "epub";
     destinationPath: string;
+    author?: string;
 }
 
 export class ExportManuscript {
@@ -14,6 +15,7 @@ export class ExportManuscript {
             request.projectId,
             request.format,
             request.destinationPath,
+            request.author,
         );
     }
 }

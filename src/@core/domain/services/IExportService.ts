@@ -3,5 +3,6 @@ export interface IExportService {
         projectId: string,
         format: "epub",
         path: string,
+        author?: string,
     ): Promise<void>;
 }

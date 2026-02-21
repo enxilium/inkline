@@ -12,12 +12,14 @@ import { Button } from "../ui/Button";
 import { useAppStore } from "../../state/appStore";
 import { getTextStats } from "../../utils/textStats";
 import { EditChapterRangeDialog } from "../dialogs/EditChapterRangeDialog";
+import { ExportDialog } from "../dialogs/ExportDialog";
 
 type MenuKey = "file" | "edit" | "view" | null;
 
 export const TitlebarMenuBar: React.FC = () => {
     const {
         projectId,
+        activeProjectName,
         exportManuscript,
         returnToProjects,
         chapters,
@@ -30,6 +32,7 @@ export const TitlebarMenuBar: React.FC = () => {
     } = useAppStore();
     const [openMenu, setOpenMenu] = React.useState<MenuKey>(null);
     const [isRangeDialogOpen, setIsRangeDialogOpen] = React.useState(false);
+    const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false);
     const [isProjectStatsOpen, setIsProjectStatsOpen] = React.useState(false);
     const [rangeStart, setRangeStart] = React.useState("");
     const [rangeEnd, setRangeEnd] = React.useState("");
@@ -119,48 +122,9 @@ export const TitlebarMenuBar: React.FC = () => {
                                 type="button"
                                 className="project-card-menu-item"
                                 role="menuitem"
-                                onClick={async () => {
+                                onClick={() => {
                                     setOpenMenu(null);
-
-                                    try {
-                                        const result =
-                                            await window.fileDialog.showSaveDialog(
-                                                {
-                                                    title: "Export Manuscript as EPUB",
-                                                    defaultPath:
-                                                        "manuscript.epub",
-                                                    filters: [
-                                                        {
-                                                            name: "EPUB",
-                                                            extensions: [
-                                                                "epub",
-                                                            ],
-                                                        },
-                                                    ],
-                                                },
-                                            );
-
-                                        if (
-                                            result.canceled ||
-                                            !result.filePath
-                                        ) {
-                                            return;
-                                        }
-
-                                        await exportManuscript({
-                                            projectId,
-                                            format: "epub",
-                                            destinationPath: result.filePath,
-                                        });
-
-                                        alert("Export complete!");
-                                    } catch (error) {
-                                        alert(
-                                            "Export failed: " +
-                                                ((error as Error)?.message ??
-                                                    "Unknown error"),
-                                        );
-                                    }
+                                    setIsExportDialogOpen(true);
                                 }}
                             >
                                 Export Manuscript...
@@ -382,6 +346,22 @@ export const TitlebarMenuBar: React.FC = () => {
                     </div>
                 </DialogContent>
             </Dialog>
+
+            <ExportDialog
+                open={isExportDialogOpen}
+                onOpenChange={setIsExportDialogOpen}
+                projectTitle={activeProjectName}
+                chapterCount={chapters.length}
+                wordCount={manuscriptWordCount}
+                onExport={async ({ filename, author, destinationPath }) => {
+                    await exportManuscript({
+                        projectId,
+                        format: "epub",
+                        destinationPath,
+                        author,
+                    });
+                }}
+            />
         </div>
     );
 };

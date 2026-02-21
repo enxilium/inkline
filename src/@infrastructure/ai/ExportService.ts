@@ -236,6 +236,7 @@ export class ExportService implements IExportService {
         projectId: string,
         _format: "epub",
         destinationPath: string,
+        author?: string,
     ): Promise<void> {
         const project = await this.projectRepository.findById(projectId);
         if (!project) {
@@ -246,7 +247,12 @@ export class ExportService implements IExportService {
             await this.chapterRepository.findByProjectId(projectId);
         const chapters = this.sortChapters(allChapters, project.chapterIds);
 
-        await this.exportToEpub(project.title, chapters, destinationPath);
+        await this.exportToEpub(
+            project.title,
+            chapters,
+            destinationPath,
+            author || "Unknown",
+        );
     }
 
     private sortChapters(chapters: Chapter[], orderIds: string[]): Chapter[] {
@@ -265,6 +271,7 @@ export class ExportService implements IExportService {
         title: string,
         chapters: Chapter[],
         outputPath: string,
+        author: string,
     ): Promise<void> {
         const content = chapters
             .filter((chapter) => {
@@ -286,7 +293,7 @@ export class ExportService implements IExportService {
 
         const options = {
             title,
-            author: "Unknown",
+            author,
             output: outputPath,
             css: EPUB_CSS,
             appendChapterTitles: true,
