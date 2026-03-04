@@ -5,7 +5,7 @@ import * as fsPromises from "fs/promises";
 import * as path from "path";
 import * as https from "https";
 import * as http from "http";
-import { spawn } from "child_process";
+import { unpack } from "7zip-min";
 import { EventEmitter } from "events";
 
 export interface DownloadProgress {
@@ -320,119 +320,32 @@ export class ModelDownloadService extends EventEmitter {
     }
 
     /**
-     * Extract a 7z archive using system 7z
+     * Extract an archive (7z or zip) using bundled 7zip-min
      */
     private async extract7z(
         archivePath: string,
         destPath: string,
-        onProgress: (progress: DownloadProgress) => void,
+        _onProgress: (progress: DownloadProgress) => void,
         downloadType: "comfyui" | "languagetool" = "comfyui",
     ): Promise<void> {
-        return new Promise((resolve, reject) => {
-            // Use single-quoted PowerShell strings so backslashes are literal
-            // (PowerShell only treats backtick as escape, not backslash).
-            const safeArchive = archivePath.replace(/'/g, "''");
-            const safeDest = destPath.replace(/'/g, "''");
-
-            // Build 7z search paths outside the template to avoid JS template
-            // literal interpreting PowerShell ${} syntax.
-            const pf86 = "${env:ProgramFiles(x86)}";
-            const psScript = `
-                $archivePath = '${safeArchive}'
-                $destPath = '${safeDest}'
-                
-                # Try to find 7z executable
-                $7zExe = $null
-                
-                # Check common locations
-                $locations = @(
-                    (Join-Path (Join-Path $env:ProgramFiles '7-Zip') '7z.exe'),
-                    (Join-Path (Join-Path ${pf86} '7-Zip') '7z.exe')
-                )
-                
-                foreach ($loc in $locations) {
-                    if (Test-Path $loc) {
-                        $7zExe = $loc
-                        break
-                    }
-                }
-                
-                # Check PATH
-                if (-not $7zExe) {
-                    $7zExe = (Get-Command 7z -ErrorAction SilentlyContinue).Source
-                }
-                
-                if ($7zExe) {
-                    & $7zExe x $archivePath ('-o' + $destPath) -y
-                    exit $LASTEXITCODE
-                } else {
-                    Write-Error '7-Zip not found. Please install 7-Zip from https://7-zip.org to continue.'
-                    exit 1
-                }
-            `;
-
-            const ps = spawn("powershell.exe", [
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                psScript,
-            ]);
-
-            // Track this extraction process for cancellation
-            this.activeExtractions.set(downloadType, {
-                kill: () => {
-                    try {
-                        ps.kill();
-                    } catch {
-                        // Process may already be dead
-                    }
-                },
-            });
-
-            let stdout = "";
-            let stderr = "";
-
-            ps.stdout?.on("data", (data) => {
-                stdout += data.toString();
-                // Try to parse progress from 7z output
-                const match = data.toString().match(/(\d+)%/);
-                if (match) {
-                    onProgress({
-                        downloadType: "comfyui",
-                        downloadedBytes: 0,
-                        totalBytes: 0,
-                        percentage: parseInt(match[1], 10),
-                        status: "extracting",
-                    });
-                }
-            });
-
-            ps.stderr?.on("data", (data) => {
-                stderr += data.toString();
-            });
-
-            ps.on("close", (code) => {
-                this.activeExtractions.delete(downloadType);
-                if (code === 0) {
-                    resolve();
-                } else if (code === null) {
-                    // Process was killed (cancelled)
-                    reject(new Error("Extraction cancelled"));
-                } else {
-                    reject(
-                        new Error(
-                            `7z extraction failed (code ${code}): ${stderr || stdout}`,
-                        ),
-                    );
-                }
-            });
-
-            ps.on("error", (err) => {
-                this.activeExtractions.delete(downloadType);
-                reject(new Error(`Failed to run extraction: ${err.message}`));
-            });
+        // Track extraction as active (7zip-min doesn't expose the child process,
+        // so cancellation during extraction is best-effort via post-completion cleanup)
+        this.activeExtractions.set(downloadType, {
+            kill: () => {
+                // 7zip-min doesn't expose the spawned process;
+                // cleanup will happen after unpack resolves/rejects.
+            },
         });
+
+        try {
+            await unpack(archivePath, destPath);
+        } catch (err) {
+            throw new Error(
+                `7z extraction failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        } finally {
+            this.activeExtractions.delete(downloadType);
+        }
     }
 
     /**
@@ -827,67 +740,29 @@ export class ModelDownloadService extends EventEmitter {
     }
 
     /**
-     * Extract a ZIP archive using PowerShell's Expand-Archive
+     * Extract a ZIP archive using bundled 7zip-min
      */
     private async extractZip(
         archivePath: string,
         destPath: string,
         downloadType: "comfyui" | "languagetool" = "languagetool",
     ): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const safeArchive = archivePath.replace(/'/g, "''");
-            const safeDest = destPath.replace(/'/g, "''");
-
-            const psScript = `
-                Expand-Archive -Path '${safeArchive}' -DestinationPath '${safeDest}' -Force
-            `;
-
-            const ps = spawn("powershell.exe", [
-                "-NoProfile",
-                "-ExecutionPolicy",
-                "Bypass",
-                "-Command",
-                psScript,
-            ]);
-
-            // Track this extraction process for cancellation
-            this.activeExtractions.set(downloadType, {
-                kill: () => {
-                    try {
-                        ps.kill();
-                    } catch {
-                        // Process may already be dead
-                    }
-                },
-            });
-
-            let stderr = "";
-
-            ps.stderr?.on("data", (data) => {
-                stderr += data.toString();
-            });
-
-            ps.on("close", (code) => {
-                this.activeExtractions.delete(downloadType);
-                if (code === 0) {
-                    resolve();
-                } else if (code === null) {
-                    // Process was killed (cancelled)
-                    reject(new Error("Extraction cancelled"));
-                } else {
-                    reject(
-                        new Error(
-                            `ZIP extraction failed (code ${code}): ${stderr}`,
-                        ),
-                    );
-                }
-            });
-
-            ps.on("error", (err) => {
-                this.activeExtractions.delete(downloadType);
-                reject(new Error(`Failed to run extraction: ${err.message}`));
-            });
+        this.activeExtractions.set(downloadType, {
+            kill: () => {
+                // 7zip-min doesn't expose the spawned process;
+                // cleanup will happen after unpack resolves/rejects.
+            },
         });
+
+        try {
+            await unpack(archivePath, destPath);
+        } catch (err) {
+            throw new Error(
+                `ZIP extraction failed: ${err instanceof Error ? err.message : String(err)}`,
+            );
+        } finally {
+            this.activeExtractions.delete(downloadType);
+        }
     }
 
     /**

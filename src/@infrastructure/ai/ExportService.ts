@@ -1,4 +1,5 @@
-import EPub from "epub-gen";
+import epub from "epub-gen-memory";
+import * as fsPromises from "fs/promises";
 
 import { IExportService } from "../../@core/domain/services/IExportService";
 import { IProjectRepository } from "../../@core/domain/repositories/IProjectRepository";
@@ -282,7 +283,7 @@ export class ExportService implements IExportService {
             })
             .map((chapter) => ({
                 title: chapter.title,
-                data: this.convertContentToHtml(chapter.content),
+                content: this.convertContentToHtml(chapter.content),
             }));
 
         if (content.length === 0) {
@@ -291,17 +292,18 @@ export class ExportService implements IExportService {
             );
         }
 
-        const options = {
-            title,
-            author,
-            output: outputPath,
-            css: EPUB_CSS,
-            appendChapterTitles: true,
+        const epubBuffer = await epub(
+            {
+                title,
+                author,
+                css: EPUB_CSS,
+                prependChapterTitles: true,
+                verbose: false,
+            },
             content,
-            verbose: false,
-        };
+        );
 
-        await new EPub(options, outputPath).promise;
+        await fsPromises.writeFile(outputPath, epubBuffer);
     }
 
     /**

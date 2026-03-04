@@ -9,15 +9,16 @@ import {
     protocol,
     net,
 } from "electron";
+import { updateElectronApp } from "update-electron-app";
+import { spawn } from "child_process";
+import fs from "fs";
 import * as path from "path";
 import { pathToFileURL } from "url";
 import { AppBuilder } from "./AppBuilder";
 import { resolveDependencies } from "./dependencies";
 import { fileSystemService } from "../@infrastructure/storage/FileSystemService";
-import { ComfyAssetGenerationService } from "../@infrastructure/ai/ComfyAssetGenerationService";
 import {
     setupService,
-    SetupConfig,
 } from "../@infrastructure/services/SetupService";
 import {
     modelDownloadService,
@@ -51,8 +52,6 @@ const handleSquirrelEvent = (): boolean => {
         return false;
     }
 
-    const { spawn } = require("child_process");
-    const fs = require("fs");
     const appFolder = path.resolve(process.execPath, "..");
     const rootFolder = path.resolve(appFolder, "..");
     const updateExe = path.resolve(rootFolder, "Update.exe");
@@ -144,6 +143,8 @@ protocol.registerSchemesAsPrivileged([
         },
     },
 ]);
+
+updateElectronApp();
 
 const dependencies = resolveDependencies();
 const appBuilder = new AppBuilder(dependencies);

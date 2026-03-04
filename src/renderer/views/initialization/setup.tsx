@@ -527,13 +527,18 @@ const DownloadsStep: React.FC<{
                 )}
 
             {!downloadStarted && (
-                <button
-                    style={styles.primaryButton}
-                    onClick={startDownloads}
-                    disabled={isDownloading}
-                >
-                    Start Downloads
-                </button>
+                <div style={styles.buttonRow}>
+                    <button style={styles.secondaryButton} onClick={onBack}>
+                        Back
+                    </button>
+                    <button
+                        style={styles.primaryButton}
+                        onClick={startDownloads}
+                        disabled={isDownloading}
+                    >
+                        Start Downloads
+                    </button>
+                </div>
             )}
 
             {downloadStarted && (
@@ -914,7 +919,8 @@ const ThemeStep: React.FC<{
 const CompleteStep: React.FC<{
     config: SetupConfig;
     onComplete: () => void;
-}> = ({ config, onComplete }) => (
+    onBack: () => void;
+}> = ({ config, onComplete, onBack }) => (
     <div style={styles.stepContainer}>
         <div style={styles.successIcon}>🎉</div>
         <h2 style={styles.stepTitle}>You're All Set!</h2>
@@ -956,9 +962,14 @@ const CompleteStep: React.FC<{
             )}
         </div>
 
-        <button style={styles.primaryButton} onClick={onComplete}>
-            Launch Inkline
-        </button>
+        <div style={styles.buttonRow}>
+            <button style={styles.secondaryButton} onClick={onBack}>
+                Back
+            </button>
+            <button style={styles.primaryButton} onClick={onComplete}>
+                Launch Inkline
+            </button>
+        </div>
     </div>
 );
 
@@ -1128,7 +1139,11 @@ const SetupWizard: React.FC = () => {
                     />
                 )}
                 {currentStep === "complete" && (
-                    <CompleteStep config={config} onComplete={handleComplete} />
+                    <CompleteStep
+                        config={config}
+                        onComplete={handleComplete}
+                        onBack={goBack}
+                    />
                 )}
             </div>
         </div>

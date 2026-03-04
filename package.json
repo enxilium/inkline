@@ -3,6 +3,10 @@
     "productName": "inkline",
     "version": "1.0.0",
     "description": "My Electron application description",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/enxilium/inkline.git"
+    },
     "main": ".webpack/main",
     "scripts": {
         "start": "electron-forge start",
@@ -32,9 +36,9 @@
         "@electron-forge/plugin-auto-unpack-natives": "^7.10.2",
         "@electron-forge/plugin-fuses": "^7.10.2",
         "@electron-forge/plugin-webpack": "^7.10.2",
+        "@electron-forge/publisher-github": "^7.11.1",
         "@electron/fuses": "^1.8.0",
         "@pmmmwh/react-refresh-webpack-plugin": "^0.6.2",
-        "@types/epub-gen": "^0.1.2",
         "@types/pdfkit": "^0.17.4",
         "@types/react": "^19.2.6",
         "@types/react-dom": "^19.2.3",
@@ -99,12 +103,13 @@
         "@tiptap/starter-kit": "^3.11.0",
         "@tiptap/suggestion": "^3.14.0",
         "@types/lodash": "^4.17.21",
+        "7zip-min": "^3.0.1",
         "clsx": "^2.1.1",
         "dexie": "^4.2.1",
         "docx": "^9.5.1",
         "dotenv": "^17.2.3",
         "electron-squirrel-startup": "^1.0.1",
-        "epub-gen": "^0.1.0",
+        "epub-gen-memory": "^1.1.2",
         "flexlayout-react": "^0.8.17",
         "lodash": "^4.17.21",
         "pdfkit": "^0.17.2",
@@ -116,6 +121,7 @@
         "tippy.js": "^6.3.7",
         "typed.js": "^2.1.0",
         "typescript": "^5.9.3",
+        "update-electron-app": "^3.1.2",
         "zustand": "^5.0.8"
     }
 }
