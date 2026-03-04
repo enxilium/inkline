@@ -17,9 +17,11 @@ import {
     RefreshCwIcon,
     PlusIcon,
     SpellCheckIcon,
+    StickyNoteIcon,
 } from "../ui/Icons";
 import { LinkDialog } from "../dialogs/LinkDialog";
 import { LanguageToolPopup } from "./LanguageToolPopup";
+import { CommentsSidebar } from "./CommentsSidebar";
 
 interface TextEditorProps {
     editor: Editor | null;
@@ -51,7 +53,7 @@ const fontOptions = [
 export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
     const DEFAULT_FALLBACK_COLOR = "#f6f7fb";
     const [themeTextColor, setThemeTextColor] = React.useState(
-        DEFAULT_FALLBACK_COLOR
+        DEFAULT_FALLBACK_COLOR,
     );
 
     React.useEffect(() => {
@@ -87,7 +89,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
 
             return themeTextColor;
         },
-        [themeTextColor]
+        [themeTextColor],
     );
     const stage = useAppStore((state) => state.stage);
     const [renderTick, setRenderTick] = React.useState(0);
@@ -99,6 +101,31 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
     const [replaceTerm, setReplaceTerm] = React.useState("");
     const [caseSensitive, setCaseSensitive] = React.useState(false);
     const findInputRef = React.useRef<HTMLInputElement | null>(null);
+
+    const [isCommentsSidebarOpen, setIsCommentsSidebarOpen] =
+        React.useState(false);
+    const [pendingCommentRequest, setPendingCommentRequest] =
+        React.useState(false);
+
+    // Listen for inline-comment-request events (keyboard shortcut / context menu).
+    React.useEffect(() => {
+        if (!editor) return;
+
+        const handleCommentRequest = () => {
+            setIsCommentsSidebarOpen(true);
+            setPendingCommentRequest(true);
+        };
+
+        const dom = editor.view.dom;
+        dom.addEventListener("inline-comment-request", handleCommentRequest);
+
+        return () => {
+            dom.removeEventListener(
+                "inline-comment-request",
+                handleCommentRequest,
+            );
+        };
+    }, [editor]);
 
     React.useEffect(() => {
         if (!editor || stage !== "workspace") {
@@ -253,7 +280,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
     return (
         <div className="text-editor-panel">
             {editor ? (
-                <>
+                <div className="text-editor-with-sidebar">
                     <div className="text-editor-container">
                         <div className="toolbar-card">
                             <select
@@ -422,7 +449,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                 className="toolbar-color"
                                 aria-label="Text color"
                                 value={normalizeHtmlColor(
-                                    editor.getAttributes("textStyle").color
+                                    editor.getAttributes("textStyle").color,
                                 )}
                                 onChange={(event) =>
                                     editor
@@ -448,6 +475,14 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                 }
                                 title="Toggle proofreading"
                             />
+                            <ToolbarButton
+                                label={<StickyNoteIcon size={16} />}
+                                onClick={() =>
+                                    setIsCommentsSidebarOpen((o) => !o)
+                                }
+                                isActive={isCommentsSidebarOpen}
+                                title="Toggle comments"
+                            />
                         </div>
                         <div className="editor-surface">
                             {isFindOpen ? (
@@ -461,7 +496,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                                 event.target as HTMLElement | null;
                                             if (
                                                 target?.closest(
-                                                    "input, textarea"
+                                                    "input, textarea",
                                                 )
                                             ) {
                                                 return;
@@ -477,7 +512,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                                 value={searchTerm}
                                                 onChange={(event) =>
                                                     setSearchTerm(
-                                                        event.target.value
+                                                        event.target.value,
                                                     )
                                                 }
                                             />
@@ -513,7 +548,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                                 className={`btn btn-icon editor-find-btn ${caseSensitive ? "is-active" : ""}`}
                                                 onClick={() =>
                                                     setCaseSensitive(
-                                                        (prev) => !prev
+                                                        (prev) => !prev,
                                                     )
                                                 }
                                                 title="Match case"
@@ -529,7 +564,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                                 className={`btn btn-icon editor-find-btn ${isReplaceOpen ? "is-active" : ""}`}
                                                 onClick={() =>
                                                     setIsReplaceOpen(
-                                                        (prev) => !prev
+                                                        (prev) => !prev,
                                                     )
                                                 }
                                                 title="Replace"
@@ -552,7 +587,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                                     setIsFindOpen(false);
                                                     setIsReplaceOpen(false);
                                                     editor.commands.setSearchTerm(
-                                                        ""
+                                                        "",
                                                     );
                                                 }}
                                                 title="Close"
@@ -570,7 +605,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                                     value={replaceTerm}
                                                     onChange={(event) =>
                                                         setReplaceTerm(
-                                                            event.target.value
+                                                            event.target.value,
                                                         )
                                                     }
                                                 />
@@ -637,7 +672,17 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                             </div>
                         </div>
                     </div>
-                </>
+                    {isCommentsSidebarOpen ? (
+                        <CommentsSidebar
+                            editor={editor}
+                            onClose={() => setIsCommentsSidebarOpen(false)}
+                            pendingCommentRequest={pendingCommentRequest}
+                            onCommentRequestHandled={() =>
+                                setPendingCommentRequest(false)
+                            }
+                        />
+                    ) : null}
+                </div>
             ) : (
                 <p className="binder-empty">
                     Editor is still starting. Sit tight.

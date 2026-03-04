@@ -539,6 +539,16 @@ const setupContextMenu = (): void => {
                 { role: "paste" },
                 { type: "separator" },
                 { role: "selectAll" },
+                { type: "separator" },
+                {
+                    label: "Add Comment",
+                    click: () => {
+                        event.sender.send("context-menu-command", {
+                            command: "add-comment",
+                            data,
+                        });
+                    },
+                },
             );
         } else if (type === "binder_chapter") {
             template.push(

@@ -1908,6 +1908,11 @@ input.toolbar-color {
     font-family: inherit;
 }
 
+select.toolbar-select option {
+    background-color: #2a2a2c;
+    color: #f6f7fb;
+}
+
 select.toolbar-select:focus,
 input.toolbar-color:focus {
     outline: none;
@@ -1957,6 +1962,13 @@ input.toolbar-color:focus {
     outline: none;
     position: relative;
     white-space: pre-wrap;
+}
+
+.editor-body .tiptap::after {
+    content: "";
+    display: block;
+    min-height: 15vh;
+    pointer-events: none;
 }
 
 .editor-body [data-comment-id] {
@@ -2093,6 +2105,180 @@ input.toolbar-color:focus {
     gap: 0;
     height: 100%;
     overflow-y: hidden;
+}
+
+.text-editor-with-sidebar {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    min-height: 0;
+    height: 100%;
+}
+
+.text-editor-with-sidebar > .text-editor-container {
+    flex: 1;
+    min-width: 0;
+}
+
+/* ---- Inline comment mark highlight ---- */
+
+.editor-body .inline-comment-mark {
+    background: rgba(255, 220, 100, 0.15);
+    box-shadow: inset 0 -2px 0 rgba(255, 200, 60, 0.45);
+    border-radius: 2px;
+    cursor: pointer;
+}
+
+/* ---- Comments sidebar ---- */
+
+.comments-sidebar {
+    width: 280px;
+    min-width: 220px;
+    max-width: 360px;
+    background: var(--surface);
+    border-left: 1px solid var(--stroke);
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+}
+
+.comments-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--stroke);
+    flex-shrink: 0;
+}
+
+.comments-sidebar-title {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-subtle);
+}
+
+.comments-sidebar-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem 0;
+}
+
+.comments-sidebar-card {
+    padding: 0.6rem 0.75rem;
+    cursor: pointer;
+    border-bottom: 1px solid var(--stroke);
+    transition: background 0.15s;
+}
+
+.comments-sidebar-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+
+.comments-sidebar-card-excerpt {
+    font-size: 0.82rem;
+    color: var(--text-subtle);
+    font-style: italic;
+    line-height: 1.35;
+    margin-bottom: 0.35rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.comments-sidebar-card-text {
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.4;
+    margin-bottom: 0.35rem;
+    white-space: pre-wrap;
+}
+
+.comments-sidebar-card-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.comments-sidebar-card-date {
+    font-size: 0.72rem;
+    color: var(--text-subtle);
+}
+
+.comments-sidebar-card-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.comments-sidebar-card-actions .btn-xs {
+    padding: 0.15rem 0.25rem;
+    font-size: 0.78rem;
+    min-width: auto;
+    color: var(--text-subtle);
+}
+
+.comments-sidebar-card-actions .btn-xs:hover {
+    color: var(--text);
+}
+
+.comments-sidebar-empty {
+    padding: 1.5rem 0.75rem;
+    color: var(--text-subtle);
+    font-size: 0.88rem;
+    text-align: center;
+}
+
+.comments-sidebar-hint {
+    margin-top: 0.5rem;
+    font-size: 0.78rem;
+    color: var(--text-subtle);
+}
+
+.comments-sidebar-hint kbd {
+    display: inline-block;
+    padding: 0.1rem 0.35rem;
+    font-size: 0.72rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.06);
+    font-family: inherit;
+}
+
+.comments-sidebar-add {
+    padding: 0.6rem 0.75rem;
+    border-bottom: 1px solid var(--stroke);
+}
+
+.comments-sidebar-textarea {
+    width: 100%;
+    min-height: 60px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 6px;
+    color: var(--text);
+    padding: 0.5rem;
+    font-size: 0.88rem;
+    font-family: inherit;
+    resize: vertical;
+    outline: none;
+}
+
+.comments-sidebar-textarea:focus {
+    border-color: var(--accent);
+}
+
+.comments-sidebar-add-actions {
+    display: flex;
+    gap: 0.35rem;
+    margin-top: 0.4rem;
+    justify-content: flex-end;
+}
+
+.comments-sidebar-edit-form {
+    margin-top: 0.25rem;
+    margin-bottom: 0.35rem;
 }
 
 .connected-editor {

@@ -11,6 +11,7 @@ import { useAppStore } from "../../state/appStore";
 import { TextEditor } from "../workspace/TextEditor";
 import { SearchAndReplace } from "../../tiptap/searchAndReplace";
 import { LanguageTool } from "../../tiptap/languageTool";
+import { InlineComment } from "../../tiptap/inlineComment";
 import {
     DocumentReference,
     createDocumentReferenceSuggestion,
@@ -40,6 +41,43 @@ const TabIndentation = Extension.create({
                     return this.editor.commands.sinkListItem("listItem");
                 }
                 return this.editor.commands.insertContent("\t");
+            },
+        };
+    },
+});
+
+const ALIGNMENT_STEP_LEFT: Record<string, string> = {
+    justify: "right",
+    right: "center",
+    center: "left",
+};
+
+const AlignmentBackspace = Extension.create({
+    name: "alignmentBackspace",
+
+    addKeyboardShortcuts() {
+        return {
+            Backspace: () => {
+                const { state } = this.editor;
+                const { selection } = state;
+
+                // Only act when the cursor is collapsed (no selection range).
+                if (!selection.empty) return false;
+
+                const { $from } = selection;
+
+                // Only act when cursor is at the very start of the block node.
+                if ($from.parentOffset !== 0) return false;
+
+                const node = $from.parent;
+                const currentAlign =
+                    (node.attrs as { textAlign?: string }).textAlign || "left";
+
+                const nextAlign = ALIGNMENT_STEP_LEFT[currentAlign];
+                if (!nextAlign) return false; // already left-aligned — let default Backspace run
+
+                this.editor.commands.setTextAlign(nextAlign);
+                return true; // prevent default Backspace behavior
             },
         };
     },
@@ -319,6 +357,8 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                   ]
                 : []),
             TabIndentation,
+            AlignmentBackspace,
+            InlineComment,
         ],
         content: "<p></p>", // Initial empty, will be populated by useEffect
         editorProps: {
@@ -326,6 +366,11 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 class: "editor-body",
                 spellCheck: "true",
             },
+            // Keep a large bottom scroll margin so the cursor never sits
+            // flush against the viewport edge — the view scrolls down
+            // automatically as the user types near the bottom.
+            scrollMargin: { top: 80, bottom: 400, left: 0, right: 0 },
+            scrollThreshold: { top: 80, bottom: 400, left: 0, right: 0 },
         },
     });
 

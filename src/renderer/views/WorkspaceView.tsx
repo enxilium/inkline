@@ -19,7 +19,7 @@ export const WorkspaceView: React.FC = () => {
     const deleteLocation = useAppStore((state) => state.deleteLocation);
     const deleteOrganization = useAppStore((state) => state.deleteOrganization);
     const setRenamingDocument = useAppStore(
-        (state) => state.setRenamingDocument
+        (state) => state.setRenamingDocument,
     );
 
     React.useEffect(() => {
@@ -30,7 +30,7 @@ export const WorkspaceView: React.FC = () => {
             } else if (command === "delete") {
                 if (
                     confirm(
-                        `Are you sure you want to delete this ${data.kind}?`
+                        `Are you sure you want to delete this ${data.kind}?`,
                     )
                 ) {
                     if (data.kind === "chapter") {
@@ -47,6 +47,16 @@ export const WorkspaceView: React.FC = () => {
                 }
             } else if (command === "rename") {
                 setRenamingDocument({ kind: data.kind, id: data.id });
+            } else if (command === "add-comment") {
+                // Dispatch to the active Tiptap editor via a custom DOM event.
+                const tiptapEl = document.querySelector(".editor-body .tiptap");
+                if (tiptapEl) {
+                    tiptapEl.dispatchEvent(
+                        new CustomEvent("inline-comment-request", {
+                            bubbles: true,
+                        }),
+                    );
+                }
             }
         });
         return () => {
@@ -64,7 +74,7 @@ export const WorkspaceView: React.FC = () => {
 
     const [binderActiveKind, setBinderActiveKind] =
         React.useState<WorkspaceDocumentKind>(
-            activeDocument?.kind ?? "chapter"
+            activeDocument?.kind ?? "chapter",
         );
 
     const [isPeeking, setIsPeeking] = React.useState(false);
@@ -103,7 +113,7 @@ export const WorkspaceView: React.FC = () => {
                 }
             }
         },
-        [isResizingBinder]
+        [isResizingBinder],
     );
 
     const resizeChat = React.useCallback(
@@ -115,7 +125,7 @@ export const WorkspaceView: React.FC = () => {
                 }
             }
         },
-        [isResizingChat]
+        [isResizingChat],
     );
 
     React.useEffect(() => {

@@ -109,11 +109,15 @@ export const Titlebar: React.FC = () => {
         }
     };
 
+    const searchInputRef = React.useRef<HTMLInputElement>(null);
+
     const openResult = (result: GlobalFindResult) => {
         setActiveDocument({ kind: result.kind, id: result.documentId });
         setSearchResults([]);
         setSearchTerm("");
         setIsSearchFocused(false);
+        // Remove DOM focus so the input fully deactivates and future typing works.
+        searchInputRef.current?.blur();
     };
 
     return (
@@ -141,6 +145,7 @@ export const Titlebar: React.FC = () => {
                                 <SearchIcon size={14} />
                             </span>
                             <input
+                                ref={searchInputRef}
                                 className={
                                     "titlebar-search-input titlebar-no-drag" +
                                     (!isSearchFocused && !searchTerm
@@ -187,7 +192,7 @@ export const Titlebar: React.FC = () => {
                                                             className="titlebar-search-result"
                                                             onClick={() =>
                                                                 openResult(
-                                                                    result
+                                                                    result,
                                                                 )
                                                             }
                                                         >
@@ -227,7 +232,7 @@ export const Titlebar: React.FC = () => {
                                                                     aria-hidden="true"
                                                                 >
                                                                     {getIconForKind(
-                                                                        result.kind
+                                                                        result.kind,
                                                                     )}
                                                                 </span>
                                                                 <span className="titlebar-search-file-label">
@@ -290,7 +295,7 @@ export const Titlebar: React.FC = () => {
                                     setWorkspaceViewMode(
                                         workspaceViewMode === "manuscript"
                                             ? "timeline"
-                                            : "manuscript"
+                                            : "manuscript",
                                     )
                                 }
                                 aria-label="Toggle View"
