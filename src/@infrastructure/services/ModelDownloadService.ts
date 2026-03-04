@@ -5,8 +5,58 @@ import * as fsPromises from "fs/promises";
 import * as path from "path";
 import * as https from "https";
 import * as http from "http";
-import { unpack } from "7zip-min";
+import { spawn } from "child_process";
 import { EventEmitter } from "events";
+
+/**
+ * Resolve the path to the bundled 7za.exe binary.
+ * In packaged builds it's shipped via extraResource; in dev it lives in node_modules.
+ */
+function get7zaPath(): string {
+    if (app.isPackaged) {
+        return path.join(process.resourcesPath, "7za.exe");
+    }
+    return path.join(
+        __dirname,
+        "..",
+        "..",
+        "node_modules",
+        "7zip-bin",
+        "win",
+        "x64",
+        "7za.exe",
+    );
+}
+
+/**
+ * Extract an archive using the bundled 7za binary.
+ * Equivalent to 7zip-min's `unpack()` but avoids the library's
+ * webpack-incompatible `__dirname` resolution.
+ */
+function unpack(archivePath: string, destPath: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const bin = get7zaPath();
+        const args = ["x", archivePath, `-o${destPath}`, "-y"];
+        const proc = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+
+        let stdout = "";
+        let stderr = "";
+        proc.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
+        proc.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
+
+        proc.on("error", (err) => reject(err));
+        proc.on("close", (code) => {
+            if (code === 0) {
+                resolve(stdout);
+            } else {
+                const err = new Error(
+                    `7za exited with code ${code}\n${stderr}`,
+                );
+                reject(err);
+            }
+        });
+    });
+}
 
 export interface DownloadProgress {
     downloadType: "comfyui" | "image" | "audio" | "languagetool";
@@ -320,7 +370,7 @@ export class ModelDownloadService extends EventEmitter {
     }
 
     /**
-     * Extract an archive (7z or zip) using bundled 7zip-min
+     * Extract an archive (7z or zip) using the bundled 7za binary.
      */
     private async extract7z(
         archivePath: string,
@@ -328,12 +378,9 @@ export class ModelDownloadService extends EventEmitter {
         _onProgress: (progress: DownloadProgress) => void,
         downloadType: "comfyui" | "languagetool" = "comfyui",
     ): Promise<void> {
-        // Track extraction as active (7zip-min doesn't expose the child process,
-        // so cancellation during extraction is best-effort via post-completion cleanup)
         this.activeExtractions.set(downloadType, {
             kill: () => {
-                // 7zip-min doesn't expose the spawned process;
-                // cleanup will happen after unpack resolves/rejects.
+                // Post-completion cleanup only.
             },
         });
 
@@ -740,7 +787,7 @@ export class ModelDownloadService extends EventEmitter {
     }
 
     /**
-     * Extract a ZIP archive using bundled 7zip-min
+     * Extract a ZIP archive using the bundled 7za binary.
      */
     private async extractZip(
         archivePath: string,
@@ -749,8 +796,7 @@ export class ModelDownloadService extends EventEmitter {
     ): Promise<void> {
         this.activeExtractions.set(downloadType, {
             kill: () => {
-                // 7zip-min doesn't expose the spawned process;
-                // cleanup will happen after unpack resolves/rejects.
+                // Post-completion cleanup only.
             },
         });
 

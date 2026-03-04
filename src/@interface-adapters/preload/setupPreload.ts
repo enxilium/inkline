@@ -41,6 +41,10 @@ const setupApi = {
     checkPlatform: (): Promise<PlatformInfo> => {
         return ipcRenderer.invoke(SETUP_CHANNELS.CHECK_PLATFORM);
     },
+
+    closeWindow: (): void => {
+        ipcRenderer.send(SETUP_CHANNELS.CLOSE_WINDOW);
+    },
 };
 
 // Events for real-time updates

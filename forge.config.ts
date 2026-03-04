@@ -11,7 +11,8 @@ const config: ForgeConfig = {
     packagerConfig: {
         asar: true,
         // Workflow files are bundled separately (server/ComfyUI downloaded at runtime)
-        extraResource: ["./assets/workflows"],
+        // 7za.exe is shipped alongside the asar for archive extraction at runtime
+        extraResource: ["./assets/workflows", "./node_modules/7zip-bin/win/x64/7za.exe"],
         icon: "./assets/app-icon",
     },
     rebuildConfig: {},

@@ -1,7 +1,7 @@
 {
     "name": "inkline",
     "productName": "inkline",
-    "version": "1.0.0",
+    "version": "0.1.1-alpha",
     "description": "My Electron application description",
     "repository": {
         "type": "git",
@@ -103,7 +103,7 @@
         "@tiptap/starter-kit": "^3.11.0",
         "@tiptap/suggestion": "^3.14.0",
         "@types/lodash": "^4.17.21",
-        "7zip-min": "^3.0.1",
+        "7zip-bin": "^5.2.0",
         "clsx": "^2.1.1",
         "dexie": "^4.2.1",
         "docx": "^9.5.1",

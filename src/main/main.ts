@@ -194,6 +194,11 @@ const createSetupWindow = (): Promise<void> => {
 
         // Cancel any in-progress AI downloads when window is closing
         // Don't cancel LanguageTool - it downloads in background and should complete
+        // Close window when requested from renderer (frameless window close button)
+        ipcMain.on(SETUP_CHANNELS.CLOSE_WINDOW, () => {
+            setupWindow?.close();
+        });
+
         setupWindow.on("close", () => {
             modelDownloadService.cancelDownload("comfyui");
             modelDownloadService.cancelDownload("image");

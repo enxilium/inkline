@@ -10,6 +10,7 @@ export const SETUP_CHANNELS = {
     CHECK_LANGUAGETOOL_STATUS: "setup:checkLanguageToolStatus",
     CHECK_PLATFORM: "setup:checkPlatform",
     DOWNLOAD_PROGRESS: "setup:downloadProgress",
+    CLOSE_WINDOW: "setup:closeWindow",
 } as const;
 
 /** Channels for managing features from the main renderer (settings screen). */

@@ -1082,6 +1082,23 @@ const SetupWizard: React.FC = () => {
 
     return (
         <div style={styles.container}>
+            {/* Close button */}
+            <button
+                onClick={() => (window as any).setupApi.closeWindow()}
+                style={styles.closeButton}
+                onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = "#e81123";
+                    e.currentTarget.style.color = "#ffffff";
+                }}
+                onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = "transparent";
+                    e.currentTarget.style.color = "#888";
+                }}
+                title="Close"
+            >
+                ✕
+            </button>
+
             {/* Progress indicator */}
             <div style={styles.progressIndicator}>
                 {steps.map((step, index) => (
@@ -1158,7 +1175,28 @@ const styles: Record<string, React.CSSProperties> = {
         height: "100vh",
         backgroundColor: "#1a1b1e",
         padding: "24px",
+        position: "relative",
     },
+    closeButton: {
+        position: "absolute",
+        top: "8px",
+        right: "8px",
+        width: "32px",
+        height: "32px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "transparent",
+        border: "none",
+        color: "#888",
+        fontSize: "16px",
+        cursor: "pointer",
+        borderRadius: "4px",
+        padding: 0,
+        WebkitAppRegion: "no-drag",
+        zIndex: 100,
+        transition: "background-color 0.15s, color 0.15s",
+    } as React.CSSProperties,
     progressIndicator: {
         display: "flex",
         alignItems: "center",
