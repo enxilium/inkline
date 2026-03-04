@@ -17,9 +17,7 @@ import { pathToFileURL } from "url";
 import { AppBuilder } from "./AppBuilder";
 import { resolveDependencies } from "./dependencies";
 import { fileSystemService } from "../@infrastructure/storage/FileSystemService";
-import {
-    setupService,
-} from "../@infrastructure/services/SetupService";
+import { setupService } from "../@infrastructure/services/SetupService";
 import {
     modelDownloadService,
     DownloadProgress,
