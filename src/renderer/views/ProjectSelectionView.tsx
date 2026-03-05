@@ -1,8 +1,11 @@
 import React from "react";
+import lottie from "lottie-web";
 import Typed from "typed.js";
 
+import lineOnceAnimation from "../../../assets/line-once.json";
+import lineLoopAnimation from "../../../assets/line-loop.json";
+
 import { Button } from "../components/ui/Button";
-import { InklineLogoLoading } from "../components/ui/InklineLogo";
 import { MoreVerticalIcon, RefreshCwIcon } from "../components/ui/Icons";
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
@@ -66,6 +69,8 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const targetProjectIdRef = React.useRef<string | null>(null);
     const welcomeTextRef = React.useRef<HTMLSpanElement>(null);
+    const underlineRef = React.useRef<HTMLDivElement>(null);
+    const introLottieRef = React.useRef<HTMLDivElement>(null);
 
     React.useEffect(() => {
         if (!isContentVisible || !welcomeTextRef.current) {
@@ -83,12 +88,48 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
             contentType: "null",
         });
 
+        let lottieInstance: ReturnType<typeof lottie.loadAnimation> | null =
+            null;
+
+        if (underlineRef.current) {
+            // Start the Lottie underline after the typing finishes
+            const typingDuration = 160 + "Welcome to Inkline.".length * 42;
+            const lottieTimer = window.setTimeout(() => {
+                if (!underlineRef.current) return;
+                lottieInstance = lottie.loadAnimation({
+                    container: underlineRef.current,
+                    renderer: "svg",
+                    loop: false,
+                    autoplay: true,
+                    animationData: lineOnceAnimation,
+                });
+            }, typingDuration);
+
+            return () => {
+                typed.destroy();
+                window.clearTimeout(lottieTimer);
+                lottieInstance?.destroy();
+            };
+        }
+
         return () => {
             typed.destroy();
         };
     }, [isContentVisible]);
 
     React.useEffect(() => {
+        let introLottieInstance: ReturnType<typeof lottie.loadAnimation> | null = null;
+
+        if (introLottieRef.current) {
+            introLottieInstance = lottie.loadAnimation({
+                container: introLottieRef.current,
+                renderer: 'svg',
+                loop: false,
+                autoplay: true,
+                animationData: lineLoopAnimation,
+            });
+        }
+
         // Smooth sequence:
         // 1) Draw logo centered
         // 2) Fly up + fade out
@@ -105,6 +146,7 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
         return () => {
             window.clearTimeout(flyTimer);
             window.clearTimeout(doneTimer);
+            introLottieInstance?.destroy();
         };
     }, []);
 
@@ -179,13 +221,10 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                     }
                     aria-hidden="true"
                 >
-                    <InklineLogoLoading
-                        className={
-                            "projectselect-intro-logo" +
-                            (introStep === "drawing" ? " is-drawing" : "")
-                        }
-                        width={220}
-                        height={52}
+                    <div
+                        ref={introLottieRef}
+                        className="projectselect-intro-logo"
+                        style={{ width: 220, height: 52 }}
                     />
                 </div>
             ) : null}
@@ -202,6 +241,10 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                         aria-label="Welcome to Inkline"
                     >
                         <span ref={welcomeTextRef} />
+                        <div
+                            ref={underlineRef}
+                            className="welcome-underline-lottie"
+                        />
                     </h2>
                     <p className="panel-subtitle">
                         What are we working on today?

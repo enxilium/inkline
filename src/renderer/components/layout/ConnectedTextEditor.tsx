@@ -5,7 +5,6 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { TextAlign } from "@tiptap/extension-text-align";
-import CommentExtension from "@sereneinserenade/tiptap-comment-extension";
 
 import { useAppStore } from "../../state/appStore";
 import { TextEditor } from "../workspace/TextEditor";
@@ -318,11 +317,6 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             });
         },
         extensions: [
-            CommentExtension.configure({
-                onCommentActivated: (commentId: string) => {
-                    setActiveCommentId(commentId ? commentId : null);
-                },
-            }),
             Color.configure({ types: ["textStyle"] }),
             TextStyle,
             FontFamily.configure({ types: ["textStyle"] }),

@@ -254,6 +254,7 @@ export const WorkspaceView: React.FC = () => {
                         <TimelineView />
                     )}
                 </div>
+                {!isChatOpen && <div className="workspace-binder-spacer" />}
                 <div className={chatContainerClass}>
                     {isChatOpen && (
                         <>
