@@ -103,8 +103,7 @@ const extractAIComments = (
         for (const mark of node.marks) {
             if (mark.type !== markType) continue;
 
-            const commentId = (mark.attrs as { commentId?: string })
-                ?.commentId;
+            const commentId = (mark.attrs as { commentId?: string })?.commentId;
             if (!commentId) continue;
 
             const pendingEdit = pendingEditsById[commentId];
@@ -117,8 +116,8 @@ const extractAIComments = (
             } else {
                 const isReplacement = pendingEdit.kind === "replacement";
                 const commentText = isReplacement
-                    ? (pendingEdit as PendingChapterReplacementEdit).comment ??
-                      ""
+                    ? ((pendingEdit as PendingChapterReplacementEdit).comment ??
+                      "")
                     : (pendingEdit as PendingChapterCommentEdit).comment;
 
                 byId.set(commentId, {
@@ -236,8 +235,8 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
             const chapterAI = buildChapterLevelAIComments(
                 chapterLevelAIComments,
             );
-            const chapterUser: UnifiedCommentEntry[] =
-                userChapterComments.map((c) => ({
+            const chapterUser: UnifiedCommentEntry[] = userChapterComments.map(
+                (c) => ({
                     id: c.id,
                     author: "user",
                     editKind: "comment",
@@ -247,7 +246,8 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
                     to: Infinity,
                     createdAt: c.createdAt,
                     isChapterLevel: true,
-                }));
+                }),
+            );
 
             const all = [...chapterAI, ...chapterUser, ...user, ...ai];
             // Sort: chapter-level first, then by document position.
@@ -268,12 +268,7 @@ export const CommentsSidebar: React.FC<CommentsSidebarProps> = ({
             editor.off("update", refresh);
             editor.off("selectionUpdate", refresh);
         };
-    }, [
-        editor,
-        pendingEditsById,
-        chapterLevelAIComments,
-        userChapterComments,
-    ]);
+    }, [editor, pendingEditsById, chapterLevelAIComments, userChapterComments]);
 
     // Auto-scroll to active comment card when cursor enters a highlight.
     React.useEffect(() => {
@@ -696,10 +691,7 @@ const CommentCard: React.FC<CommentCardProps> = ({
                         value={editText}
                         onChange={(e) => setEditText(e.target.value)}
                         onKeyDown={(e) => {
-                            if (
-                                e.key === "Enter" &&
-                                (e.ctrlKey || e.metaKey)
-                            ) {
+                            if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
                                 e.preventDefault();
                                 onSubmitEdit();
                             }

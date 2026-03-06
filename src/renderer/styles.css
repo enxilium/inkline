@@ -1256,8 +1256,6 @@ html {
     transform: translateY(0);
 }
 
-
-
 @keyframes projectSelectIntroFlyOut {
     from {
         opacity: 1;

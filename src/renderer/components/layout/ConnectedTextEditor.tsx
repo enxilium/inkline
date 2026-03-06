@@ -678,7 +678,8 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
     // Collect the pending edits relevant to this chapter for the sidebar.
     const chapterPendingEditsById = React.useMemo(() => {
-        if (kind !== "chapter" || !chapterBucket) return {} as Record<string, (typeof pendingEditsById)[string]>;
+        if (kind !== "chapter" || !chapterBucket)
+            return {} as Record<string, (typeof pendingEditsById)[string]>;
         const ids = new Set<string>();
         for (const c of chapterBucket.comments) ids.add(c.id);
         for (const r of chapterBucket.replacements) ids.add(r.id);
@@ -690,12 +691,18 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     }, [kind, chapterBucket, pendingEditsById]);
 
     // User chapter-level (un-anchored) comments — session-only.
-    const [userChapterComments, setUserChapterComments] = React.useState<UserChapterComment[]>([]);
+    const [userChapterComments, setUserChapterComments] = React.useState<
+        UserChapterComment[]
+    >([]);
 
     const addUserChapterComment = React.useCallback((text: string) => {
         setUserChapterComments((prev) => [
             ...prev,
-            { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() },
+            {
+                id: crypto.randomUUID(),
+                text,
+                createdAt: new Date().toISOString(),
+            },
         ]);
     }, []);
 
@@ -931,8 +938,12 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 editor={editor}
                 autosaveLabel={autosaveLabel}
                 autosaveClass={autosaveClass}
-                pendingEditsById={kind === "chapter" ? chapterPendingEditsById : undefined}
-                chapterLevelAIComments={kind === "chapter" ? chapterLevelAIComments : undefined}
+                pendingEditsById={
+                    kind === "chapter" ? chapterPendingEditsById : undefined
+                }
+                chapterLevelAIComments={
+                    kind === "chapter" ? chapterLevelAIComments : undefined
+                }
                 userChapterComments={userChapterComments}
                 onAddUserChapterComment={addUserChapterComment}
                 onRemoveUserChapterComment={removeUserChapterComment}

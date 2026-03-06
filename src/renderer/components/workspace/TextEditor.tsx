@@ -21,11 +21,11 @@ import {
 } from "../ui/Icons";
 import { LinkDialog } from "../dialogs/LinkDialog";
 import { LanguageToolPopup } from "./LanguageToolPopup";
-import {
-    CommentsSidebar,
-    type UserChapterComment,
-} from "./CommentsSidebar";
-import type { PendingChapterCommentEdit, PendingChapterEdit } from "../../state/appStore";
+import { CommentsSidebar, type UserChapterComment } from "./CommentsSidebar";
+import type {
+    PendingChapterCommentEdit,
+    PendingChapterEdit,
+} from "../../state/appStore";
 
 interface TextEditorProps {
     editor: Editor | null;
