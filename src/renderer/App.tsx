@@ -90,14 +90,15 @@ const App: React.FC = () => {
     }, [pendingEditsCount, stage]);
 
     React.useEffect(() => {
-        const isMac =
-            typeof navigator !== "undefined" &&
-            /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const ua =
+            typeof navigator !== "undefined" ? navigator.userAgent : "";
 
-        if (isMac) {
+        if (/Mac|iPhone|iPad|iPod/i.test(ua)) {
             document.documentElement.dataset.platform = "mac";
+        } else if (/Linux/i.test(ua)) {
+            document.documentElement.dataset.platform = "linux";
         } else {
-            delete document.documentElement.dataset.platform;
+            document.documentElement.dataset.platform = "windows";
         }
     }, []);
 
