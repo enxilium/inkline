@@ -55,6 +55,7 @@ const App: React.FC = () => {
         setProjectsError,
         createProject,
         deleteProject,
+        renameProject,
         openProject,
         returnToProjects,
         importAsset,
@@ -266,6 +267,15 @@ const App: React.FC = () => {
         [deleteProject],
     );
 
+    const handleRenameProject = React.useCallback(
+        (projectId: string, title: string) => {
+            renameProject(projectId, title).catch(() => {
+                /* noop */
+            });
+        },
+        [renameProject],
+    );
+
     const handleUploadCover = React.useCallback(
         async (projectId: string, file: File) => {
             const arrayBuffer = await file.arrayBuffer();
@@ -310,6 +320,7 @@ const App: React.FC = () => {
                         onCreateProject={handleCreateProject}
                         onOpenProject={handleOpenProject}
                         onDeleteProject={handleDeleteProject}
+                        onRenameProject={handleRenameProject}
                         onUploadCover={handleUploadCover}
                     />
                 );
