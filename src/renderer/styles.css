@@ -120,7 +120,8 @@ html[data-platform="mac"] {
     line-height: 0;
 }
 
-.titlebar-logo svg {
+.titlebar-logo svg,
+.titlebar-logo img {
     cursor: text;
     height: 14px;
     width: auto;
@@ -774,6 +775,31 @@ html {
     gap: 0.6rem;
     flex-wrap: wrap;
 }
+
+.project-rename-input {
+    width: 100%;
+    font-size: 0.8rem;
+    font-weight: 400;
+    font-family: inherit;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid var(--accent);
+    border-radius: 4px;
+    color: inherit;
+    padding: 2px 4px;
+    outline: none;
+    box-sizing: border-box;
+}
+
+
+.loading-view {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: var(--surface);
+}
+
 
 .user-chip {
     background: rgba(255, 255, 255, 0.08);

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { InklineLogo } from "../ui/InklineLogo";
+import strokeLogo from "../../../../assets/stroke.png";
 import {
     BinderChapterIcon,
     BinderOrganizationIcon,
@@ -125,7 +125,7 @@ export const Titlebar: React.FC = () => {
             <div className="titlebar-content">
                 <div className="titlebar-left">
                     <div className="titlebar-logo" aria-hidden="true">
-                        <InklineLogo />
+                        <img src={strokeLogo} alt="Inkline" />
                     </div>
                     {stage === "workspace" ? <TitlebarMenuBar /> : null}
                 </div>
