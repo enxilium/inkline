@@ -32,16 +32,41 @@ function get7zaPath(): string {
  * Extract an archive using the bundled 7za binary.
  * Equivalent to 7zip-min's `unpack()` but avoids the library's
  * webpack-incompatible `__dirname` resolution.
+ *
+ * Uses `-bsp1` to direct progress output to stdout.  7za emits lines
+ * like "  45% 12 - some/file.txt" which we parse for percentage values.
  */
-function unpack(archivePath: string, destPath: string): Promise<string> {
-    return new Promise((resolve, reject) => {
-        const bin = get7zaPath();
-        const args = ["x", archivePath, `-o${destPath}`, "-y"];
-        const proc = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
+function unpack(
+    archivePath: string,
+    destPath: string,
+    onProgress?: (percentage: number) => void,
+): { promise: Promise<string>; process: ReturnType<typeof spawn> } {
+    const bin = get7zaPath();
+    const args = ["x", archivePath, `-o${destPath}`, "-y", "-bsp1"];
+    const proc = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
 
+    const promise = new Promise<string>((resolve, reject) => {
         let stdout = "";
         let stderr = "";
-        proc.stdout.on("data", (d: Buffer) => (stdout += d.toString()));
+
+        proc.stdout.on("data", (d: Buffer) => {
+            const chunk = d.toString();
+            stdout += chunk;
+
+            if (onProgress) {
+                // 7za progress lines look like: " 45% 12 - path/to/file"
+                // or just " 45%" on a line by itself. We grab the last
+                // percentage value in the chunk.
+                const matches = chunk.match(/(\d+)%/g);
+                if (matches && matches.length > 0) {
+                    const last = matches[matches.length - 1];
+                    const pct = parseInt(last.replace("%", ""), 10);
+                    if (!isNaN(pct)) {
+                        onProgress(pct);
+                    }
+                }
+            }
+        });
         proc.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
 
         proc.on("error", (err) => reject(err));
@@ -56,6 +81,8 @@ function unpack(archivePath: string, destPath: string): Promise<string> {
             }
         });
     });
+
+    return { promise, process: proc };
 }
 
 export interface DownloadProgress {
@@ -375,17 +402,31 @@ export class ModelDownloadService extends EventEmitter {
     private async extract7z(
         archivePath: string,
         destPath: string,
-        _onProgress: (progress: DownloadProgress) => void,
+        onProgress: (progress: DownloadProgress) => void,
         downloadType: "comfyui" | "languagetool" = "comfyui",
     ): Promise<void> {
+        const { promise, process: proc } = unpack(
+            archivePath,
+            destPath,
+            (percentage) => {
+                onProgress({
+                    downloadType,
+                    downloadedBytes: 0,
+                    totalBytes: 0,
+                    percentage,
+                    status: "extracting",
+                });
+            },
+        );
+
         this.activeExtractions.set(downloadType, {
             kill: () => {
-                // Post-completion cleanup only.
+                proc.kill();
             },
         });
 
         try {
-            await unpack(archivePath, destPath);
+            await promise;
         } catch (err) {
             throw new Error(
                 `7z extraction failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -669,7 +710,18 @@ export class ModelDownloadService extends EventEmitter {
             status: "extracting",
         });
 
-        await this.extractZip(jreZipPath, this.serverBasePath);
+        await this.extractZip(
+            jreZipPath,
+            this.serverBasePath,
+            "languagetool",
+            (p) => {
+                // Scale extraction 0-100% to overall 40-50%
+                onProgress({
+                    ...p,
+                    percentage: 40 + Math.round(p.percentage * 0.1),
+                });
+            },
+        );
 
         // Rename extracted JRE folder to java_embeded
         // The Adoptium zip extracts to something like "jdk-21.0.5+11-jre"
@@ -725,7 +777,18 @@ export class ModelDownloadService extends EventEmitter {
             status: "extracting",
         });
 
-        await this.extractZip(ltZipPath, this.serverBasePath);
+        await this.extractZip(
+            ltZipPath,
+            this.serverBasePath,
+            "languagetool",
+            (p) => {
+                // Scale extraction 0-100% to overall 90-100%
+                onProgress({
+                    ...p,
+                    percentage: 90 + Math.round(p.percentage * 0.1),
+                });
+            },
+        );
 
         // Rename extracted LanguageTool folder to "language"
         // The zip extracts to something like "LanguageTool-6.6-SNAPSHOT"
@@ -793,15 +856,32 @@ export class ModelDownloadService extends EventEmitter {
         archivePath: string,
         destPath: string,
         downloadType: "comfyui" | "languagetool" = "languagetool",
+        onProgress?: (progress: DownloadProgress) => void,
     ): Promise<void> {
+        const { promise, process: proc } = unpack(
+            archivePath,
+            destPath,
+            onProgress
+                ? (percentage) => {
+                      onProgress({
+                          downloadType,
+                          downloadedBytes: 0,
+                          totalBytes: 0,
+                          percentage,
+                          status: "extracting",
+                      });
+                  }
+                : undefined,
+        );
+
         this.activeExtractions.set(downloadType, {
             kill: () => {
-                // Post-completion cleanup only.
+                proc.kill();
             },
         });
 
         try {
-            await unpack(archivePath, destPath);
+            await promise;
         } catch (err) {
             throw new Error(
                 `ZIP extraction failed: ${err instanceof Error ? err.message : String(err)}`,

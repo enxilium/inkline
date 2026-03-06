@@ -47,16 +47,6 @@ export const WorkspaceView: React.FC = () => {
                 }
             } else if (command === "rename") {
                 setRenamingDocument({ kind: data.kind, id: data.id });
-            } else if (command === "add-comment") {
-                // Dispatch to the active Tiptap editor via a custom DOM event.
-                const tiptapEl = document.querySelector(".editor-body .tiptap");
-                if (tiptapEl) {
-                    tiptapEl.dispatchEvent(
-                        new CustomEvent("inline-comment-request", {
-                            bubbles: true,
-                        }),
-                    );
-                }
             }
         });
         return () => {

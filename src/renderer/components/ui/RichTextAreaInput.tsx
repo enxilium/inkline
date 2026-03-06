@@ -1,6 +1,7 @@
 import React, {
     useEffect,
     useRef,
+    useMemo,
     forwardRef,
     useImperativeHandle,
 } from "react";
@@ -10,6 +11,8 @@ import {
     DocumentReference,
     createDocumentReferenceSuggestion,
 } from "../../tiptap/documentReference";
+import { LanguageTool } from "../../tiptap/languageTool";
+import { LanguageToolPopup } from "../workspace/LanguageToolPopup";
 import type { DocumentRef } from "./ListInput";
 import classNames from "clsx";
 
@@ -25,6 +28,7 @@ export interface RichTextAreaInputProps {
     onKeyDown?: (e: KeyboardEvent) => void;
     autoFocus?: boolean;
     singleLine?: boolean;
+    enableGrammarCheck?: boolean;
 }
 
 export interface RichTextAreaInputRef {
@@ -49,14 +53,21 @@ export const RichTextAreaInput = forwardRef<
             onKeyDown,
             autoFocus,
             singleLine,
+            enableGrammarCheck = true,
         },
-        ref
+        ref,
     ) => {
         // Keep a ref to availableDocuments so the extension can access the latest list
         const docsRef = useRef(availableDocuments);
         useEffect(() => {
             docsRef.current = availableDocuments;
         }, [availableDocuments]);
+
+        // Stable document ID for the LanguageTool ignored-suggestions DB
+        const documentId = useMemo(
+            () => id || `rich-textarea-${Math.random().toString(36).slice(2)}`,
+            [id],
+        );
 
         const editor = useEditor({
             extensions: [
@@ -67,6 +78,15 @@ export const RichTextAreaInput = forwardRef<
                         onReferenceClick,
                     }),
                 }),
+                ...(enableGrammarCheck
+                    ? [
+                          LanguageTool.configure({
+                              language: "auto",
+                              automaticMode: true,
+                              documentId,
+                          }),
+                      ]
+                    : []),
             ],
             content: value,
             autofocus: autoFocus,
@@ -116,6 +136,9 @@ export const RichTextAreaInput = forwardRef<
         return (
             <div className="rich-textarea-wrapper">
                 <EditorContent editor={editor} />
+                {enableGrammarCheck && editor && (
+                    <LanguageToolPopup editor={editor} />
+                )}
                 {editor?.isEmpty && placeholder && (
                     <div className="rich-textarea-placeholder">
                         {placeholder}
@@ -123,7 +146,7 @@ export const RichTextAreaInput = forwardRef<
                 )}
             </div>
         );
-    }
+    },
 );
 
 RichTextAreaInput.displayName = "RichTextAreaInput";

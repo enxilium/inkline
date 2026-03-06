@@ -21,13 +21,31 @@ import {
 } from "../ui/Icons";
 import { LinkDialog } from "../dialogs/LinkDialog";
 import { LanguageToolPopup } from "./LanguageToolPopup";
-import { CommentsSidebar } from "./CommentsSidebar";
+import {
+    CommentsSidebar,
+    type UserChapterComment,
+} from "./CommentsSidebar";
+import type { PendingChapterCommentEdit, PendingChapterEdit } from "../../state/appStore";
 
 interface TextEditorProps {
     editor: Editor | null;
     autosaveLabel?: string;
     autosaveClass?: string;
     children?: React.ReactNode;
+    /** AI pending edits (keyed by id) for the current chapter. */
+    pendingEditsById?: Record<string, PendingChapterEdit>;
+    /** Chapter-level AI comments (no word range). */
+    chapterLevelAIComments?: PendingChapterCommentEdit[];
+    /** User chapter-level notes. */
+    userChapterComments?: UserChapterComment[];
+    onAddUserChapterComment?: (text: string) => void;
+    onRemoveUserChapterComment?: (id: string) => void;
+    /** Called when an AI edit should be dismissed. */
+    onDismissAIEdit?: (editId: string) => void;
+    /** Called when an AI replacement should be accepted. */
+    onAcceptReplacement?: (editId: string, replacementText: string) => void;
+    /** The comment mark id the cursor is currently inside. */
+    activeCommentId?: string | null;
 }
 
 const fontOptions = [
@@ -50,7 +68,18 @@ const fontOptions = [
     { label: "IBM Plex Mono", value: "'IBM Plex Mono', monospace" },
 ];
 
-export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
+export const TextEditor: React.FC<TextEditorProps> = ({
+    editor,
+    children,
+    pendingEditsById = {},
+    chapterLevelAIComments = [],
+    userChapterComments = [],
+    onAddUserChapterComment,
+    onRemoveUserChapterComment,
+    onDismissAIEdit,
+    onAcceptReplacement,
+    activeCommentId = null,
+}) => {
     const DEFAULT_FALLBACK_COLOR = "#f6f7fb";
     const [themeTextColor, setThemeTextColor] = React.useState(
         DEFAULT_FALLBACK_COLOR,
@@ -107,7 +136,10 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
     const [pendingCommentRequest, setPendingCommentRequest] =
         React.useState(false);
 
-    // Listen for inline-comment-request events (keyboard shortcut / context menu).
+    // Track whether this editor instance triggered the most recent context menu.
+    const didTriggerContextMenuRef = React.useRef(false);
+
+    // Listen for inline-comment-request events (keyboard shortcut).
     React.useEffect(() => {
         if (!editor) return;
 
@@ -124,6 +156,27 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                 "inline-comment-request",
                 handleCommentRequest,
             );
+        };
+    }, [editor]);
+
+    // Handle "add-comment" context menu command via IPC.
+    // Only the editor instance that fired the context menu responds.
+    React.useEffect(() => {
+        if (!editor) return;
+
+        const removeListener = window.ui.onContextMenuCommand(
+            (payload: { command: string; data: any }) => {
+                if (payload.command !== "add-comment") return;
+                if (!didTriggerContextMenuRef.current) return;
+                didTriggerContextMenuRef.current = false;
+
+                setIsCommentsSidebarOpen(true);
+                setPendingCommentRequest(true);
+            },
+        );
+
+        return () => {
+            removeListener();
         };
     }, [editor]);
 
@@ -655,6 +708,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                                     style={{ position: "relative" }}
                                     onContextMenu={(e) => {
                                         e.preventDefault();
+                                        didTriggerContextMenuRef.current = true;
                                         window.ui.showContextMenu("editor");
                                     }}
                                 >
@@ -680,6 +734,20 @@ export const TextEditor: React.FC<TextEditorProps> = ({ editor, children }) => {
                             onCommentRequestHandled={() =>
                                 setPendingCommentRequest(false)
                             }
+                            pendingEditsById={pendingEditsById}
+                            chapterLevelAIComments={chapterLevelAIComments}
+                            userChapterComments={userChapterComments}
+                            onAddUserChapterComment={
+                                onAddUserChapterComment ?? (() => {})
+                            }
+                            onRemoveUserChapterComment={
+                                onRemoveUserChapterComment ?? (() => {})
+                            }
+                            onDismissAIEdit={onDismissAIEdit ?? (() => {})}
+                            onAcceptReplacement={
+                                onAcceptReplacement ?? (() => {})
+                            }
+                            activeCommentId={activeCommentId}
                         />
                     ) : null}
                 </div>

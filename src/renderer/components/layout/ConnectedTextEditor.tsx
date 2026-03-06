@@ -11,6 +11,7 @@ import { TextEditor } from "../workspace/TextEditor";
 import { SearchAndReplace } from "../../tiptap/searchAndReplace";
 import { LanguageTool } from "../../tiptap/languageTool";
 import { InlineComment } from "../../tiptap/inlineComment";
+import CommentExtension from "../../tiptap/commentExtension";
 import {
     DocumentReference,
     createDocumentReferenceSuggestion,
@@ -25,8 +26,7 @@ import {
     stripCommentMarksFromTiptapJSON,
 } from "../../tiptap/comments";
 import { countWords } from "../../utils/textStats";
-import { Button } from "../ui/Button";
-import { CheckIcon, CloseIcon } from "../ui/Icons";
+import type { UserChapterComment } from "../workspace/CommentsSidebar";
 
 const AUTOSAVE_DELAY_MS = 1200;
 
@@ -352,6 +352,11 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 : []),
             TabIndentation,
             AlignmentBackspace,
+            CommentExtension.configure({
+                onCommentActivated: (commentId: string) => {
+                    setActiveCommentId(commentId ? commentId : null);
+                },
+            }),
             InlineComment,
         ],
         content: "<p></p>", // Initial empty, will be populated by useEffect
@@ -365,6 +370,13 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             // automatically as the user types near the bottom.
             scrollMargin: { top: 80, bottom: 400, left: 0, right: 0 },
             scrollThreshold: { top: 80, bottom: 400, left: 0, right: 0 },
+            clipboardTextSerializer: (content) => {
+                return content.content.textBetween(
+                    0,
+                    content.content.size,
+                    "\n",
+                );
+            },
         },
     });
 
@@ -660,44 +672,36 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
     const chapterBucket =
         kind === "chapter" ? pendingEditsByChapterId[documentId] : null;
-    const chapterLevelComments = (chapterBucket?.comments ?? []).filter(
+    const chapterLevelAIComments = (chapterBucket?.comments ?? []).filter(
         (c) => !c.wordNumberStart || !c.wordNumberEnd,
     );
 
-    const activeEdit =
-        activeCommentId && pendingEditsById[activeCommentId]
-            ? pendingEditsById[activeCommentId]
-            : null;
-
-    const bubblePosition = React.useMemo(() => {
-        if (!editor || !activeEdit) {
-            return null;
+    // Collect the pending edits relevant to this chapter for the sidebar.
+    const chapterPendingEditsById = React.useMemo(() => {
+        if (kind !== "chapter" || !chapterBucket) return {} as Record<string, (typeof pendingEditsById)[string]>;
+        const ids = new Set<string>();
+        for (const c of chapterBucket.comments) ids.add(c.id);
+        for (const r of chapterBucket.replacements) ids.add(r.id);
+        const result: Record<string, (typeof pendingEditsById)[string]> = {};
+        for (const id of ids) {
+            if (pendingEditsById[id]) result[id] = pendingEditsById[id];
         }
+        return result;
+    }, [kind, chapterBucket, pendingEditsById]);
 
-        try {
-            const coords = editor.view.coordsAtPos(editor.state.selection.from);
-            const scrollContainer = editor.view.dom.closest(".editor-body");
+    // User chapter-level (un-anchored) comments — session-only.
+    const [userChapterComments, setUserChapterComments] = React.useState<UserChapterComment[]>([]);
 
-            if (!scrollContainer) {
-                return null;
-            }
+    const addUserChapterComment = React.useCallback((text: string) => {
+        setUserChapterComments((prev) => [
+            ...prev,
+            { id: crypto.randomUUID(), text, createdAt: new Date().toISOString() },
+        ]);
+    }, []);
 
-            const containerRect = scrollContainer.getBoundingClientRect();
-            const width = 320;
-
-            // Calculate position relative to the editor body
-            const top = coords.bottom - containerRect.top + 8;
-            const left = coords.left - containerRect.left;
-
-            // Ensure it doesn't overflow the right edge of the container
-            const maxLeft = scrollContainer.scrollWidth - width - 16;
-            const adjustedLeft = Math.min(left, maxLeft);
-
-            return { left: adjustedLeft, top, width };
-        } catch {
-            return null;
-        }
-    }, [editor, activeEdit]);
+    const removeUserChapterComment = React.useCallback((id: string) => {
+        setUserChapterComments((prev) => prev.filter((c) => c.id !== id));
+    }, []);
 
     const jumpToNextHighlightedEdit = React.useCallback(
         (afterPos: number) => {
@@ -923,118 +927,19 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
     return (
         <div className="connected-editor">
-            {kind === "chapter" && chapterLevelComments.length > 0 ? (
-                <div className="chapter-edits-banner">
-                    <div className="chapter-edits-banner-title">
-                        Pending chapter comments
-                    </div>
-                    <div className="chapter-edits-banner-list">
-                        {chapterLevelComments.map((comment) => (
-                            <div
-                                key={comment.id}
-                                className="chapter-edits-banner-item"
-                            >
-                                <div className="chapter-edits-banner-text">
-                                    {comment.comment}
-                                </div>
-                                <Button
-                                    variant="ghost"
-                                    onClick={() => dismissComment(comment.id)}
-                                >
-                                    Dismiss
-                                </Button>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            ) : null}
-
             <TextEditor
                 editor={editor}
                 autosaveLabel={autosaveLabel}
                 autosaveClass={autosaveClass}
-            >
-                {kind === "chapter" && activeEdit && bubblePosition ? (
-                    <div
-                        className="chapter-edit-bubble"
-                        style={{
-                            position: "absolute",
-                            top: bubblePosition.top,
-                            left: bubblePosition.left,
-                            width: bubblePosition.width,
-                        }}
-                    >
-                        {activeEdit.kind === "comment" ? (
-                            <>
-                                <div className="chapter-edit-bubble-text">
-                                    {activeEdit.comment}
-                                </div>
-                                <div className="chapter-edit-bubble-actions">
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() =>
-                                            dismissComment(activeEdit.id)
-                                        }
-                                    >
-                                        Dismiss
-                                    </Button>
-                                </div>
-                            </>
-                        ) : (
-                            <>
-                                <div className="chapter-edit-bubble-replace">
-                                    Replace{" "}
-                                    <span className="chapter-edit-bubble-quote">
-                                        {activeEdit.originalText}
-                                    </span>{" "}
-                                    with{" "}
-                                    <span className="chapter-edit-bubble-quote">
-                                        {sanitizeReplacementText(
-                                            activeEdit.replacementText,
-                                        ) || activeEdit.replacementText}
-                                    </span>
-                                </div>
-
-                                {activeEdit.comment ? (
-                                    <div className="chapter-edit-bubble-comment">
-                                        <div className="chapter-edit-bubble-comment-label">
-                                            Comment (optional)
-                                        </div>
-                                        <div className="chapter-edit-bubble-comment-text">
-                                            {activeEdit.comment}
-                                        </div>
-                                    </div>
-                                ) : null}
-                                <div className="chapter-edit-bubble-actions">
-                                    <Button
-                                        variant="primary"
-                                        size="sm"
-                                        onClick={() =>
-                                            acceptReplacement(
-                                                activeEdit.id,
-                                                activeEdit.replacementText,
-                                            )
-                                        }
-                                    >
-                                        <CheckIcon size={16} />
-                                        Accept
-                                    </Button>
-                                    <Button
-                                        variant="secondary"
-                                        size="sm"
-                                        onClick={() =>
-                                            dismissComment(activeEdit.id)
-                                        }
-                                    >
-                                        <CloseIcon size={16} />
-                                        Reject
-                                    </Button>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                ) : null}
-            </TextEditor>
+                pendingEditsById={kind === "chapter" ? chapterPendingEditsById : undefined}
+                chapterLevelAIComments={kind === "chapter" ? chapterLevelAIComments : undefined}
+                userChapterComments={userChapterComments}
+                onAddUserChapterComment={addUserChapterComment}
+                onRemoveUserChapterComment={removeUserChapterComment}
+                onDismissAIEdit={dismissComment}
+                onAcceptReplacement={acceptReplacement}
+                activeCommentId={activeCommentId}
+            />
         </div>
     );
 };

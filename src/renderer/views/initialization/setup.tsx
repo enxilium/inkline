@@ -543,13 +543,6 @@ const DownloadsStep: React.FC<{
 
             {downloadStarted && (
                 <div style={styles.buttonRow}>
-                    <button
-                        style={styles.secondaryButton}
-                        onClick={onBack}
-                        disabled={isActivelyDownloading}
-                    >
-                        Back
-                    </button>
                     {isActivelyDownloading && (
                         <button
                             style={styles.dangerButton}
@@ -560,6 +553,12 @@ const DownloadsStep: React.FC<{
                     )}
                     {wasCancelled && (
                         <>
+                            <button
+                                style={styles.secondaryButton}
+                                onClick={onBack}
+                            >
+                                Back
+                            </button>
                             <button
                                 style={styles.secondaryButton}
                                 onClick={startDownloads}
@@ -574,13 +573,21 @@ const DownloadsStep: React.FC<{
                             </button>
                         </>
                     )}
-                    {hasError && (
-                        <button
-                            style={styles.primaryButton}
-                            onClick={startDownloads}
-                        >
-                            Retry
-                        </button>
+                    {hasError && !wasCancelled && (
+                        <>
+                            <button
+                                style={styles.secondaryButton}
+                                onClick={onBack}
+                            >
+                                Back
+                            </button>
+                            <button
+                                style={styles.primaryButton}
+                                onClick={startDownloads}
+                            >
+                                Retry
+                            </button>
+                        </>
                     )}
                     {allDownloadsComplete && (
                         <button style={styles.primaryButton} onClick={onNext}>
@@ -1176,7 +1183,8 @@ const styles: Record<string, React.CSSProperties> = {
         backgroundColor: "#1a1b1e",
         padding: "24px",
         position: "relative",
-    },
+        WebkitAppRegion: "drag",
+    } as React.CSSProperties,
     closeButton: {
         position: "absolute",
         top: "8px",
@@ -1230,7 +1238,8 @@ const styles: Record<string, React.CSSProperties> = {
         alignItems: "center",
         justifyContent: "center",
         overflow: "auto",
-    },
+        WebkitAppRegion: "no-drag",
+    } as React.CSSProperties,
     stepContainer: {
         maxWidth: "500px",
         width: "100%",
