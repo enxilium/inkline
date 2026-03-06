@@ -177,7 +177,7 @@ const createSetupWindow = (): Promise<void> => {
             frame: false,
             resizable: false,
             center: true,
-            backgroundColor: "#1a1b1e",
+            backgroundColor: "#222324",
             webPreferences: {
                 nodeIntegration: false,
                 contextIsolation: true,
