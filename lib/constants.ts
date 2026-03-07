@@ -49,13 +49,13 @@ export const SOCIAL_LINKS = {
 export const TEAM = [
     {
         name: "enxilium",
-        role: "Lead Developer",
+        role: "Founder & Lead Developer",
         github: "https://github.com/enxilium",
         discord: "enxil.",
     },
     {
         name: "sukdip",
-        role: "Co-creator",
+        role: "Co-Founder & Lead Designer",
         github: "https://github.com/sukdippa",
         discord: "sukdip",
     },

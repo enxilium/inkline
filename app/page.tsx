@@ -9,6 +9,7 @@ import {
     Github,
     Download,
     Check,
+    ExternalLink,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Badge } from "@/components/ui/Badge";
@@ -121,6 +122,15 @@ export default function Home() {
                             >
                                 Explore Features
                                 <ArrowRight className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                href="https://jacemu.xyz"
+                                variant="ghost"
+                                size="lg"
+                                external
+                            >
+                                See all my other projects
+                                <ExternalLink className="h-4 w-4" />
                             </Button>
                         </div>
                     </FadeIn>
