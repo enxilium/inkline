@@ -22,11 +22,14 @@ type ProjectSelectionViewProps = {
     error: string | null;
     selectionError: string | null;
     openingProjectId: string | null;
+    isImporting: boolean;
+    importProgress: number;
     onRefresh: () => void;
     onCreateProject: (title: string) => Promise<void> | void;
     onOpenProject: (project: ProjectSummary) => void;
     onDeleteProject: (projectId: string) => void;
     onUploadCover: (projectId: string, file: File) => Promise<void> | void;
+    onImportProject: () => void;
 };
 
 const formatTimestamp = (value: Date | string | number): string => {
@@ -51,7 +54,10 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     onOpenProject,
     onDeleteProject,
     onUploadCover,
+    onImportProject,
     projectCovers,
+    isImporting,
+    importProgress,
 }) => {
     const INTRO_DRAW_MS = 1500;
     const INTRO_FLY_MS = 900;
@@ -118,12 +124,14 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     }, [isContentVisible]);
 
     React.useEffect(() => {
-        let introLottieInstance: ReturnType<typeof lottie.loadAnimation> | null = null;
+        let introLottieInstance: ReturnType<
+            typeof lottie.loadAnimation
+        > | null = null;
 
         if (introLottieRef.current) {
             introLottieInstance = lottie.loadAnimation({
                 container: introLottieRef.current,
-                renderer: 'svg',
+                renderer: "svg",
                 loop: false,
                 autoplay: true,
                 animationData: lineLoopAnimation,
@@ -177,7 +185,7 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
             setDraftTitle("");
         } catch (submitError) {
             setLocalError(
-                (submitError as Error)?.message ?? "Unable to create project."
+                (submitError as Error)?.message ?? "Unable to create project.",
             );
         } finally {
             setIsSubmitting(false);
@@ -185,7 +193,7 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     };
 
     const handleFileChange = async (
-        event: React.ChangeEvent<HTMLInputElement>
+        event: React.ChangeEvent<HTMLInputElement>,
     ) => {
         const file = event.target.files?.[0];
         const projectId = targetProjectIdRef.current;
@@ -290,7 +298,30 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                 {isSubmitting ? "Creating…" : "Create"}
                             </Button>
                         </form>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={onImportProject}
+                            disabled={isImporting}
+                            title="Import from EPUB"
+                        >
+                            {isImporting
+                                ? "Importing\u2026"
+                                : "Import Existing"}
+                        </Button>
                     </div>
+
+                    {isImporting ? (
+                        <div className="import-progress-bar">
+                            <div
+                                className="import-progress-fill"
+                                style={{ width: `${importProgress}%` }}
+                            />
+                            <span className="import-progress-label">
+                                Importing\u2026 {Math.round(importProgress)}%
+                            </span>
+                        </div>
+                    ) : null}
                     {error ? (
                         <span className="card-hint is-error">{error}</span>
                     ) : null}
@@ -318,7 +349,7 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                             setOpenMenuProjectId(
                                                 openMenuProjectId === project.id
                                                     ? null
-                                                    : project.id
+                                                    : project.id,
                                             );
                                         }}
                                         title="Project Options"
@@ -337,7 +368,7 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                                     setOpenMenuProjectId(null);
                                                     // onAddCover(project.id);
                                                     window.alert(
-                                                        "Rename not implemented yet."
+                                                        "Rename not implemented yet.",
                                                     );
                                                 }}
                                             >
@@ -360,11 +391,11 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                                     setOpenMenuProjectId(null);
                                                     if (
                                                         window.confirm(
-                                                            `Are you sure you want to delete "${project.title}"? This cannot be undone.`
+                                                            `Are you sure you want to delete "${project.title}"? This cannot be undone.`,
                                                         )
                                                     ) {
                                                         onDeleteProject(
-                                                            project.id
+                                                            project.id,
                                                         );
                                                     }
                                                 }}

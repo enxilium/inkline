@@ -16,6 +16,7 @@ import { GeminiAITextService } from "../@infrastructure/ai/GeminiAITextService";
 import { ComfyAssetGenerationService } from "../@infrastructure/ai/ComfyAssetGenerationService";
 import { PlaylistGenerationService } from "../@infrastructure/ai/PlaylistGenerationService";
 import { ExportService } from "../@infrastructure/ai/ExportService";
+import { EpubImportService } from "../@infrastructure/services/EpubImportService";
 
 import { FileSystemProjectRepository } from "../@infrastructure/db/filesystem/FileSystemProjectRepository";
 import { OfflineFirstProjectRepository } from "../@infrastructure/db/offline/OfflineFirstProjectRepository";
@@ -41,49 +42,49 @@ export function resolveDependencies(): AppBuilderDependencies {
     const fsProjectRepo = new FileSystemProjectRepository();
     const projectRepository = new OfflineFirstProjectRepository(
         supabaseProjectRepo,
-        fsProjectRepo
+        fsProjectRepo,
     );
 
     const supabaseChapterRepo = new SupabaseChapterRepository();
     const fsChapterRepo = new FileSystemChapterRepository();
     const chapterRepository = new OfflineFirstChapterRepository(
         supabaseChapterRepo,
-        fsChapterRepo
+        fsChapterRepo,
     );
 
     const supabaseCharacterRepo = new SupabaseCharacterRepository();
     const fsCharacterRepo = new FileSystemCharacterRepository();
     const characterRepository = new OfflineFirstCharacterRepository(
         supabaseCharacterRepo,
-        fsCharacterRepo
+        fsCharacterRepo,
     );
 
     const supabaseLocationRepo = new SupabaseLocationRepository();
     const fsLocationRepo = new FileSystemLocationRepository();
     const locationRepository = new OfflineFirstLocationRepository(
         supabaseLocationRepo,
-        fsLocationRepo
+        fsLocationRepo,
     );
 
     const supabaseOrganizationRepo = new SupabaseOrganizationRepository();
     const fsOrganizationRepo = new FileSystemOrganizationRepository();
     const organizationRepository = new OfflineFirstOrganizationRepository(
         supabaseOrganizationRepo,
-        fsOrganizationRepo
+        fsOrganizationRepo,
     );
 
     const supabaseScrapNoteRepo = new SupabaseScrapNoteRepository();
     const fsScrapNoteRepo = new FileSystemScrapNoteRepository();
     const scrapNoteRepository = new OfflineFirstScrapNoteRepository(
         supabaseScrapNoteRepo,
-        fsScrapNoteRepo
+        fsScrapNoteRepo,
     );
 
     const supabaseAssetRepo = new SupabaseAssetRepository();
     const fsAssetRepo = new FileSystemAssetRepository();
     const assetRepository = new OfflineFirstAssetRepository(
         supabaseAssetRepo,
-        fsAssetRepo
+        fsAssetRepo,
     );
 
     const userRepository = new SupabaseUserRepository();
@@ -98,7 +99,7 @@ export function resolveDependencies(): AppBuilderDependencies {
         characterRepository,
         locationRepository,
         organizationRepository,
-        scrapNoteRepository
+        scrapNoteRepository,
     );
     const comfyAssetGenerationService = new ComfyAssetGenerationService(
         sessionStore,
@@ -106,19 +107,21 @@ export function resolveDependencies(): AppBuilderDependencies {
         characterRepository,
         locationRepository,
         organizationRepository,
-        scrapNoteRepository
+        scrapNoteRepository,
     );
     const audioGenerationService = comfyAssetGenerationService;
     const imageGenerationService = comfyAssetGenerationService;
 
     const playlistGenerationService = new PlaylistGenerationService(
         sessionStore,
-        locationRepository
+        locationRepository,
     );
     const exportService = new ExportService(
         projectRepository,
-        chapterRepository
+        chapterRepository,
     );
+
+    const epubImportService = new EpubImportService();
 
     const supabaseDeletionLogRepo = new SupabaseDeletionLogRepository();
 
@@ -140,7 +143,7 @@ export function resolveDependencies(): AppBuilderDependencies {
         fsScrapNoteRepo,
         supabaseAssetRepo,
         fsAssetRepo,
-        supabaseDeletionLogRepo
+        supabaseDeletionLogRepo,
     );
 
     return {
@@ -162,6 +165,7 @@ export function resolveDependencies(): AppBuilderDependencies {
             audioGeneration: audioGenerationService,
             auth: authService,
             export: exportService,
+            epubImport: epubImportService,
             imageGeneration: imageGenerationService,
             playlistGeneration: playlistGenerationService,
             storage: storageService,

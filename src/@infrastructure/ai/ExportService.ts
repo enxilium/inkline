@@ -138,6 +138,14 @@ function renderNode(node: TiptapNode): string {
         case "horizontalRule":
             return "<hr/>\n";
 
+        case "image": {
+            const src = (node.attrs?.src as string) || "";
+            const alt = (node.attrs?.alt as string) || "";
+            const title = (node.attrs?.title as string) || "";
+            const titleAttr = title ? ` title="${escapeAttr(title)}"` : "";
+            return `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"${titleAttr}/>`;
+        }
+
         case "text":
             return renderMarks(node.text || "", node.marks);
 

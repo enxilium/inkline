@@ -42,6 +42,7 @@ import type { ExportManuscriptController } from "./project/ExportManuscriptContr
 import type { LoadProjectListController } from "./project/LoadProjectListController";
 import type { OpenProjectController } from "./project/OpenProjectController";
 import type { ReorderProjectItemsController } from "./project/ReorderProjectItemsController";
+import type { ImportProjectController } from "./project/ImportProjectController";
 import type { CreateCharacterController } from "./world/CreateCharacterController";
 import type { CreateLocationController } from "./world/CreateLocationController";
 import type { CreateOrganizationController } from "./world/CreateOrganizationController";
@@ -120,6 +121,7 @@ export interface ControllerInstanceMap {
         createProject: CreateProjectController;
         deleteProject: DeleteProjectController;
         exportManuscript: ExportManuscriptController;
+        importProject: ImportProjectController;
         loadProjectList: LoadProjectListController;
         openProject: OpenProjectController;
         reorderProjectItems: ReorderProjectItemsController;
@@ -219,6 +221,7 @@ export const controllerChannels: ControllerChannelMap = {
         createProject: "project:createProject",
         deleteProject: "project:deleteProject",
         exportManuscript: "project:exportManuscript",
+        importProject: "project:importProject",
         loadProjectList: "project:loadProjectList",
         openProject: "project:openProject",
         reorderProjectItems: "project:reorderProjectItems",

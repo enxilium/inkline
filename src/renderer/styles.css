@@ -113,15 +113,19 @@ html[data-platform="mac"] {
 }
 
 .titlebar-logo {
+    appearance: none;
+    border: none;
+    background: transparent;
     display: flex;
     align-items: center;
     cursor: pointer;
     height: 100%;
     line-height: 0;
+    padding: 0;
 }
 
 .titlebar-logo svg {
-    cursor: text;
+    cursor: pointer;
     height: 14px;
     width: auto;
     display: block;
@@ -1347,6 +1351,34 @@ html {
     margin-top: 1rem;
 }
 
+.import-progress-bar {
+    position: relative;
+    width: 100%;
+    height: 28px;
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.import-progress-fill {
+    height: 100%;
+    background: var(--accent, #6366f1);
+    transition: width 0.25s ease;
+    border-radius: 6px;
+}
+
+.import-progress-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.8);
+    white-space: nowrap;
+    pointer-events: none;
+}
+
 .project-card {
     cursor: pointer;
     position: relative;
@@ -2001,6 +2033,14 @@ input.toolbar-color:focus {
 
 .editor-body a:hover {
     color: var(--accent-light);
+}
+
+.editor-body img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 1rem auto;
+    border-radius: 4px;
 }
 
 .flex-row {

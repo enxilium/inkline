@@ -11,7 +11,7 @@ export type ContextMenuType =
 export interface UiApi {
     showContextMenu: (type: ContextMenuType, data?: any) => void;
     onContextMenuCommand: (
-        listener: (payload: { command: string; data: any }) => void
+        listener: (payload: { command: string; data: any }) => void,
     ) => () => IpcRenderer;
 }
 
@@ -19,9 +19,21 @@ declare global {
     interface Window {
         api: RendererApi;
         ui: UiApi;
+        fileDialog: {
+            showSaveDialog(options: {
+                title?: string;
+                defaultPath?: string;
+                filters?: { name: string; extensions: string[] }[];
+            }): Promise<{ canceled: boolean; filePath?: string }>;
+            showOpenDialog(options: {
+                title?: string;
+                filters?: { name: string; extensions: string[] }[];
+                properties?: string[];
+            }): Promise<{ canceled: boolean; filePaths: string[] }>;
+        };
         authEvents: {
             onStateChanged(
-                listener: (payload: AuthStatePayload) => void
+                listener: (payload: AuthStatePayload) => void,
             ): () => IpcRenderer;
         };
         generationEvents: {
@@ -29,7 +41,12 @@ declare global {
                 listener: (payload: {
                     type: "audio" | "image";
                     progress: number;
-                }) => void
+                }) => void,
+            ): () => IpcRenderer;
+        };
+        importEvents: {
+            onProgress(
+                listener: (payload: { progress: number }) => void,
             ): () => IpcRenderer;
         };
         // Note: syncEvents was removed as conflicts are now auto-resolved using "most recent wins" strategy.

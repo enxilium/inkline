@@ -294,14 +294,50 @@ interface ShowSaveDialogResult {
     filePath?: string;
 }
 
+interface ShowOpenDialogOptions {
+    title?: string;
+    filters?: { name: string; extensions: string[] }[];
+    properties?: string[];
+}
+
+interface ShowOpenDialogResult {
+    canceled: boolean;
+    filePaths: string[];
+}
+
 const fileDialog = {
     showSaveDialog: (
         options: ShowSaveDialogOptions,
     ): Promise<ShowSaveDialogResult> =>
         ipcRenderer.invoke("dialog:showSaveDialog", options),
+    showOpenDialog: (
+        options: ShowOpenDialogOptions,
+    ): Promise<ShowOpenDialogResult> =>
+        ipcRenderer.invoke("dialog:showOpenDialog", options),
 };
 
 contextBridge.exposeInMainWorld("fileDialog", fileDialog);
+
+// ── Import progress events ──
+
+type ImportProgressListener = (payload: { progress: number }) => void;
+
+const createImportEvents = () => {
+    const onProgress = (listener: ImportProgressListener) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            payload: { progress: number },
+        ) => {
+            listener(payload);
+        };
+        ipcRenderer.on("import-progress", handler);
+        return () => ipcRenderer.removeListener("import-progress", handler);
+    };
+    return { onProgress };
+};
+
+const importEvents = createImportEvents();
+contextBridge.exposeInMainWorld("importEvents", importEvents);
 
 // ── Feature management (Settings screen) ──
 
@@ -350,5 +386,6 @@ declare global {
         fileDialog: typeof fileDialog;
         featureApi: typeof featureApi;
         featureEvents: typeof featureEvents;
+        importEvents: typeof importEvents;
     }
 }

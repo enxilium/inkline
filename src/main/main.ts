@@ -8,6 +8,7 @@ import {
     MenuItemConstructorOptions,
     protocol,
     net,
+    shell,
 } from "electron";
 import { updateElectronApp } from "update-electron-app";
 import { spawn } from "child_process";
@@ -524,6 +525,14 @@ const createWindow = (): void => {
         mainWindow.webContents.openDevTools({ mode: "detach" });
     }
 
+    // Intercept window.open (e.g. link clicks) and open in the default browser
+    mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+        if (url.startsWith("https://") || url.startsWith("http://")) {
+            shell.openExternal(url);
+        }
+        return { action: "deny" };
+    });
+
     mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
     mainWindow.maximize();
     mainWindow.show();
@@ -736,6 +745,31 @@ ipcMain.handle(
             title: options.title,
             defaultPath: options.defaultPath,
             filters: options.filters,
+        });
+        return result;
+    },
+);
+
+// Native file dialog for import
+ipcMain.handle(
+    "dialog:showOpenDialog",
+    async (
+        event,
+        options: {
+            title?: string;
+            filters?: { name: string; extensions: string[] }[];
+            properties?: string[];
+        },
+    ) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        const result = await dialog.showOpenDialog(win!, {
+            title: options.title,
+            filters: options.filters,
+            properties: (options.properties ?? ["openFile"]) as (
+                | "openFile"
+                | "openDirectory"
+                | "multiSelections"
+            )[],
         });
         return result;
     },

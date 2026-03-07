@@ -25,6 +25,7 @@ export const Titlebar: React.FC = () => {
         stage,
         projectId,
         activeProjectName,
+        returnToProjects,
         isBinderOpen,
         toggleBinder,
         isChatOpen,
@@ -124,9 +125,20 @@ export const Titlebar: React.FC = () => {
         <div className="titlebar">
             <div className="titlebar-content">
                 <div className="titlebar-left">
-                    <div className="titlebar-logo" aria-hidden="true">
+                    <button
+                        type="button"
+                        className="titlebar-logo titlebar-no-drag"
+                        onClick={() => {
+                            if (stage !== "workspace") {
+                                return;
+                            }
+                            void returnToProjects();
+                        }}
+                        aria-label="Back to projects"
+                        title="Back to projects"
+                    >
                         <InklineLogo />
-                    </div>
+                    </button>
                     {stage === "workspace" ? <TitlebarMenuBar /> : null}
                 </div>
 

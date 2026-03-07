@@ -1,0 +1,23 @@
+[project]
+name = "inkline"
+
+[env]
+
+[up]
+steps = [
+
+]
+
+[down]
+steps = [
+
+]
+
+[start]
+commands = [
+
+]
+
+[tasks]
+
+[open]

@@ -101,14 +101,14 @@ const generateOptimisticId = (): string => {
 
 const runInBackground = (
     promise: Promise<unknown>,
-    onError: (error: unknown) => void
+    onError: (error: unknown) => void,
 ): void => {
     promise.catch(onError);
 };
 
 const documentExists = (
     payload: OpenProjectPayload,
-    selection: WorkspaceDocumentRef | null
+    selection: WorkspaceDocumentRef | null,
 ): boolean => {
     if (!selection) {
         return false;
@@ -125,7 +125,7 @@ const documentExists = (
             return payload.locations.some((item) => item.id === selection.id);
         case "organization":
             return payload.organizations.some(
-                (item) => item.id === selection.id
+                (item) => item.id === selection.id,
             );
         default:
             return false;
@@ -133,7 +133,7 @@ const documentExists = (
 };
 
 const createDefaultSelection = (
-    payload: OpenProjectPayload
+    payload: OpenProjectPayload,
 ): WorkspaceDocumentRef | null => {
     if (payload.chapters.length) {
         return { kind: "chapter", id: payload.chapters[0].id };
@@ -155,7 +155,7 @@ const createDefaultSelection = (
 
 const resolveDocumentSelection = (
     payload: OpenProjectPayload,
-    preferred?: WorkspaceDocumentRef | null
+    preferred?: WorkspaceDocumentRef | null,
 ): WorkspaceDocumentRef | null => {
     if (preferred && documentExists(payload, preferred)) {
         return preferred;
@@ -166,10 +166,10 @@ const resolveDocumentSelection = (
 const patchEntity = <T extends { id: string }>(
     list: T[],
     entityId: string,
-    patch: Partial<T>
+    patch: Partial<T>,
 ): T[] =>
     list.map((entity) =>
-        entity.id === entityId ? { ...entity, ...patch } : entity
+        entity.id === entityId ? { ...entity, ...patch } : entity,
     );
 
 const indexAssets = (bundle: WorkspaceAssetBundle): WorkspaceAssets => {
@@ -229,6 +229,8 @@ type AppStore = {
     projectsError: string | null;
     projectSelectionError: string | null;
     openingProjectId: string | null;
+    isImporting: boolean;
+    importProgress: number;
     activeProjectName: string;
     projectId: string;
     workspaceProject: WorkspaceProject | null;
@@ -280,7 +282,7 @@ type AppStore = {
         range: string; // e.g. "Chapter 1 100-200"
     } | null;
     setCurrentSelection: (
-        selection: { text: string; range: string } | null
+        selection: { text: string; range: string } | null,
     ) => void;
 
     addPendingEdits: (payload: {
@@ -315,6 +317,7 @@ type AppStore = {
     loadProjects: (userId?: string) => Promise<void>;
     setProjectsError: (message: string | null) => void;
     createProject: (params: { title: string }) => Promise<void>;
+    importProject: () => Promise<void>;
     openProject: (project: ProjectSummary) => Promise<void>;
     reloadActiveProject: () => Promise<void>;
     setProjectSelectionError: (message: string | null) => void;
@@ -325,23 +328,23 @@ type AppStore = {
     reorderTabs: (newOrder: WorkspaceDocumentRef[]) => void;
     updateChapterLocally: (
         chapterId: string,
-        patch: Partial<WorkspaceChapter>
+        patch: Partial<WorkspaceChapter>,
     ) => void;
     updateScrapNoteLocally: (
         scrapNoteId: string,
-        patch: Partial<WorkspaceScrapNote>
+        patch: Partial<WorkspaceScrapNote>,
     ) => void;
     updateCharacterLocally: (
         characterId: string,
-        patch: Partial<WorkspaceCharacter>
+        patch: Partial<WorkspaceCharacter>,
     ) => void;
     updateLocationLocally: (
         locationId: string,
-        patch: Partial<WorkspaceLocation>
+        patch: Partial<WorkspaceLocation>,
     ) => void;
     updateOrganizationLocally: (
         organizationId: string,
-        patch: Partial<WorkspaceOrganization>
+        patch: Partial<WorkspaceOrganization>,
     ) => void;
     createChapterEntry: (order?: number) => Promise<void>;
     createScrapNoteEntry: () => Promise<void>;
@@ -362,7 +365,7 @@ type AppStore = {
     renameDocument: (
         kind: string,
         id: string,
-        newTitle: string
+        newTitle: string,
     ) => Promise<void>;
     setAutosaveStatus: (status: AutosaveStatus) => void;
     setAutosaveError: (message: string | null) => void;
@@ -371,13 +374,13 @@ type AppStore = {
     setLastSyncedAt: (timestamp: string | null) => void;
     setPendingConflict: (conflict: AppStore["pendingConflict"]) => void;
     resolveConflict: (
-        resolution: "accept-remote" | "keep-local"
+        resolution: "accept-remote" | "keep-local",
     ) => Promise<void>;
     setLastSavedAt: (timestamp: number | null) => void;
     setShortcutState: (id: string, state: ShortcutStates[string]) => void;
     resetShortcutState: (id: string) => void;
     setDraggedDocument: (
-        doc: { id: string; kind: string; title: string } | null
+        doc: { id: string; kind: string; title: string } | null,
     ) => void;
     renamingDocument: { id: string; kind: string } | null;
     setRenamingDocument: (doc: { id: string; kind: string } | null) => void;
@@ -452,7 +455,7 @@ type AppStore = {
     updateAccountPassword: RendererApi["auth"]["updatePassword"];
     globalFind: (request: GlobalFindRequest) => Promise<GlobalFindResponse>;
     globalFindAndReplace: (
-        request: GlobalFindAndReplaceRequest
+        request: GlobalFindAndReplaceRequest,
     ) => Promise<GlobalFindAndReplaceResponse>;
 };
 
@@ -527,7 +530,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         }
 
         return window.confirm(
-            "You have pending chapter edits that are not saved and will be lost. Continue?"
+            "You have pending chapter edits that are not saved and will be lost. Continue?",
         );
     };
 
@@ -580,7 +583,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 });
             }),
             (error) =>
-                console.error("Failed to fetch initial sync state", error)
+                console.error("Failed to fetch initial sync state", error),
         );
 
         // Subscribe to sync state changes (online/offline/syncing)
@@ -598,7 +601,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             // Only log changes for the currently open project
             if (stage === "workspace" && payload.projectId === projectId) {
                 console.log(
-                    `[appStore] Remote change detected: ${payload.entityType} ${payload.changeType}`
+                    `[appStore] Remote change detected: ${payload.entityType} ${payload.changeType}`,
                 );
             }
         });
@@ -610,7 +613,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             // Only show conflicts for the currently open project
             if (stage === "workspace" && payload.projectId === projectId) {
                 console.log(
-                    `[appStore] Conflict detected: ${payload.entityType} ${payload.entityName}`
+                    `[appStore] Conflict detected: ${payload.entityType} ${payload.entityName}`,
                 );
                 set({ pendingConflict: payload });
             }
@@ -626,7 +629,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             }
 
             console.log(
-                `[appStore] Entity updated: ${payload.entityType} ${payload.entityId}`
+                `[appStore] Entity updated: ${payload.entityType} ${payload.entityId}`,
             );
 
             const data = payload.data;
@@ -642,13 +645,13 @@ export const useAppStore = create<AppStore>((set, get) => {
                     const chapter = data as unknown as WorkspaceChapter;
                     set((state) => ({
                         chapters: state.chapters.some(
-                            (c) => c.id === chapter.id
+                            (c) => c.id === chapter.id,
                         )
                             ? state.chapters.map((c) =>
-                                  c.id === chapter.id ? chapter : c
+                                  c.id === chapter.id ? chapter : c,
                               )
                             : [...state.chapters, chapter].sort(
-                                  (a, b) => a.order - b.order
+                                  (a, b) => a.order - b.order,
                               ),
                     }));
                     break;
@@ -657,10 +660,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     const character = data as unknown as WorkspaceCharacter;
                     set((state) => ({
                         characters: state.characters.some(
-                            (c) => c.id === character.id
+                            (c) => c.id === character.id,
                         )
                             ? state.characters.map((c) =>
-                                  c.id === character.id ? character : c
+                                  c.id === character.id ? character : c,
                               )
                             : [...state.characters, character],
                     }));
@@ -670,10 +673,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     const location = data as unknown as WorkspaceLocation;
                     set((state) => ({
                         locations: state.locations.some(
-                            (l) => l.id === location.id
+                            (l) => l.id === location.id,
                         )
                             ? state.locations.map((l) =>
-                                  l.id === location.id ? location : l
+                                  l.id === location.id ? location : l,
                               )
                             : [...state.locations, location],
                     }));
@@ -684,10 +687,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                         data as unknown as WorkspaceOrganization;
                     set((state) => ({
                         organizations: state.organizations.some(
-                            (o) => o.id === organization.id
+                            (o) => o.id === organization.id,
                         )
                             ? state.organizations.map((o) =>
-                                  o.id === organization.id ? organization : o
+                                  o.id === organization.id ? organization : o,
                               )
                             : [...state.organizations, organization],
                     }));
@@ -697,10 +700,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     const scrapNote = data as unknown as WorkspaceScrapNote;
                     set((state) => ({
                         scrapNotes: state.scrapNotes.some(
-                            (s) => s.id === scrapNote.id
+                            (s) => s.id === scrapNote.id,
                         )
                             ? state.scrapNotes.map((s) =>
-                                  s.id === scrapNote.id ? scrapNote : s
+                                  s.id === scrapNote.id ? scrapNote : s,
                               )
                             : [...state.scrapNotes, scrapNote],
                     }));
@@ -753,20 +756,20 @@ export const useAppStore = create<AppStore>((set, get) => {
             }
 
             console.log(
-                `[appStore] Entity deleted: ${payload.entityType} ${payload.entityId}`
+                `[appStore] Entity deleted: ${payload.entityType} ${payload.entityId}`,
             );
 
             const entityId = payload.entityId;
 
             // Helper to clean up tabs and active document if needed
             const cleanupDocumentRefs = (
-                kind: string
+                kind: string,
             ): {
                 activeDocument: WorkspaceDocumentRef | null;
                 openTabs: WorkspaceDocumentRef[];
             } => {
                 const newTabs = openTabs.filter(
-                    (t) => !(t.kind === kind && t.id === entityId)
+                    (t) => !(t.kind === kind && t.id === entityId),
                 );
                 const newActive =
                     activeDocument?.kind === kind &&
@@ -788,7 +791,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 case "chapter": {
                     set((state) => ({
                         chapters: state.chapters.filter(
-                            (c) => c.id !== entityId
+                            (c) => c.id !== entityId,
                         ),
                         ...cleanupDocumentRefs("chapter"),
                     }));
@@ -797,7 +800,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 case "character": {
                     set((state) => ({
                         characters: state.characters.filter(
-                            (c) => c.id !== entityId
+                            (c) => c.id !== entityId,
                         ),
                         ...cleanupDocumentRefs("character"),
                     }));
@@ -806,7 +809,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 case "location": {
                     set((state) => ({
                         locations: state.locations.filter(
-                            (l) => l.id !== entityId
+                            (l) => l.id !== entityId,
                         ),
                         ...cleanupDocumentRefs("location"),
                     }));
@@ -815,7 +818,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 case "organization": {
                     set((state) => ({
                         organizations: state.organizations.filter(
-                            (o) => o.id !== entityId
+                            (o) => o.id !== entityId,
                         ),
                         ...cleanupDocumentRefs("organization"),
                     }));
@@ -824,7 +827,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 case "scrapNote": {
                     set((state) => ({
                         scrapNotes: state.scrapNotes.filter(
-                            (s) => s.id !== entityId
+                            (s) => s.id !== entityId,
                         ),
                         ...cleanupDocumentRefs("scrapNote"),
                     }));
@@ -858,7 +861,7 @@ export const useAppStore = create<AppStore>((set, get) => {
 
     const loadProjectWorkspace = async (
         targetProjectId: string,
-        preferredSelection?: WorkspaceDocumentRef | null
+        preferredSelection?: WorkspaceDocumentRef | null,
     ) => {
         const payload = await rendererApi.project.openProject({
             projectId: targetProjectId,
@@ -866,7 +869,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         const indexedAssets = indexAssets(payload.assets);
         const nextSelection = resolveDocumentSelection(
             payload,
-            preferredSelection ?? get().activeDocument
+            preferredSelection ?? get().activeDocument,
         );
         // Default to Main timeline when opening project
         const mainTimeline = payload.timelines.find((t) => t.name === "Main");
@@ -908,6 +911,8 @@ export const useAppStore = create<AppStore>((set, get) => {
         projectsError: null,
         projectSelectionError: null,
         openingProjectId: null,
+        isImporting: false,
+        importProgress: 0,
         activeProjectName: "",
         projectId: "",
         workspaceProject: null,
@@ -982,7 +987,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({
                     authError: createErrorMessage(
                         error,
-                        "Unable to complete request."
+                        "Unable to complete request.",
                     ),
                 });
             } finally {
@@ -1015,7 +1020,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     projectsStatus: "error",
                     projectsError: createErrorMessage(
                         error,
-                        "Unable to load projects."
+                        "Unable to load projects.",
                     ),
                 });
             }
@@ -1040,9 +1045,53 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({
                     projectsError: createErrorMessage(
                         error,
-                        "Failed to create project."
+                        "Failed to create project.",
                     ),
                 });
+            }
+        },
+        importProject: async () => {
+            const { user } = get();
+            if (!user) {
+                throw new Error("User session missing");
+            }
+
+            const result = await window.fileDialog.showOpenDialog({
+                title: "Import EPUB",
+                filters: [{ name: "EPUB Files", extensions: ["epub"] }],
+                properties: ["openFile"],
+            });
+
+            if (result.canceled || result.filePaths.length === 0) {
+                return;
+            }
+
+            const filePath = result.filePaths[0];
+
+            set({ isImporting: true, importProgress: 0, projectsError: null });
+
+            const unsubscribe = window.importEvents.onProgress(
+                ({ progress }) => {
+                    set({ importProgress: progress });
+                },
+            );
+
+            try {
+                await rendererApi.project.importProject({
+                    userId: user.id,
+                    filePath,
+                });
+                await get().loadProjects(user.id);
+            } catch (error) {
+                set({
+                    projectsError: createErrorMessage(
+                        error,
+                        "Failed to import EPUB.",
+                    ),
+                });
+            } finally {
+                unsubscribe();
+                set({ isImporting: false, importProgress: 0 });
             }
         },
         openProject: async (project) => {
@@ -1056,7 +1105,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({
                     projectSelectionError: createErrorMessage(
                         error,
-                        "Unable to open project."
+                        "Unable to open project.",
                     ),
                 });
             } finally {
@@ -1086,7 +1135,7 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             if (selection.kind === "chapter") {
                 const chapter = get().chapters.find(
-                    (c) => c.id === selection.id
+                    (c) => c.id === selection.id,
                 );
                 if (!chapter) return;
 
@@ -1100,7 +1149,7 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             if (selection.kind === "scrapNote") {
                 const note = get().scrapNotes.find(
-                    (s) => s.id === selection.id
+                    (s) => s.id === selection.id,
                 );
                 if (!note) return;
 
@@ -1127,7 +1176,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({
                     autosaveError: createErrorMessage(
                         error,
-                        "Failed to save before leaving the project."
+                        "Failed to save before leaving the project.",
                     ),
                 });
                 throw error;
@@ -1165,7 +1214,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             set((state) => {
                 const exists = state.openTabs.some(
                     (tab) =>
-                        tab.kind === selection.kind && tab.id === selection.id
+                        tab.kind === selection.kind && tab.id === selection.id,
                 );
                 return {
                     activeDocument: selection,
@@ -1184,7 +1233,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         !(
                             tab.kind === selection.kind &&
                             tab.id === selection.id
-                        )
+                        ),
                 );
 
                 let nextActive = state.activeDocument;
@@ -1232,7 +1281,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 organizations: patchEntity(
                     state.organizations,
                     organizationId,
-                    patch
+                    patch,
                 ),
             }));
         },
@@ -1277,7 +1326,7 @@ export const useAppStore = create<AppStore>((set, get) => {
 
                 const nextTab: WorkspaceDocumentRef = { kind: "chapter", id };
                 const nextTabs = state.openTabs.some(
-                    (t) => t.kind === "chapter" && t.id === id
+                    (t) => t.kind === "chapter" && t.id === id,
                 )
                     ? state.openTabs
                     : [...state.openTabs, nextTab];
@@ -1308,12 +1357,12 @@ export const useAppStore = create<AppStore>((set, get) => {
                     const message =
                         createErrorMessage(
                             error,
-                            "Failed to save new chapter to the cloud."
+                            "Failed to save new chapter to the cloud.",
                         ) +
                         "\n\nYour change was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
                     set({ cloudSyncError: message });
                     alert(message);
-                }
+                },
             );
         },
         createScrapNoteEntry: async () => {
@@ -1344,7 +1393,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     id,
                 };
                 const nextTabs = state.openTabs.some(
-                    (t) => t.kind === "scrapNote" && t.id === id
+                    (t) => t.kind === "scrapNote" && t.id === id,
                 )
                     ? state.openTabs
                     : [...state.openTabs, nextTab];
@@ -1374,12 +1423,12 @@ export const useAppStore = create<AppStore>((set, get) => {
                     const message =
                         createErrorMessage(
                             error,
-                            "Failed to save new scrap note to the cloud."
+                            "Failed to save new scrap note to the cloud.",
                         ) +
                         "\n\nYour change was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
                     set({ cloudSyncError: message });
                     alert(message);
-                }
+                },
             );
         },
         createCharacterEntry: async () => {
@@ -1421,7 +1470,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     id,
                 };
                 const nextTabs = state.openTabs.some(
-                    (t) => t.kind === "character" && t.id === id
+                    (t) => t.kind === "character" && t.id === id,
                 )
                     ? state.openTabs
                     : [...state.openTabs, nextTab];
@@ -1451,12 +1500,12 @@ export const useAppStore = create<AppStore>((set, get) => {
                     const message =
                         createErrorMessage(
                             error,
-                            "Failed to save new character to the cloud."
+                            "Failed to save new character to the cloud.",
                         ) +
                         "\n\nYour change was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
                     set({ cloudSyncError: message });
                     alert(message);
-                }
+                },
             );
         },
         createLocationEntry: async () => {
@@ -1494,7 +1543,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     id,
                 };
                 const nextTabs = state.openTabs.some(
-                    (t) => t.kind === "location" && t.id === id
+                    (t) => t.kind === "location" && t.id === id,
                 )
                     ? state.openTabs
                     : [...state.openTabs, nextTab];
@@ -1524,19 +1573,19 @@ export const useAppStore = create<AppStore>((set, get) => {
                     const message =
                         createErrorMessage(
                             error,
-                            "Failed to save new location to the cloud."
+                            "Failed to save new location to the cloud.",
                         ) +
                         "\n\nYour change was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
                     set({ cloudSyncError: message });
                     alert(message);
-                }
+                },
             );
         },
         createOrganizationEntry: async () => {
             const projectId = get().projectId.trim();
             if (!projectId) {
                 throw new Error(
-                    "Open a project before creating organizations."
+                    "Open a project before creating organizations.",
                 );
             }
 
@@ -1566,7 +1615,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     id,
                 };
                 const nextTabs = state.openTabs.some(
-                    (t) => t.kind === "organization" && t.id === id
+                    (t) => t.kind === "organization" && t.id === id,
                 )
                     ? state.openTabs
                     : [...state.openTabs, nextTab];
@@ -1596,12 +1645,12 @@ export const useAppStore = create<AppStore>((set, get) => {
                     const message =
                         createErrorMessage(
                             error,
-                            "Failed to save new organization to the cloud."
+                            "Failed to save new organization to the cloud.",
                         ) +
                         "\n\nYour change was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
                     set({ cloudSyncError: message });
                     alert(message);
-                }
+                },
             );
         },
         deleteProject: async (projectId) => {
@@ -1621,7 +1670,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({
                     projectsError: createErrorMessage(
                         error,
-                        "Failed to delete project."
+                        "Failed to delete project.",
                     ),
                 });
             }
@@ -1639,7 +1688,7 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             set((state) => {
                 const filtered = state.chapters.filter(
-                    (c) => c.id !== chapterId
+                    (c) => c.id !== chapterId,
                 );
 
                 // Re-index orders to close the gap
@@ -1648,7 +1697,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     .map((c, index) => ({ ...c, order: index }));
 
                 const nextTabs = state.openTabs.filter(
-                    (t) => !(t.kind === "chapter" && t.id === chapterId)
+                    (t) => !(t.kind === "chapter" && t.id === chapterId),
                 );
 
                 let nextActive = state.activeDocument;
@@ -1681,10 +1730,10 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             set((state) => {
                 const nextNotes = state.scrapNotes.filter(
-                    (n) => n.id !== scrapNoteId
+                    (n) => n.id !== scrapNoteId,
                 );
                 const nextTabs = state.openTabs.filter(
-                    (t) => !(t.kind === "scrapNote" && t.id === scrapNoteId)
+                    (t) => !(t.kind === "scrapNote" && t.id === scrapNoteId),
                 );
                 let nextActive = state.activeDocument;
                 if (
@@ -1716,10 +1765,10 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             set((state) => {
                 const nextCharacters = state.characters.filter(
-                    (c) => c.id !== characterId
+                    (c) => c.id !== characterId,
                 );
                 const nextTabs = state.openTabs.filter(
-                    (t) => !(t.kind === "character" && t.id === characterId)
+                    (t) => !(t.kind === "character" && t.id === characterId),
                 );
                 let nextActive = state.activeDocument;
                 if (
@@ -1751,10 +1800,10 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             set((state) => {
                 const nextLocations = state.locations.filter(
-                    (l) => l.id !== locationId
+                    (l) => l.id !== locationId,
                 );
                 const nextTabs = state.openTabs.filter(
-                    (t) => !(t.kind === "location" && t.id === locationId)
+                    (t) => !(t.kind === "location" && t.id === locationId),
                 );
                 let nextActive = state.activeDocument;
                 if (
@@ -1777,7 +1826,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             const projectId = get().projectId.trim();
             if (!projectId) {
                 throw new Error(
-                    "Open a project before deleting organizations."
+                    "Open a project before deleting organizations.",
                 );
             }
 
@@ -1788,11 +1837,11 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             set((state) => {
                 const nextOrgs = state.organizations.filter(
-                    (o) => o.id !== organizationId
+                    (o) => o.id !== organizationId,
                 );
                 const nextTabs = state.openTabs.filter(
                     (t) =>
-                        !(t.kind === "organization" && t.id === organizationId)
+                        !(t.kind === "organization" && t.id === organizationId),
                 );
                 let nextActive = state.activeDocument;
                 if (
@@ -1818,7 +1867,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             // Optimistic update
             set((state) => {
                 const chapterMap = new Map(
-                    state.chapters.map((c) => [c.id, c])
+                    state.chapters.map((c) => [c.id, c]),
                 );
                 const reordered = newOrder
                     .map((id, index) => {
@@ -1842,7 +1891,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({
                     autosaveError: createErrorMessage(
                         error,
-                        "Failed to save chapter order."
+                        "Failed to save chapter order.",
                     ),
                 });
             }
@@ -1869,7 +1918,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({
                     autosaveError: createErrorMessage(
                         error,
-                        "Failed to save scrap note order."
+                        "Failed to save scrap note order.",
                     ),
                 });
             }
@@ -1896,7 +1945,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({
                     autosaveError: createErrorMessage(
                         error,
-                        "Failed to save character order."
+                        "Failed to save character order.",
                     ),
                 });
             }
@@ -1923,7 +1972,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({
                     autosaveError: createErrorMessage(
                         error,
-                        "Failed to save location order."
+                        "Failed to save location order.",
                     ),
                 });
             }
@@ -1950,7 +1999,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({
                     autosaveError: createErrorMessage(
                         error,
-                        "Failed to save organization order."
+                        "Failed to save organization order.",
                     ),
                 });
             }
@@ -1964,31 +2013,31 @@ export const useAppStore = create<AppStore>((set, get) => {
                 if (kind === "chapter") {
                     return {
                         chapters: state.chapters.map((c) =>
-                            c.id === id ? { ...c, title: newTitle } : c
+                            c.id === id ? { ...c, title: newTitle } : c,
                         ),
                     };
                 } else if (kind === "character") {
                     return {
                         characters: state.characters.map((c) =>
-                            c.id === id ? { ...c, name: newTitle } : c
+                            c.id === id ? { ...c, name: newTitle } : c,
                         ),
                     };
                 } else if (kind === "location") {
                     return {
                         locations: state.locations.map((l) =>
-                            l.id === id ? { ...l, name: newTitle } : l
+                            l.id === id ? { ...l, name: newTitle } : l,
                         ),
                     };
                 } else if (kind === "organization") {
                     return {
                         organizations: state.organizations.map((o) =>
-                            o.id === id ? { ...o, name: newTitle } : o
+                            o.id === id ? { ...o, name: newTitle } : o,
                         ),
                     };
                 } else if (kind === "scrapNote") {
                     return {
                         scrapNotes: state.scrapNotes.map((s) =>
-                            s.id === id ? { ...s, title: newTitle } : s
+                            s.id === id ? { ...s, title: newTitle } : s,
                         ),
                     };
                 }
@@ -2027,7 +2076,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 const message =
                     createErrorMessage(
                         error,
-                        "Failed to save rename to the cloud."
+                        "Failed to save rename to the cloud.",
                     ) +
                     "\n\nYour rename was applied locally, but was NOT saved to the cloud. Please check your internet connection and try again.";
                 set({ cloudSyncError: message });
@@ -2061,7 +2110,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     pendingConflict.entityType,
                     pendingConflict.entityId,
                     pendingConflict.projectId,
-                    resolution
+                    resolution,
                 );
 
                 // If we accepted remote changes and this is the current project, reload
@@ -2162,7 +2211,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         item.wordNumberStart > 0 &&
                         item.wordNumberEnd >= item.wordNumberStart &&
                         item.originalText?.trim() &&
-                        item.replacementText?.trim()
+                        item.replacementText?.trim(),
                 );
 
             for (const item of [...comments, ...replacements]) {
@@ -2240,13 +2289,13 @@ export const useAppStore = create<AppStore>((set, get) => {
                     comments:
                         edit.kind === "comment"
                             ? chapterBucket.comments.filter(
-                                  (c) => c.id !== editId
+                                  (c) => c.id !== editId,
                               )
                             : chapterBucket.comments,
                     replacements:
                         edit.kind === "replacement"
                             ? chapterBucket.replacements.filter(
-                                  (r) => r.id !== editId
+                                  (r) => r.id !== editId,
                               )
                             : chapterBucket.replacements,
                 };
@@ -2286,13 +2335,13 @@ export const useAppStore = create<AppStore>((set, get) => {
                         comments:
                             edit.kind === "comment"
                                 ? chapterBucket.comments.filter(
-                                      (c) => c.id !== editId
+                                      (c) => c.id !== editId,
                                   )
                                 : chapterBucket.comments,
                         replacements:
                             edit.kind === "replacement"
                                 ? chapterBucket.replacements.filter(
-                                      (r) => r.id !== editId
+                                      (r) => r.id !== editId,
                                   )
                                 : chapterBucket.replacements,
                     };
@@ -2477,7 +2526,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     projectId,
                 });
                 const newTimelines = timelines.filter(
-                    (t) => t.id !== timelineId
+                    (t) => t.id !== timelineId,
                 );
                 set({
                     timelines: newTimelines,
@@ -2516,7 +2565,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                                       startValue: params.startValue,
                                   }),
                               }
-                            : t
+                            : t,
                     ),
                 });
             } catch (error) {
@@ -2561,7 +2610,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         events: state.events.map((e) =>
                             e.id === params.eventId
                                 ? (result.event as unknown as WorkspaceEvent)
-                                : e
+                                : e,
                         ),
                     }));
                 }
@@ -2596,19 +2645,19 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             const normalizeLabel = (
                 value: string | null | undefined,
-                fallback: string
+                fallback: string,
             ): string => {
                 const trimmed = value?.trim();
                 return trimmed ? trimmed : fallback;
             };
 
             const joinParts = (
-                parts: Array<string | null | undefined>
+                parts: Array<string | null | undefined>,
             ): string => {
                 return parts
                     .filter(
                         (p): p is string =>
-                            typeof p === "string" && p.trim().length > 0
+                            typeof p === "string" && p.trim().length > 0,
                     )
                     .join("\n");
             };
@@ -2624,7 +2673,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     id: chapter.id,
                     title: `${chapter.order + 1}. ${normalizeLabel(
                         chapter.title,
-                        "Untitled Chapter"
+                        "Untitled Chapter",
                     )}`,
                     content: chapter.content,
                     contentFormat: "tiptap-json" as const,
@@ -2727,7 +2776,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             const replaceInJson = (
                 node: unknown,
                 regex: RegExp,
-                replaceText: string
+                replaceText: string,
             ): number => {
                 let count = 0;
 
@@ -2750,7 +2799,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         count += matches.length;
                         const replaced = candidate.text.replace(
                             regex,
-                            replaceText
+                            replaceText,
                         );
                         (node as { text?: string }).text = replaced;
                     }
@@ -2783,7 +2832,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         matchCount = matches.length;
                         newContent = chapter.content.replace(
                             regex,
-                            request.replace
+                            request.replace,
                         );
                     }
                 }
@@ -2817,7 +2866,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         matchCount = matches.length;
                         newContent = note.content.replace(
                             regex,
-                            request.replace
+                            request.replace,
                         );
                     }
                 }

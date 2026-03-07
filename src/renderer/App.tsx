@@ -58,6 +58,9 @@ const App: React.FC = () => {
         openProject,
         returnToProjects,
         importAsset,
+        importProject,
+        isImporting,
+        importProgress,
         pendingEditsById,
     } = useAppStore();
 
@@ -311,6 +314,9 @@ const App: React.FC = () => {
                         onOpenProject={handleOpenProject}
                         onDeleteProject={handleDeleteProject}
                         onUploadCover={handleUploadCover}
+                        onImportProject={importProject}
+                        isImporting={isImporting}
+                        importProgress={importProgress}
                     />
                 );
             case "auth":

@@ -49,6 +49,7 @@ import { ExportManuscript } from "../@core/application/use-cases/project/ExportM
 import { LoadProjectList } from "../@core/application/use-cases/project/LoadProjectList";
 import { OpenProject } from "../@core/application/use-cases/project/OpenProject";
 import { ReorderProjectItems } from "../@core/application/use-cases/project/ReorderProjectItems";
+import { ImportProject } from "../@core/application/use-cases/project/ImportProject";
 import { CreateCharacter } from "../@core/application/use-cases/world/CreateCharacter";
 import { CreateLocation } from "../@core/application/use-cases/world/CreateLocation";
 import { CreateOrganization } from "../@core/application/use-cases/world/CreateOrganization";
@@ -111,6 +112,7 @@ import { ExportManuscriptController } from "../@interface-adapters/controllers/p
 import { LoadProjectListController } from "../@interface-adapters/controllers/project/LoadProjectListController";
 import { OpenProjectController } from "../@interface-adapters/controllers/project/OpenProjectController";
 import { ReorderProjectItemsController } from "../@interface-adapters/controllers/project/ReorderProjectItemsController";
+import { ImportProjectController } from "../@interface-adapters/controllers/project/ImportProjectController";
 import { CreateCharacterController } from "../@interface-adapters/controllers/world/CreateCharacterController";
 import { CreateLocationController } from "../@interface-adapters/controllers/world/CreateLocationController";
 import { CreateOrganizationController } from "../@interface-adapters/controllers/world/CreateOrganizationController";
@@ -141,6 +143,7 @@ import type { IAITextService } from "../@core/domain/services/IAITextService";
 import type { ICreativeAssetGenerationService } from "../@core/domain/services/ICreativeAssetGenerationService";
 import type { IAuthService } from "../@core/domain/services/IAuthService";
 import type { IExportService } from "../@core/domain/services/IExportService";
+import type { IEpubImportService } from "../@core/domain/services/IEpubImportService";
 import type { IPlaylistGenerationService } from "../@core/domain/services/IPlaylistGenerationService";
 import type { IStorageService } from "../@core/domain/services/IStorageService";
 import type { IUserSessionStore } from "../@core/domain/services/IUserSessionStore";
@@ -167,6 +170,7 @@ export type ServiceDependencies = {
     audioGeneration: ICreativeAssetGenerationService;
     auth: IAuthService;
     export: IExportService;
+    epubImport: IEpubImportService;
     imageGeneration: ICreativeAssetGenerationService;
     playlistGeneration: IPlaylistGenerationService;
     storage: IStorageService;
@@ -236,6 +240,7 @@ type UseCaseMap = {
         createProject: CreateProject;
         deleteProject: DeleteProject;
         exportManuscript: ExportManuscript;
+        importProject: ImportProject;
         loadProjectList: LoadProjectList;
         openProject: OpenProject;
         reorderProjectItems: ReorderProjectItems;
@@ -266,16 +271,16 @@ const invokeController = <
 >(
     controller: TController,
     event: IpcMainInvokeEvent,
-    args: unknown[]
+    args: unknown[],
 ): ReturnType<TController["handle"]> => {
     if ("handleWithEvent" in controller) {
         return (controller as any).handleWithEvent(
             event,
-            ...(args as Parameters<TController["handle"]>)
+            ...(args as Parameters<TController["handle"]>),
         ) as ReturnType<TController["handle"]>;
     }
     return controller.handle(
-        ...(args as Parameters<TController["handle"]>)
+        ...(args as Parameters<TController["handle"]>),
     ) as ReturnType<TController["handle"]>;
 };
 
@@ -293,7 +298,7 @@ export class AppBuilder {
 
         // Wire up sync state gateway to the synchronization service
         this.dependencies.syncService.setSyncStateGateway(
-            this.syncStateGateway
+            this.syncStateGateway,
         );
 
         this.authStateGateway.on("auth-changed", (user) => {
@@ -312,15 +317,15 @@ export class AppBuilder {
                 entityType: EntityType,
                 entityId: string,
                 projectId: string,
-                resolution: "accept-remote" | "keep-local"
+                resolution: "accept-remote" | "keep-local",
             ) => {
                 await this.dependencies.syncService.resolveConflict(
                     entityType,
                     entityId,
                     projectId,
-                    resolution
+                    resolution,
                 );
-            }
+            },
         );
 
         await this.initializeAuthState(useCases.auth.loadStoredSession);
@@ -337,7 +342,7 @@ export class AppBuilder {
                     repo.character,
                     repo.location,
                     repo.organization,
-                    repo.project
+                    repo.project,
                 ),
                 editChapters: new EditChapters(
                     svc.aiText,
@@ -345,7 +350,7 @@ export class AppBuilder {
                     repo.character,
                     repo.location,
                     repo.organization,
-                    repo.project
+                    repo.project,
                 ),
                 generalChat: new GeneralChat(
                     svc.aiText,
@@ -354,7 +359,7 @@ export class AppBuilder {
                     repo.location,
                     repo.organization,
                     repo.chatConversation,
-                    repo.project
+                    repo.project,
                 ),
                 loadChatHistory: new LoadChatHistory(repo.chatConversation),
                 loadChatMessages: new LoadChatMessages(repo.chatConversation),
@@ -365,7 +370,7 @@ export class AppBuilder {
                     svc.storage,
                     repo.character,
                     repo.location,
-                    repo.organization
+                    repo.organization,
                 ),
                 importAsset: new ImportAsset(
                     repo.asset,
@@ -374,7 +379,7 @@ export class AppBuilder {
                     repo.location,
                     repo.organization,
                     repo.chapter,
-                    repo.project
+                    repo.project,
                 ),
             },
             auth: {
@@ -383,21 +388,21 @@ export class AppBuilder {
                 registerUser: new RegisterUser(
                     svc.auth,
                     repo.user,
-                    svc.sessionStore
+                    svc.sessionStore,
                 ),
                 loadStoredSession: new LoadStoredSession(
                     svc.sessionStore,
-                    svc.auth
+                    svc.auth,
                 ),
                 updateEmail: new UpdateUserEmail(
                     svc.auth,
                     repo.user,
-                    svc.sessionStore
+                    svc.sessionStore,
                 ),
                 updatePassword: new UpdateUserPassword(
                     svc.auth,
                     repo.user,
-                    svc.sessionStore
+                    svc.sessionStore,
                 ),
             },
             generation: {
@@ -405,55 +410,55 @@ export class AppBuilder {
                     repo.character,
                     repo.asset,
                     svc.imageGeneration,
-                    svc.storage
+                    svc.storage,
                 ),
                 generateCharacterPlaylist: new GenerateCharacterPlaylist(
                     repo.character,
                     svc.playlistGeneration,
                     repo.asset,
-                    svc.storage
+                    svc.storage,
                 ),
                 generateCharacterSong: new GenerateCharacterSong(
                     repo.character,
                     svc.audioGeneration,
                     svc.storage,
-                    repo.asset
+                    repo.asset,
                 ),
                 generateLocationImage: new GenerateLocationImage(
                     repo.location,
                     repo.asset,
                     svc.imageGeneration,
-                    svc.storage
+                    svc.storage,
                 ),
                 generateLocationPlaylist: new GenerateLocationPlaylist(
                     repo.location,
                     svc.playlistGeneration,
                     repo.asset,
-                    svc.storage
+                    svc.storage,
                 ),
                 generateLocationSong: new GenerateLocationSong(
                     repo.location,
                     svc.audioGeneration,
                     svc.storage,
-                    repo.asset
+                    repo.asset,
                 ),
                 generateOrganizationImage: new GenerateOrganizationImage(
                     repo.organization,
                     repo.asset,
                     svc.imageGeneration,
-                    svc.storage
+                    svc.storage,
                 ),
                 generateOrganizationPlaylist: new GenerateOrganizationPlaylist(
                     repo.organization,
                     svc.playlistGeneration,
                     repo.asset,
-                    svc.storage
+                    svc.storage,
                 ),
                 generateOrganizationSong: new GenerateOrganizationSong(
                     repo.organization,
                     svc.audioGeneration,
                     svc.storage,
-                    repo.asset
+                    repo.asset,
                 ),
             },
             logistics: {
@@ -461,33 +466,33 @@ export class AppBuilder {
                 saveCharacterInfo: new SaveCharacterInfo(
                     repo.character,
                     repo.location,
-                    repo.organization
+                    repo.organization,
                 ),
                 saveLocationInfo: new SaveLocationInfo(repo.location),
                 saveManuscriptStructure: new SaveManuscriptStructure(
                     repo.project,
-                    repo.chapter
+                    repo.chapter,
                 ),
                 saveOrganizationInfo: new SaveOrganizationInfo(
                     repo.organization,
-                    repo.location
+                    repo.location,
                 ),
                 saveProjectSettings: new SaveProjectSettings(repo.project),
                 saveUserSettings: new SaveUserSettings(
                     repo.user,
-                    svc.sessionStore
+                    svc.sessionStore,
                 ),
             },
             manuscript: {
                 createChapter: new CreateChapter(repo.chapter, repo.project),
                 createScrapNote: new CreateScrapNote(
                     repo.scrapNote,
-                    repo.project
+                    repo.project,
                 ),
                 deleteChapter: new DeleteChapter(repo.chapter, repo.project),
                 deleteScrapNote: new DeleteScrapNote(
                     repo.scrapNote,
-                    repo.project
+                    repo.project,
                 ),
                 moveChapter: new MoveChapter(repo.project, repo.chapter),
                 overwriteChapter: new OverwriteChapter(repo.chapter),
@@ -499,7 +504,7 @@ export class AppBuilder {
                 createProject: new CreateProject(
                     repo.project,
                     repo.user,
-                    repo.timeline
+                    repo.timeline,
                 ),
                 deleteProject: new DeleteProject(
                     repo.project,
@@ -511,9 +516,18 @@ export class AppBuilder {
                     repo.asset,
                     svc.storage,
                     repo.chatConversation,
-                    repo.user
+                    repo.user,
                 ),
                 exportManuscript: new ExportManuscript(svc.export),
+                importProject: new ImportProject(
+                    svc.epubImport,
+                    repo.project,
+                    repo.chapter,
+                    repo.timeline,
+                    repo.user,
+                    svc.storage,
+                    repo.asset,
+                ),
                 loadProjectList: new LoadProjectList(repo.project, repo.asset),
                 openProject: new OpenProject(
                     repo.project,
@@ -524,26 +538,26 @@ export class AppBuilder {
                     repo.organization,
                     repo.asset,
                     repo.timeline,
-                    repo.event
+                    repo.event,
                 ),
                 reorderProjectItems: new ReorderProjectItems(repo.project),
             },
             world: {
                 createCharacter: new CreateCharacter(
                     repo.character,
-                    repo.project
+                    repo.project,
                 ),
                 createLocation: new CreateLocation(repo.location, repo.project),
                 createOrganization: new CreateOrganization(
                     repo.organization,
-                    repo.project
+                    repo.project,
                 ),
                 deleteCharacter: new DeleteCharacter(
                     repo.character,
                     repo.location,
                     repo.project,
                     repo.asset,
-                    svc.storage
+                    svc.storage,
                 ),
                 deleteLocation: new DeleteLocation(
                     repo.location,
@@ -551,7 +565,7 @@ export class AppBuilder {
                     repo.character,
                     repo.organization,
                     repo.asset,
-                    svc.storage
+                    svc.storage,
                 ),
                 deleteOrganization: new DeleteOrganization(
                     repo.organization,
@@ -559,21 +573,21 @@ export class AppBuilder {
                     repo.character,
                     repo.location,
                     repo.asset,
-                    svc.storage
+                    svc.storage,
                 ),
                 overwriteCharacter: new OverwriteCharacter(
                     repo.character,
                     repo.location,
-                    repo.organization
+                    repo.organization,
                 ),
                 overwriteLocation: new OverwriteLocation(
                     repo.location,
                     repo.character,
-                    repo.organization
+                    repo.organization,
                 ),
                 overwriteOrganization: new OverwriteOrganization(
                     repo.organization,
-                    repo.location
+                    repo.location,
                 ),
             },
             timeline: {
@@ -584,14 +598,14 @@ export class AppBuilder {
                     repo.event,
                     repo.timeline,
                     repo.chapter,
-                    repo.scrapNote
+                    repo.scrapNote,
                 ),
                 updateEvent: new UpdateEvent(repo.event),
                 deleteEvent: new DeleteEvent(
                     repo.event,
                     repo.timeline,
                     repo.chapter,
-                    repo.scrapNote
+                    repo.scrapNote,
                 ),
             },
         };
@@ -601,156 +615,159 @@ export class AppBuilder {
         return {
             analysis: {
                 analyzeText: new AnalyzeTextController(
-                    useCases.analysis.analyzeText
+                    useCases.analysis.analyzeText,
                 ),
                 editChapters: new EditChaptersController(
-                    useCases.analysis.editChapters
+                    useCases.analysis.editChapters,
                 ),
                 generalChat: new GeneralChatController(
-                    useCases.analysis.generalChat
+                    useCases.analysis.generalChat,
                 ),
                 loadChatHistory: new LoadChatHistoryController(
-                    useCases.analysis.loadChatHistory
+                    useCases.analysis.loadChatHistory,
                 ),
                 loadChatMessages: new LoadChatMessagesController(
-                    useCases.analysis.loadChatMessages
+                    useCases.analysis.loadChatMessages,
                 ),
             },
             asset: {
                 deleteAsset: new DeleteAssetController(
-                    useCases.asset.deleteAsset
+                    useCases.asset.deleteAsset,
                 ),
                 importAsset: new ImportAssetController(
-                    useCases.asset.importAsset
+                    useCases.asset.importAsset,
                 ),
             },
             auth: {
                 loginUser: new LoginUserController(
                     useCases.auth.loginUser,
-                    this.authStateGateway
+                    this.authStateGateway,
                 ),
                 logoutUser: new LogoutUserController(
                     useCases.auth.logoutUser,
-                    this.authStateGateway
+                    this.authStateGateway,
                 ),
                 registerUser: new RegisterUserController(
                     useCases.auth.registerUser,
-                    this.authStateGateway
+                    this.authStateGateway,
                 ),
                 getState: new GetAuthStateController(this.authStateGateway),
                 updateEmail: new UpdateUserEmailController(
                     useCases.auth.updateEmail,
-                    this.authStateGateway
+                    this.authStateGateway,
                 ),
                 updatePassword: new UpdateUserPasswordController(
                     useCases.auth.updatePassword,
-                    this.authStateGateway
+                    this.authStateGateway,
                 ),
             },
             generation: {
                 generateCharacterImage: new GenerateCharacterImageController(
-                    useCases.generation.generateCharacterImage
+                    useCases.generation.generateCharacterImage,
                 ),
                 generateCharacterPlaylist:
                     new GenerateCharacterPlaylistController(
-                        useCases.generation.generateCharacterPlaylist
+                        useCases.generation.generateCharacterPlaylist,
                     ),
                 generateCharacterSong: new GenerateCharacterSongController(
-                    useCases.generation.generateCharacterSong
+                    useCases.generation.generateCharacterSong,
                 ),
                 generateLocationImage: new GenerateLocationImageController(
-                    useCases.generation.generateLocationImage
+                    useCases.generation.generateLocationImage,
                 ),
                 generateLocationPlaylist:
                     new GenerateLocationPlaylistController(
-                        useCases.generation.generateLocationPlaylist
+                        useCases.generation.generateLocationPlaylist,
                     ),
                 generateLocationSong: new GenerateLocationSongController(
-                    useCases.generation.generateLocationSong
+                    useCases.generation.generateLocationSong,
                 ),
                 generateOrganizationImage:
                     new GenerateOrganizationImageController(
-                        useCases.generation.generateOrganizationImage
+                        useCases.generation.generateOrganizationImage,
                     ),
                 generateOrganizationPlaylist:
                     new GenerateOrganizationPlaylistController(
-                        useCases.generation.generateOrganizationPlaylist
+                        useCases.generation.generateOrganizationPlaylist,
                     ),
                 generateOrganizationSong:
                     new GenerateOrganizationSongController(
-                        useCases.generation.generateOrganizationSong
+                        useCases.generation.generateOrganizationSong,
                     ),
             },
             logistics: {
                 saveChapterContent: new SaveChapterContentController(
-                    useCases.logistics.saveChapterContent
+                    useCases.logistics.saveChapterContent,
                 ),
                 saveCharacterInfo: new SaveCharacterInfoController(
-                    useCases.logistics.saveCharacterInfo
+                    useCases.logistics.saveCharacterInfo,
                 ),
                 saveLocationInfo: new SaveLocationInfoController(
-                    useCases.logistics.saveLocationInfo
+                    useCases.logistics.saveLocationInfo,
                 ),
                 saveManuscriptStructure: new SaveManuscriptStructureController(
-                    useCases.logistics.saveManuscriptStructure
+                    useCases.logistics.saveManuscriptStructure,
                 ),
                 saveOrganizationInfo: new SaveOrganizationInfoController(
-                    useCases.logistics.saveOrganizationInfo
+                    useCases.logistics.saveOrganizationInfo,
                 ),
                 saveProjectSettings: new SaveProjectSettingsController(
-                    useCases.logistics.saveProjectSettings
+                    useCases.logistics.saveProjectSettings,
                 ),
                 saveUserSettings: new SaveUserSettingsController(
-                    useCases.logistics.saveUserSettings
+                    useCases.logistics.saveUserSettings,
                 ),
             },
             manuscript: {
                 createChapter: new CreateChapterController(
-                    useCases.manuscript.createChapter
+                    useCases.manuscript.createChapter,
                 ),
                 createScrapNote: new CreateScrapNoteController(
-                    useCases.manuscript.createScrapNote
+                    useCases.manuscript.createScrapNote,
                 ),
                 deleteChapter: new DeleteChapterController(
-                    useCases.manuscript.deleteChapter
+                    useCases.manuscript.deleteChapter,
                 ),
                 deleteScrapNote: new DeleteScrapNoteController(
-                    useCases.manuscript.deleteScrapNote
+                    useCases.manuscript.deleteScrapNote,
                 ),
                 moveChapter: new MoveChapterController(
-                    useCases.manuscript.moveChapter
+                    useCases.manuscript.moveChapter,
                 ),
                 renameChapter: new RenameChapterController(
-                    useCases.manuscript.renameChapter
+                    useCases.manuscript.renameChapter,
                 ),
                 updateScrapNote: new UpdateScrapNoteController(
-                    useCases.manuscript.updateScrapNote
+                    useCases.manuscript.updateScrapNote,
                 ),
                 overwriteChapter: new OverwriteChapterController(
-                    useCases.manuscript.overwriteChapter
+                    useCases.manuscript.overwriteChapter,
                 ),
                 overwriteScrapNote: new OverwriteScrapNoteController(
-                    useCases.manuscript.overwriteScrapNote
+                    useCases.manuscript.overwriteScrapNote,
                 ),
             },
             project: {
                 createProject: new CreateProjectController(
-                    useCases.project.createProject
+                    useCases.project.createProject,
                 ),
                 deleteProject: new DeleteProjectController(
-                    useCases.project.deleteProject
+                    useCases.project.deleteProject,
                 ),
                 exportManuscript: new ExportManuscriptController(
-                    useCases.project.exportManuscript
+                    useCases.project.exportManuscript,
+                ),
+                importProject: new ImportProjectController(
+                    useCases.project.importProject,
                 ),
                 loadProjectList: new LoadProjectListController(
-                    useCases.project.loadProjectList
+                    useCases.project.loadProjectList,
                 ),
                 openProject: new OpenProjectController(
-                    useCases.project.openProject
+                    useCases.project.openProject,
                 ),
                 reorderProjectItems: new ReorderProjectItemsController(
-                    useCases.project.reorderProjectItems
+                    useCases.project.reorderProjectItems,
                 ),
             },
             sync: {
@@ -758,58 +775,58 @@ export class AppBuilder {
             },
             world: {
                 createCharacter: new CreateCharacterController(
-                    useCases.world.createCharacter
+                    useCases.world.createCharacter,
                 ),
                 createLocation: new CreateLocationController(
-                    useCases.world.createLocation
+                    useCases.world.createLocation,
                 ),
                 createOrganization: new CreateOrganizationController(
-                    useCases.world.createOrganization
+                    useCases.world.createOrganization,
                 ),
                 deleteCharacter: new DeleteCharacterController(
-                    useCases.world.deleteCharacter
+                    useCases.world.deleteCharacter,
                 ),
                 deleteLocation: new DeleteLocationController(
-                    useCases.world.deleteLocation
+                    useCases.world.deleteLocation,
                 ),
                 deleteOrganization: new DeleteOrganizationController(
-                    useCases.world.deleteOrganization
+                    useCases.world.deleteOrganization,
                 ),
                 overwriteCharacter: new OverwriteCharacterController(
-                    useCases.world.overwriteCharacter
+                    useCases.world.overwriteCharacter,
                 ),
                 overwriteLocation: new OverwriteLocationController(
-                    useCases.world.overwriteLocation
+                    useCases.world.overwriteLocation,
                 ),
                 overwriteOrganization: new OverwriteOrganizationController(
-                    useCases.world.overwriteOrganization
+                    useCases.world.overwriteOrganization,
                 ),
             },
             timeline: {
                 createTimeline: new CreateTimelineController(
-                    useCases.timeline.createTimeline
+                    useCases.timeline.createTimeline,
                 ),
                 updateTimeline: new UpdateTimelineController(
-                    useCases.timeline.updateTimeline
+                    useCases.timeline.updateTimeline,
                 ),
                 deleteTimeline: new DeleteTimelineController(
-                    useCases.timeline.deleteTimeline
+                    useCases.timeline.deleteTimeline,
                 ),
                 createEvent: new CreateEventController(
-                    useCases.timeline.createEvent
+                    useCases.timeline.createEvent,
                 ),
                 updateEvent: new UpdateEventController(
-                    useCases.timeline.updateEvent
+                    useCases.timeline.updateEvent,
                 ),
                 deleteEvent: new DeleteEventController(
-                    useCases.timeline.deleteEvent
+                    useCases.timeline.deleteEvent,
                 ),
             },
         };
     }
 
     private async initializeAuthState(
-        loadStoredSession: LoadStoredSession
+        loadStoredSession: LoadStoredSession,
     ): Promise<void> {
         try {
             const { user } = await loadStoredSession.execute();
@@ -838,7 +855,7 @@ export class AppBuilder {
                 const controller = this.controllers[category][action];
 
                 ipcMain.handle(channel, (event, ...args) =>
-                    invokeController(controller, event, args)
+                    invokeController(controller, event, args),
                 );
             }
         }
