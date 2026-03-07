@@ -48,6 +48,7 @@ import { DeleteProject } from "../@core/application/use-cases/project/DeleteProj
 import { ExportManuscript } from "../@core/application/use-cases/project/ExportManuscript";
 import { LoadProjectList } from "../@core/application/use-cases/project/LoadProjectList";
 import { OpenProject } from "../@core/application/use-cases/project/OpenProject";
+import { RenameProject } from "../@core/application/use-cases/project/RenameProject";
 import { ReorderProjectItems } from "../@core/application/use-cases/project/ReorderProjectItems";
 import { ImportProject } from "../@core/application/use-cases/project/ImportProject";
 import { CreateCharacter } from "../@core/application/use-cases/world/CreateCharacter";
@@ -111,6 +112,7 @@ import { DeleteProjectController } from "../@interface-adapters/controllers/proj
 import { ExportManuscriptController } from "../@interface-adapters/controllers/project/ExportManuscriptController";
 import { LoadProjectListController } from "../@interface-adapters/controllers/project/LoadProjectListController";
 import { OpenProjectController } from "../@interface-adapters/controllers/project/OpenProjectController";
+import { RenameProjectController } from "../@interface-adapters/controllers/project/RenameProjectController";
 import { ReorderProjectItemsController } from "../@interface-adapters/controllers/project/ReorderProjectItemsController";
 import { ImportProjectController } from "../@interface-adapters/controllers/project/ImportProjectController";
 import { CreateCharacterController } from "../@interface-adapters/controllers/world/CreateCharacterController";
@@ -243,6 +245,7 @@ type UseCaseMap = {
         importProject: ImportProject;
         loadProjectList: LoadProjectList;
         openProject: OpenProject;
+        renameProject: RenameProject;
         reorderProjectItems: ReorderProjectItems;
     };
     world: {
@@ -540,6 +543,7 @@ export class AppBuilder {
                     repo.timeline,
                     repo.event,
                 ),
+                renameProject: new RenameProject(repo.project),
                 reorderProjectItems: new ReorderProjectItems(repo.project),
             },
             world: {
@@ -765,6 +769,9 @@ export class AppBuilder {
                 ),
                 openProject: new OpenProjectController(
                     useCases.project.openProject,
+                ),
+                renameProject: new RenameProjectController(
+                    useCases.project.renameProject
                 ),
                 reorderProjectItems: new ReorderProjectItemsController(
                     useCases.project.reorderProjectItems,

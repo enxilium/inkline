@@ -2,6 +2,7 @@
 name = "inkline"
 
 [env]
+development = ".env"
 
 [up]
 steps = [
@@ -15,9 +16,11 @@ steps = [
 
 [start]
 commands = [
-
+	npm start
 ]
 
 [tasks]
+publish = "npm run publish"
 
 [open]
+repo = "https://github.com/enxilium/inkline"

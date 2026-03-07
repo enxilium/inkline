@@ -41,6 +41,7 @@ import type { DeleteProjectController } from "./project/DeleteProjectController"
 import type { ExportManuscriptController } from "./project/ExportManuscriptController";
 import type { LoadProjectListController } from "./project/LoadProjectListController";
 import type { OpenProjectController } from "./project/OpenProjectController";
+import type { RenameProjectController } from "./project/RenameProjectController";
 import type { ReorderProjectItemsController } from "./project/ReorderProjectItemsController";
 import type { ImportProjectController } from "./project/ImportProjectController";
 import type { CreateCharacterController } from "./world/CreateCharacterController";
@@ -124,6 +125,7 @@ export interface ControllerInstanceMap {
         importProject: ImportProjectController;
         loadProjectList: LoadProjectListController;
         openProject: OpenProjectController;
+        renameProject: RenameProjectController;
         reorderProjectItems: ReorderProjectItemsController;
     };
     sync: {
@@ -224,6 +226,7 @@ export const controllerChannels: ControllerChannelMap = {
         importProject: "project:importProject",
         loadProjectList: "project:loadProjectList",
         openProject: "project:openProject",
+        renameProject: "project:renameProject",
         reorderProjectItems: "project:reorderProjectItems",
     },
     sync: {

@@ -352,6 +352,7 @@ type AppStore = {
     createLocationEntry: () => Promise<void>;
     createOrganizationEntry: () => Promise<void>;
     deleteProject: (projectId: string) => Promise<void>;
+    renameProject: (projectId: string, title: string) => Promise<void>;
     deleteChapter: (chapterId: string) => Promise<void>;
     deleteScrapNote: (scrapNoteId: string) => Promise<void>;
     deleteCharacter: (characterId: string) => Promise<void>;
@@ -1671,6 +1672,29 @@ export const useAppStore = create<AppStore>((set, get) => {
                     projectsError: createErrorMessage(
                         error,
                         "Failed to delete project.",
+                    ),
+                });
+            }
+        },
+        renameProject: async (projectId, title) => {
+            set({ projectsError: null });
+            try {
+                await rendererApi.project.renameProject({
+                    projectId,
+                    title,
+                });
+                set((state) => ({
+                    projects: state.projects.map((p) =>
+                        p.id === projectId
+                            ? { ...p, title, updatedAt: new Date() }
+                            : p
+                    ),
+                }));
+            } catch (error) {
+                set({
+                    projectsError: createErrorMessage(
+                        error,
+                        "Failed to rename project."
                     ),
                 });
             }

@@ -1,6 +1,6 @@
 import React from "react";
 
-import { InklineLogo } from "../ui/InklineLogo";
+import strokeLogo from "../../../../assets/stroke.png";
 import {
     BinderChapterIcon,
     BinderOrganizationIcon,

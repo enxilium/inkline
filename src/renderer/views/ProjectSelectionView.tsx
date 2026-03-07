@@ -28,6 +28,7 @@ type ProjectSelectionViewProps = {
     onCreateProject: (title: string) => Promise<void> | void;
     onOpenProject: (project: ProjectSummary) => void;
     onDeleteProject: (projectId: string) => void;
+    onRenameProject: (projectId: string, title: string) => void;
     onUploadCover: (projectId: string, file: File) => Promise<void> | void;
     onImportProject: () => void;
 };
@@ -53,6 +54,7 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
     onCreateProject,
     onOpenProject,
     onDeleteProject,
+    onRenameProject,
     onUploadCover,
     onImportProject,
     projectCovers,
@@ -72,6 +74,11 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
         "drawing" | "flyOut" | "done"
     >("drawing");
     const [isContentVisible, setIsContentVisible] = React.useState(false);
+    const [renamingProjectId, setRenamingProjectId] = React.useState<
+        string | null
+    >(null);
+    const [renameValue, setRenameValue] = React.useState("");
+    const renameInputRef = React.useRef<HTMLInputElement>(null);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const targetProjectIdRef = React.useRef<string | null>(null);
     const welcomeTextRef = React.useRef<HTMLSpanElement>(null);
@@ -432,7 +439,70 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                         ) : null}
                                     </div>
                                     <div>
-                                        <h3>{project.title}</h3>
+                                        {renamingProjectId === project.id ? (
+                                            <form
+                                                onSubmit={(e) => {
+                                                    e.preventDefault();
+                                                    const trimmed =
+                                                        renameValue.trim();
+                                                    if (
+                                                        trimmed &&
+                                                        trimmed !==
+                                                            project.title
+                                                    ) {
+                                                        onRenameProject(
+                                                            project.id,
+                                                            trimmed,
+                                                        );
+                                                    }
+                                                    setRenamingProjectId(null);
+                                                }}
+                                                onClick={(e) =>
+                                                    e.stopPropagation()
+                                                }
+                                            >
+                                                <input
+                                                    ref={renameInputRef}
+                                                    className="project-rename-input"
+                                                    type="text"
+                                                    value={renameValue}
+                                                    onChange={(e) =>
+                                                        setRenameValue(
+                                                            e.target.value,
+                                                        )
+                                                    }
+                                                    onBlur={() => {
+                                                        const trimmed =
+                                                            renameValue.trim();
+                                                        if (
+                                                            trimmed &&
+                                                            trimmed !==
+                                                                project.title
+                                                        ) {
+                                                            onRenameProject(
+                                                                project.id,
+                                                                trimmed,
+                                                            );
+                                                        }
+                                                        setRenamingProjectId(
+                                                            null,
+                                                        );
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (
+                                                            e.key === "Escape"
+                                                        ) {
+                                                            setRenamingProjectId(
+                                                                null,
+                                                            );
+                                                        }
+                                                    }}
+                                                    autoFocus
+                                                />
+                                            </form>
+                                        ) : (
+                                            <h3>{project.title}</h3>
+                                        )}
                                         <p className="panel-subtitle">
                                             Updated{" "}
                                             {formatTimestamp(project.updatedAt)}

@@ -55,6 +55,7 @@ const App: React.FC = () => {
         setProjectsError,
         createProject,
         deleteProject,
+        renameProject,
         openProject,
         returnToProjects,
         importAsset,
@@ -92,14 +93,15 @@ const App: React.FC = () => {
     }, [pendingEditsCount, stage]);
 
     React.useEffect(() => {
-        const isMac =
-            typeof navigator !== "undefined" &&
-            /Mac|iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const ua =
+            typeof navigator !== "undefined" ? navigator.userAgent : "";
 
-        if (isMac) {
+        if (/Mac|iPhone|iPad|iPod/i.test(ua)) {
             document.documentElement.dataset.platform = "mac";
+        } else if (/Linux/i.test(ua)) {
+            document.documentElement.dataset.platform = "linux";
         } else {
-            delete document.documentElement.dataset.platform;
+            document.documentElement.dataset.platform = "windows";
         }
     }, []);
 
@@ -269,6 +271,15 @@ const App: React.FC = () => {
         [deleteProject],
     );
 
+    const handleRenameProject = React.useCallback(
+        (projectId: string, title: string) => {
+            renameProject(projectId, title).catch(() => {
+                /* noop */
+            });
+        },
+        [renameProject],
+    );
+
     const handleUploadCover = React.useCallback(
         async (projectId: string, file: File) => {
             const arrayBuffer = await file.arrayBuffer();
@@ -313,6 +324,7 @@ const App: React.FC = () => {
                         onCreateProject={handleCreateProject}
                         onOpenProject={handleOpenProject}
                         onDeleteProject={handleDeleteProject}
+                        onRenameProject={handleRenameProject}
                         onUploadCover={handleUploadCover}
                         onImportProject={importProject}
                         isImporting={isImporting}
