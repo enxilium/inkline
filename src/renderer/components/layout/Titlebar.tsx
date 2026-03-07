@@ -137,7 +137,7 @@ export const Titlebar: React.FC = () => {
                         aria-label="Back to projects"
                         title="Back to projects"
                     >
-                        <InklineLogo />
+                        <img src={strokeLogo} alt="Stroke logo" className="titlebar-logo-image" />
                     </button>
                     {stage === "workspace" ? <TitlebarMenuBar /> : null}
                 </div>

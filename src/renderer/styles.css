@@ -262,11 +262,17 @@ h2 {
     padding: 0;
 }
 
-.titlebar-logo svg {
+.titlebar-logo svg,
+.titlebar-logo-image {
     cursor: pointer;
     height: 14px;
     width: auto;
     display: block;
+}
+
+.titlebar-logo-image {
+    max-height: 100%;
+    object-fit: contain;
 }
 
 .titlebar-right {
