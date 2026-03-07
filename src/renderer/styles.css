@@ -901,7 +901,6 @@ html {
     box-sizing: border-box;
 }
 
-
 /* ============================================================
  * LOADING & STATUS
  * ============================================================ */
@@ -914,7 +913,6 @@ html {
     justify-content: center;
     background: var(--surface);
 }
-
 
 .status-pill {
     display: inline-flex;
@@ -1059,8 +1057,13 @@ html {
 /* ── Feature toggle cards (Settings > AI Features) ── */
 
 .feature-platform-warning {
-    background: color-mix(in srgb, var(--color-warning-accent) 10%, transparent);
-    border: 1px solid color-mix(in srgb, var(--color-warning-accent) 25%, transparent);
+    background: color-mix(
+        in srgb,
+        var(--color-warning-accent) 10%,
+        transparent
+    );
+    border: 1px solid
+        color-mix(in srgb, var(--color-warning-accent) 25%, transparent);
     border-radius: var(--radius);
     padding: 0.75rem 1rem;
     font-size: var(--text-sm2);
@@ -3092,7 +3095,11 @@ input.toolbar-color:focus {
 }
 
 .flexlayout__border_button--selected {
-    background-color: color-mix(in srgb, var(--color-lt-style) 10%, transparent);
+    background-color: color-mix(
+        in srgb,
+        var(--color-lt-style) 10%,
+        transparent
+    );
     color: var(--accent);
 }
 
@@ -4075,7 +4082,8 @@ input.toolbar-color:focus {
     border-radius: 4px;
     font-size: 0.85em;
     cursor: pointer;
-    border: 1px solid color-mix(in srgb, var(--color-ref-character) 30%, transparent);
+    border: 1px solid
+        color-mix(in srgb, var(--color-ref-character) 30%, transparent);
     font-family: inherit;
     font-weight: 500;
     transition:
@@ -4085,7 +4093,11 @@ input.toolbar-color:focus {
 
 .list-input-reference:hover {
     background: color-mix(in srgb, var(--color-ref-character) 25%, transparent);
-    border-color: color-mix(in srgb, var(--color-ref-character) 50%, transparent);
+    border-color: color-mix(
+        in srgb,
+        var(--color-ref-character) 50%,
+        transparent
+    );
     text-decoration: none;
 }
 
@@ -4241,7 +4253,8 @@ input.toolbar-color:focus {
 .tiptap-ref-kind-chapter:hover,
 .tiptap-document-reference[data-kind="chapter"]:hover {
     background: color-mix(in srgb, var(--color-ref-chapter) 10%, transparent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--color-ref-chapter) 20%, transparent);
+    box-shadow: 0 0 8px
+        color-mix(in srgb, var(--color-ref-chapter) 20%, transparent);
 }
 .tiptap-ref-kind-chapter:hover {
     border-color: color-mix(in srgb, var(--color-ref-chapter) 25%, transparent);
@@ -4249,7 +4262,8 @@ input.toolbar-color:focus {
 .tiptap-ref-kind-scrapNote:hover,
 .tiptap-document-reference[data-kind="scrapNote"]:hover {
     background: color-mix(in srgb, var(--color-ref-scrap) 10%, transparent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--color-ref-scrap) 20%, transparent);
+    box-shadow: 0 0 8px
+        color-mix(in srgb, var(--color-ref-scrap) 20%, transparent);
 }
 .tiptap-ref-kind-scrapNote:hover {
     border-color: color-mix(in srgb, var(--color-ref-scrap) 25%, transparent);
@@ -4257,26 +4271,45 @@ input.toolbar-color:focus {
 .tiptap-ref-kind-character:hover,
 .tiptap-document-reference[data-kind="character"]:hover {
     background: color-mix(in srgb, var(--color-ref-character) 10%, transparent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--color-ref-character) 20%, transparent);
+    box-shadow: 0 0 8px
+        color-mix(in srgb, var(--color-ref-character) 20%, transparent);
 }
 .tiptap-ref-kind-character:hover {
-    border-color: color-mix(in srgb, var(--color-ref-character) 25%, transparent);
+    border-color: color-mix(
+        in srgb,
+        var(--color-ref-character) 25%,
+        transparent
+    );
 }
 .tiptap-ref-kind-location:hover,
 .tiptap-document-reference[data-kind="location"]:hover {
     background: color-mix(in srgb, var(--color-ref-location) 10%, transparent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--color-ref-location) 20%, transparent);
+    box-shadow: 0 0 8px
+        color-mix(in srgb, var(--color-ref-location) 20%, transparent);
 }
 .tiptap-ref-kind-location:hover {
-    border-color: color-mix(in srgb, var(--color-ref-location) 25%, transparent);
+    border-color: color-mix(
+        in srgb,
+        var(--color-ref-location) 25%,
+        transparent
+    );
 }
 .tiptap-ref-kind-organization:hover,
 .tiptap-document-reference[data-kind="organization"]:hover {
-    background: color-mix(in srgb, var(--color-ref-organization) 10%, transparent);
-    box-shadow: 0 0 8px color-mix(in srgb, var(--color-ref-organization) 20%, transparent);
+    background: color-mix(
+        in srgb,
+        var(--color-ref-organization) 10%,
+        transparent
+    );
+    box-shadow: 0 0 8px
+        color-mix(in srgb, var(--color-ref-organization) 20%, transparent);
 }
 .tiptap-ref-kind-organization:hover {
-    border-color: color-mix(in srgb, var(--color-ref-organization) 25%, transparent);
+    border-color: color-mix(
+        in srgb,
+        var(--color-ref-organization) 25%,
+        transparent
+    );
 }
 
 /* Suggestion dropdown triggered by "/" */
