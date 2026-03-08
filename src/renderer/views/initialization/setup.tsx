@@ -1,5 +1,9 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import strokeLargeLogo from "../../../../assets/stroke-large.png";
+import inkyLargeIcon from "../../../../assets/icons/inky-large.png";
+import genAiIcon from "../../../../assets/icons/gen-ai.png";
+import musicIcon from "../../../../assets/icons/music.png";
 
 // Types for IPC communication
 interface DownloadProgress {
@@ -17,10 +21,6 @@ interface SetupConfig {
         imageGeneration: boolean;
         audioGeneration: boolean;
     };
-    theme: {
-        colorScheme: "dark" | "light";
-        accentColor: string;
-    };
 }
 
 interface PlatformInfo {
@@ -33,17 +33,13 @@ type SetupStep =
     | "features"
     | "downloads"
     | "finalizing"
-    | "theme"
     | "complete";
 
-const ACCENT_COLORS = [
-    { name: "Blue", value: "#4a90e2" },
-    { name: "Teal", value: "#50e39c" },
-    { name: "Purple", value: "#9b59b6" },
-    { name: "Orange", value: "#e67e22" },
-    { name: "Pink", value: "#e91e63" },
-    { name: "Cyan", value: "#00bcd4" },
-];
+// Single accent color now - no selection needed
+const ACCENT_COLOR = "#2ef6ad";
+const ACCENT_TRANSPARENT = "#2ef6ad11";
+const ACCENT_TRANSPARENT2 = "#2ef6ad44";
+const ACCENT_LIGHT = "#b4ffeb";
 
 // Helper to format bytes
 const formatBytes = (bytes: number): string => {
@@ -58,39 +54,15 @@ const formatBytes = (bytes: number): string => {
 const WelcomeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => (
     <div style={styles.stepContainer}>
         <div style={styles.logoContainer}>
-            <svg
-                width="80"
-                height="80"
-                viewBox="0 0 100 100"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-            >
-                <defs>
-                    <linearGradient
-                        id="logoGradient"
-                        x1="0%"
-                        y1="0%"
-                        x2="100%"
-                        y2="100%"
-                    >
-                        <stop offset="0%" stopColor="#4a90e2" />
-                        <stop offset="100%" stopColor="#50e39c" />
-                    </linearGradient>
-                </defs>
-                <path
-                    d="M20 80 L50 20 L80 80"
-                    stroke="url(#logoGradient)"
-                    strokeWidth="8"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    fill="none"
-                />
-                <circle cx="50" cy="60" r="6" fill="url(#logoGradient)" />
-            </svg>
+            <img
+                src={strokeLargeLogo}
+                alt="Inkline Logo"
+                style={{ width: "80px", height: "80px", objectFit: "contain" }}
+            />
         </div>
         <h1 style={styles.title}>Welcome to Inkline</h1>
         <p style={styles.subtitle}>
-            Your AI-powered storytelling companion. Let's set up your
+            Your AI-powered storytelling companion. <br></br>Let's set up your
             experience.
         </p>
         <button style={styles.primaryButton} onClick={onNext}>
@@ -145,11 +117,17 @@ const FeaturesStep: React.FC<{
                         ...styles.featureCard,
                         ...(config.features.aiChat
                             ? styles.featureCardActive
-                            : {}),
+                            : styles.featureCardInactive),
                     }}
                     onClick={() => toggleFeature("aiChat")}
                 >
-                    <div style={styles.featureIcon}>💬</div>
+                    <div style={styles.featureIcon}>
+                        <img
+                            src={inkyLargeIcon}
+                            alt="AI Chat Icon"
+                            style={{ width: "24px", height: "24px", objectFit: "contain" }}
+                        />
+                    </div>
                     <div style={styles.featureInfo}>
                         <h3 style={styles.featureName}>AI Chat & Editor</h3>
                         <p style={styles.featureDesc}>
@@ -166,7 +144,7 @@ const FeaturesStep: React.FC<{
                             ...styles.checkbox,
                             ...(config.features.aiChat
                                 ? styles.checkboxActive
-                                : {}),
+                                : styles.checkboxInactive),
                         }}
                     >
                         {config.features.aiChat && "✓"}
@@ -178,14 +156,20 @@ const FeaturesStep: React.FC<{
                         ...styles.featureCard,
                         ...(config.features.imageGeneration
                             ? styles.featureCardActive
-                            : {}),
+                            : styles.featureCardInactive),
                         ...(isLocalAiDisabled
                             ? styles.featureCardDisabled
                             : {}),
                     }}
                     onClick={() => toggleFeature("imageGeneration")}
                 >
-                    <div style={styles.featureIcon}>🎨</div>
+                    <div style={styles.featureIcon}>
+                        <img
+                            src={genAiIcon}
+                            alt="Image Generation Icon"
+                            style={{ width: "24px", height: "24px", objectFit: "contain" }}
+                        />
+                    </div>
                     <div style={styles.featureInfo}>
                         <h3 style={styles.featureName}>Image Generation</h3>
                         <p style={styles.featureDesc}>
@@ -203,7 +187,7 @@ const FeaturesStep: React.FC<{
                             ...styles.checkbox,
                             ...(config.features.imageGeneration
                                 ? styles.checkboxActive
-                                : {}),
+                                : styles.checkboxInactive),
                             ...(isLocalAiDisabled
                                 ? styles.checkboxDisabled
                                 : {}),
@@ -218,14 +202,20 @@ const FeaturesStep: React.FC<{
                         ...styles.featureCard,
                         ...(config.features.audioGeneration
                             ? styles.featureCardActive
-                            : {}),
+                            : styles.featureCardInactive),
                         ...(isLocalAiDisabled
                             ? styles.featureCardDisabled
                             : {}),
                     }}
                     onClick={() => toggleFeature("audioGeneration")}
                 >
-                    <div style={styles.featureIcon}>🎵</div>
+                    <div style={styles.featureIcon}>
+                        <img
+                            src={musicIcon}
+                            alt="Audio Generation Icon"
+                            style={{ width: "24px", height: "24px", objectFit: "contain" }}
+                        />
+                    </div>
                     <div style={styles.featureInfo}>
                         <h3 style={styles.featureName}>Audio Generation</h3>
                         <p style={styles.featureDesc}>
@@ -243,7 +233,7 @@ const FeaturesStep: React.FC<{
                             ...styles.checkbox,
                             ...(config.features.audioGeneration
                                 ? styles.checkboxActive
-                                : {}),
+                                : styles.checkboxInactive),
                             ...(isLocalAiDisabled
                                 ? styles.checkboxDisabled
                                 : {}),
@@ -447,10 +437,10 @@ const DownloadsStep: React.FC<{
                                 progress.status === "error"
                                     ? "#e74c3c"
                                     : progress.status === "completed"
-                                      ? "#50e39c"
+                                      ? "#2ef6ad"
                                       : progress.status === "extracting"
                                         ? "#f39c12"
-                                        : "#4a90e2",
+                                        : "#2ef6ad",
                         }}
                     />
                 </div>
@@ -470,7 +460,7 @@ const DownloadsStep: React.FC<{
             <div style={styles.stepContainer}>
                 <h2 style={styles.stepTitle}>No Downloads Required</h2>
                 <p style={styles.stepDescription}>
-                    You've chosen not to enable local AI features. You can
+                    You've chosen not to enable local AI features. <br></br>You can
                     enable them later in Settings.
                 </p>
                 <div style={styles.buttonRow}>
@@ -733,7 +723,7 @@ const FinalizingStep: React.FC<{
                                 />
                                 <path
                                     d="M24 4C12.954 4 4 12.954 4 24"
-                                    stroke="#4a90e2"
+                                    stroke="#2ef6ad"
                                     strokeWidth="4"
                                     strokeLinecap="round"
                                     fill="none"
@@ -759,7 +749,7 @@ const FinalizingStep: React.FC<{
                                                     downloadProgress.status ===
                                                     "extracting"
                                                         ? "#f39c12"
-                                                        : "#4a90e2",
+                                                        : "#2ef6ad",
                                             }}
                                         />
                                     </div>
@@ -807,121 +797,7 @@ const FinalizingStep: React.FC<{
     );
 };
 
-const ThemeStep: React.FC<{
-    config: SetupConfig;
-    onUpdateConfig: (config: Partial<SetupConfig>) => void;
-    onNext: () => void;
-    onBack: () => void;
-}> = ({ config, onUpdateConfig, onNext, onBack }) => {
-    const setColorScheme = (colorScheme: "dark" | "light") => {
-        onUpdateConfig({
-            theme: { ...config.theme, colorScheme },
-        });
-    };
 
-    const setAccentColor = (accentColor: string) => {
-        onUpdateConfig({
-            theme: { ...config.theme, accentColor },
-        });
-    };
-
-    return (
-        <div style={styles.stepContainer}>
-            <h2 style={styles.stepTitle}>Choose Your Theme</h2>
-            <p style={styles.stepDescription}>
-                Customize the look and feel of Inkline. You can change this
-                anytime in Settings.
-            </p>
-
-            <div style={styles.themeSection}>
-                <h3 style={styles.themeSectionTitle}>Color Scheme</h3>
-                <div style={styles.schemeOptions}>
-                    <div
-                        style={{
-                            ...styles.schemeOption,
-                            ...(config.theme.colorScheme === "dark"
-                                ? styles.schemeOptionActive
-                                : {}),
-                        }}
-                        onClick={() => setColorScheme("dark")}
-                    >
-                        <div
-                            style={{
-                                ...styles.schemePreview,
-                                backgroundColor: "#1a1b1e",
-                            }}
-                        >
-                            <div
-                                style={{
-                                    ...styles.schemePreviewInner,
-                                    backgroundColor: "#2a2b2e",
-                                }}
-                            />
-                        </div>
-                        <span>Dark</span>
-                    </div>
-                    <div
-                        style={{
-                            ...styles.schemeOption,
-                            ...(config.theme.colorScheme === "light"
-                                ? styles.schemeOptionActive
-                                : {}),
-                        }}
-                        onClick={() => setColorScheme("light")}
-                    >
-                        <div
-                            style={{
-                                ...styles.schemePreview,
-                                backgroundColor: "#f5f5f5",
-                            }}
-                        >
-                            <div
-                                style={{
-                                    ...styles.schemePreviewInner,
-                                    backgroundColor: "#ffffff",
-                                }}
-                            />
-                        </div>
-                        <span>Light</span>
-                    </div>
-                </div>
-            </div>
-
-            <div style={styles.themeSection}>
-                <h3 style={styles.themeSectionTitle}>Accent Color</h3>
-                <div style={styles.colorOptions}>
-                    {ACCENT_COLORS.map((color) => (
-                        <div
-                            key={color.value}
-                            style={{
-                                ...styles.colorOption,
-                                backgroundColor: color.value,
-                                ...(config.theme.accentColor === color.value
-                                    ? styles.colorOptionActive
-                                    : {}),
-                            }}
-                            onClick={() => setAccentColor(color.value)}
-                            title={color.name}
-                        >
-                            {config.theme.accentColor === color.value && (
-                                <span style={styles.colorCheck}>✓</span>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            <div style={styles.buttonRow}>
-                <button style={styles.secondaryButton} onClick={onBack}>
-                    Back
-                </button>
-                <button style={styles.primaryButton} onClick={onNext}>
-                    Continue
-                </button>
-            </div>
-        </div>
-    );
-};
 
 const CompleteStep: React.FC<{
     config: SetupConfig;
@@ -929,7 +805,13 @@ const CompleteStep: React.FC<{
     onBack: () => void;
 }> = ({ config, onComplete, onBack }) => (
     <div style={styles.stepContainer}>
-        <div style={styles.successIcon}>🎉</div>
+        <div style={styles.successIcon}>
+            <img
+                src={strokeLargeLogo}
+                alt="Success"
+                style={{ width: "64px", height: "64px", objectFit: "contain" }}
+            />
+        </div>
         <h2 style={styles.stepTitle}>You're All Set!</h2>
         <p style={styles.stepDescription}>
             Inkline is ready to help you tell your stories.
@@ -953,12 +835,6 @@ const CompleteStep: React.FC<{
                     {config.features.audioGeneration
                         ? "✅ Enabled"
                         : "❌ Disabled"}
-                </li>
-                <li>
-                    Theme:{" "}
-                    {config.theme.colorScheme === "dark"
-                        ? "🌙 Dark"
-                        : "☀️ Light"}
                 </li>
             </ul>
             {config.features.aiChat && (
@@ -989,10 +865,6 @@ const SetupWizard: React.FC = () => {
             aiChat: true,
             imageGeneration: false,
             audioGeneration: false,
-        },
-        theme: {
-            colorScheme: "dark",
-            accentColor: "#4a90e2",
         },
     });
 
@@ -1048,10 +920,6 @@ const SetupWizard: React.FC = () => {
                 ...prev.features,
                 ...(updates.features || {}),
             },
-            theme: {
-                ...prev.theme,
-                ...(updates.theme || {}),
-            },
         }));
     }, []);
 
@@ -1068,7 +936,6 @@ const SetupWizard: React.FC = () => {
         "features",
         "downloads",
         "finalizing",
-        "theme",
         "complete",
     ];
     const currentIndex = steps.indexOf(currentStep);
@@ -1154,14 +1021,6 @@ const SetupWizard: React.FC = () => {
                 {currentStep === "finalizing" && (
                     <FinalizingStep onNext={goNext} />
                 )}
-                {currentStep === "theme" && (
-                    <ThemeStep
-                        config={config}
-                        onUpdateConfig={updateConfig}
-                        onNext={goNext}
-                        onBack={goBack}
-                    />
-                )}
                 {currentStep === "complete" && (
                     <CompleteStep
                         config={config}
@@ -1220,7 +1079,7 @@ const styles: Record<string, React.CSSProperties> = {
         transition: "background-color 0.3s ease",
     },
     progressDotActive: {
-        backgroundColor: "#4a90e2",
+        backgroundColor: "#2ef6ad",
     },
     progressLine: {
         width: "40px",
@@ -1230,7 +1089,7 @@ const styles: Record<string, React.CSSProperties> = {
         transition: "background-color 0.3s ease",
     },
     progressLineActive: {
-        backgroundColor: "#4a90e2",
+        backgroundColor: "#2ef6ad",
     },
     content: {
         flex: 1,
@@ -1273,8 +1132,8 @@ const styles: Record<string, React.CSSProperties> = {
         lineHeight: 1.5,
     },
     primaryButton: {
-        backgroundColor: "#4a90e2",
-        color: "#fff",
+        backgroundColor: "#2ef6ad",
+        color: "#000000",
         border: "none",
         padding: "12px 32px",
         borderRadius: "8px",
@@ -1329,8 +1188,12 @@ const styles: Record<string, React.CSSProperties> = {
         transition: "all 0.2s ease",
     },
     featureCardActive: {
-        borderColor: "#4a90e2",
-        backgroundColor: "rgba(74, 144, 226, 0.1)",
+        borderColor: "#2ef6ad",
+        backgroundColor: "rgba(46, 246, 173, 0.1)",
+    },
+    featureCardInactive: {
+        borderColor: "transparent",
+        backgroundColor: "#2a2b2e",
     },
     featureIcon: {
         fontSize: "24px",
@@ -1358,7 +1221,7 @@ const styles: Record<string, React.CSSProperties> = {
     checkbox: {
         width: "24px",
         height: "24px",
-        borderRadius: "6px",
+        borderRadius: "4px",
         border: "2px solid #3a3b3e",
         display: "flex",
         alignItems: "center",
@@ -1368,8 +1231,12 @@ const styles: Record<string, React.CSSProperties> = {
         flexShrink: 0,
     },
     checkboxActive: {
-        backgroundColor: "#4a90e2",
-        borderColor: "#4a90e2",
+        backgroundColor: "#2ef6ad",
+        borderColor: "#2ef6ad",
+    },
+    checkboxInactive: {
+        backgroundColor: "transparent",
+        borderColor: "#3a3b3e",
     },
     downloadsList: {
         display: "flex",
@@ -1417,72 +1284,6 @@ const styles: Record<string, React.CSSProperties> = {
         color: "#6a6b6e",
         marginTop: "16px",
     },
-    themeSection: {
-        marginBottom: "24px",
-        textAlign: "left",
-    },
-    themeSectionTitle: {
-        fontSize: "14px",
-        fontWeight: 500,
-        color: "#f6f7fb",
-        marginBottom: "12px",
-    },
-    schemeOptions: {
-        display: "flex",
-        gap: "16px",
-    },
-    schemeOption: {
-        flex: 1,
-        padding: "16px",
-        borderRadius: "12px",
-        backgroundColor: "#2a2b2e",
-        border: "2px solid transparent",
-        cursor: "pointer",
-        textAlign: "center",
-        transition: "all 0.2s ease",
-    },
-    schemeOptionActive: {
-        borderColor: "#4a90e2",
-    },
-    schemePreview: {
-        width: "100%",
-        height: "60px",
-        borderRadius: "8px",
-        marginBottom: "8px",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-    },
-    schemePreviewInner: {
-        width: "60%",
-        height: "40px",
-        borderRadius: "4px",
-    },
-    colorOptions: {
-        display: "flex",
-        gap: "12px",
-        flexWrap: "wrap",
-    },
-    colorOption: {
-        width: "48px",
-        height: "48px",
-        borderRadius: "12px",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        transition: "transform 0.2s ease",
-    },
-    colorOptionActive: {
-        transform: "scale(1.1)",
-        boxShadow: "0 0 0 3px rgba(255,255,255,0.3)",
-    },
-    colorCheck: {
-        color: "#fff",
-        fontSize: "18px",
-        fontWeight: "bold",
-        textShadow: "0 1px 2px rgba(0,0,0,0.3)",
-    },
     successIcon: {
         fontSize: "64px",
         marginBottom: "24px",
@@ -1499,6 +1300,7 @@ const styles: Record<string, React.CSSProperties> = {
         fontWeight: 500,
         color: "#f6f7fb",
         marginBottom: "12px",
+        marginTop: "0px",
     },
     summaryList: {
         listStyle: "none",
@@ -1512,6 +1314,7 @@ const styles: Record<string, React.CSSProperties> = {
         fontSize: "13px",
         color: "#e67e22",
         marginTop: "12px",
+        marginBottom: "0px",
         paddingTop: "12px",
         borderTop: "1px solid #3a3b3e",
     },
@@ -1544,7 +1347,7 @@ const styles: Record<string, React.CSSProperties> = {
         textAlign: "left",
     },
     link: {
-        color: "#4a90e2",
+        color: "#2ef6ad",
         textDecoration: "underline",
     },
     // Finalizing step styles
@@ -1573,6 +1376,17 @@ const styles: Record<string, React.CSSProperties> = {
         marginTop: "8px",
         textAlign: "center",
     },
+};
+
+// Exports for dev preview
+export {
+    WelcomeStep,
+    FeaturesStep,
+    DownloadsStep,
+    FinalizingStep,
+    CompleteStep,
+    SetupWizard,
+    styles,
 };
 
 // Mount the app

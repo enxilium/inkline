@@ -67,7 +67,23 @@ export const ChatPanel: React.FC = () => {
     const [historyList, setHistoryList] = React.useState<ChatHistoryItem[]>([]);
 
     const messagesEndRef = React.useRef<HTMLDivElement>(null);
+    const inputRef = React.useRef<HTMLTextAreaElement>(null);
     const isFirstRender = React.useRef(true);
+
+    const MAX_INPUT_HEIGHT = 180;
+
+    const resizeInputToContent = React.useCallback(() => {
+        const input = inputRef.current;
+        if (!input) {
+            return;
+        }
+
+        input.style.height = "auto";
+        const nextHeight = Math.min(input.scrollHeight, MAX_INPUT_HEIGHT);
+        input.style.height = `${nextHeight}px`;
+        input.style.overflowY =
+            input.scrollHeight > MAX_INPUT_HEIGHT ? "auto" : "hidden";
+    }, []);
 
     const scrollToBottom = (behavior: ScrollBehavior = "smooth") => {
         messagesEndRef.current?.scrollIntoView({ behavior });
@@ -81,6 +97,10 @@ export const ChatPanel: React.FC = () => {
             scrollToBottom("smooth");
         }
     }, [messages]);
+
+    React.useEffect(() => {
+        resizeInputToContent();
+    }, [inputValue, resizeInputToContent]);
 
     const handleLoadHistory = async () => {
         if (!showHistory) {
@@ -473,12 +493,7 @@ export const ChatPanel: React.FC = () => {
                 <div ref={messagesEndRef} />
             </div>
 
-            <div
-                style={{
-                    padding: "0.5rem",
-                    borderTop: "1px solid var(--stroke)",
-                }}
-            >
+            <div>
                 {/* Context Area */}
                 {(attachedContexts.length > 0 || currentSelection) && (
                     <div
@@ -562,14 +577,18 @@ export const ChatPanel: React.FC = () => {
 
                 <div style={{ position: "relative" }}>
                     <textarea
+                        ref={inputRef}
                         value={inputValue}
-                        onChange={(e) => setInputValue(e.target.value)}
+                        onChange={(e) => {
+                            setInputValue(e.target.value);
+                        }}
                         onKeyDown={handleKeyDown}
                         placeholder="Ask something..."
                         className="chat-input"
                         style={{
                             width: "100%",
-                            minHeight: "60px",
+                            minHeight: "100px",
+                            maxHeight: "200px",
                             padding: "8px",
                             paddingRight: "32px",
                             background: "var(--surface-strong)",
@@ -577,8 +596,9 @@ export const ChatPanel: React.FC = () => {
                             borderRadius: "6px",
                             color: "var(--text)",
                             fontSize: "0.9rem",
-                            resize: "vertical",
+                            resize: "none",
                             fontFamily: "inherit",
+                            overflowY: "hidden",
                         }}
                     />
                     <div

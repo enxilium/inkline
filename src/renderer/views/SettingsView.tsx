@@ -4,6 +4,12 @@ import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
 import { showDownloadToast } from "../components/ui/DownloadToast";
 import { useAppStore } from "../state/appStore";
+import sparkleIcon from "../../../assets/icons/sparkle.png";
+import inkyIcon from "../../../assets/icons/inky.png";
+import wrenchIcon from "../../../assets/icons/wrench.png";
+import personIcon from "../../../assets/icons/person.png";
+import genAiIcon from "../../../assets/icons/gen-ai.png";
+import musicIcon from "../../../assets/icons/music.png";
 
 type SettingsSection = "theme" | "features" | "models" | "account";
 
@@ -37,7 +43,7 @@ export const SettingsView: React.FC = () => {
     const previousStage = useAppStore((state) => state.previousStage);
 
     const [activeSection, setActiveSection] =
-        useState<SettingsSection>("theme");
+        useState<SettingsSection>("account");
 
     // Theme & personalization (CSS vars)
     const [accent, setAccent] = useState("#2ef6ad");
@@ -49,7 +55,7 @@ export const SettingsView: React.FC = () => {
     const [geminiApiKey, setGeminiApiKey] = useState("");
     const [modelStatus, setModelStatus] = useState<string | null>(null);
 
-    // Account management
+    // Account
     const [newEmail, setNewEmail] = useState("");
     const [newPassword, setNewPassword] = useState("");
     const [accountStatus, setAccountStatus] = useState<string | null>(null);
@@ -357,29 +363,34 @@ export const SettingsView: React.FC = () => {
         () =>
             [
                 {
+                    id: "account" as const,
+                    title: "Account",
+                    subtitle: "Email and password",
+                    icon: personIcon,
+                },
+                {
                     id: "theme" as const,
                     title: "Theme & Personalization",
                     subtitle: "Colors and UI appearance",
+                    icon: sparkleIcon,
                 },
                 {
                     id: "features" as const,
                     title: "AI Features",
                     subtitle: "Image & audio generation",
+                    icon: inkyIcon,
                 },
                 {
                     id: "models" as const,
                     title: "Model Configuration",
                     subtitle: "Gemini API key",
-                },
-                {
-                    id: "account" as const,
-                    title: "Account Management",
-                    subtitle: "Email and password",
+                    icon: wrenchIcon,
                 },
             ] satisfies Array<{
                 id: SettingsSection;
                 title: string;
                 subtitle: string;
+                icon: string;
             }>,
         [],
     );
@@ -453,28 +464,19 @@ export const SettingsView: React.FC = () => {
                 <div>
                     <p className="panel-label">Settings</p>
                     <p className="panel-subtitle">
-                        Manage appearance, models, and your account.
+                        Configure Inkline to fit your needs.
                     </p>
                 </div>
                 <div className="settings-header-actions">
                     <Button onClick={handleReset} variant="ghost" size="sm">
                         Reset to Defaults
                     </Button>
-                    {previousStage === "workspace" && (
-                        <Button
-                            onClick={closeSettings}
-                            variant="ghost"
-                            size="sm"
-                        >
-                            Back to Workspace
-                        </Button>
-                    )}
                     <Button
                         onClick={() => returnToProjects()}
                         variant="ghost"
                         size="sm"
                     >
-                        Back to Projects
+                        Back
                     </Button>
                 </div>
             </div>
@@ -492,12 +494,21 @@ export const SettingsView: React.FC = () => {
                             onClick={() => setActiveSection(item.id)}
                             type="button"
                         >
-                            <span className="settings-nav-title">
-                                {item.title}
-                            </span>
-                            <span className="settings-nav-subtitle">
-                                {item.subtitle}
-                            </span>
+                            <div className="flex-row" style={{ alignItems: "flex-start" }}>
+                                <img
+                                    src={item.icon}
+                                    alt=""
+                                    className="settings-nav-icon"
+                                />
+                                <div className="flex-column" style={{ alignItems: "flex-start" }}>
+                                    <div className="settings-nav-title">
+                                        {item.title}
+                                    </div>
+                                    <div className="settings-nav-subtitle">
+                                        {item.subtitle}
+                                    </div>
+                                </div>
+                            </div>
                         </Button>
                     ))}
                 </nav>
@@ -521,8 +532,8 @@ export const SettingsView: React.FC = () => {
                                                 style={{ flex: 1 }}
                                             >
                                                 {isDarkMode
-                                                    ? "Switch to Light Mode (Text)"
-                                                    : "Switch to Dark Mode (Text)"}
+                                                    ? "Switch to Dark Text for Light Background"
+                                                    : "Switch to Light Text for Dark Background"}
                                             </Button>
                                         </div>
                                         <p className="helper-text">
@@ -637,7 +648,15 @@ export const SettingsView: React.FC = () => {
                                     {/* Image Generation */}
                                     <div className="feature-toggle-card">
                                         <div className="feature-toggle-icon">
-                                            🎨
+                                            <img
+                                                src={genAiIcon}
+                                                alt="Image Generation"
+                                                style={{
+                                                    width: "24px",
+                                                    height: "24px",
+                                                    objectFit: "contain",
+                                                }}
+                                            />
                                         </div>
                                         <div className="feature-toggle-info">
                                             <h3 className="feature-toggle-name">
@@ -719,7 +738,15 @@ export const SettingsView: React.FC = () => {
                                     {/* Audio Generation */}
                                     <div className="feature-toggle-card">
                                         <div className="feature-toggle-icon">
-                                            🎵
+                                            <img
+                                                src={musicIcon}
+                                                alt="Audio Generation"
+                                                style={{
+                                                    width: "24px",
+                                                    height: "24px",
+                                                    objectFit: "contain",
+                                                }}
+                                            />
                                         </div>
                                         <div className="feature-toggle-info">
                                             <h3 className="feature-toggle-name">
@@ -849,7 +876,7 @@ export const SettingsView: React.FC = () => {
 
                         {activeSection === "account" ? (
                             <>
-                                <h2>Account Management</h2>
+                                <h2>Account</h2>
                                 <p className="panel-subtitle">
                                     Update your sign-in details.
                                 </p>

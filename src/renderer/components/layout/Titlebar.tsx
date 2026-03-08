@@ -323,15 +323,6 @@ export const Titlebar: React.FC = () => {
                                     <PenLineIcon size={16} />
                                 )}
                             </button>
-                            <button
-                                type="button"
-                                className="titlebar-action-icon"
-                                aria-label="Settings"
-                                onClick={openSettings}
-                                title="Settings"
-                            >
-                                <SettingsIcon size={16} />
-                            </button>
                             {/* Hide chat toggle when in timeline view */}
                             {workspaceViewMode === "manuscript" && (
                                 <button
