@@ -1,7 +1,7 @@
 {
     "name": "inkline",
-    "productName": "inkline",
-    "version": "0.1.1-alpha",
+    "productName": "Inkline",
+    "version": "1.0.0",
     "description": "My Electron application description",
     "repository": {
         "type": "git",
