@@ -10,6 +10,7 @@ import { rendererConfig } from "./webpack.renderer.config";
 const config: ForgeConfig = {
     packagerConfig: {
         asar: true,
+        executableName: "inkline",
         // Workflow files are bundled separately (server/ComfyUI downloaded at runtime)
         // 7za.exe is shipped alongside the asar for archive extraction at runtime
         extraResource: [
