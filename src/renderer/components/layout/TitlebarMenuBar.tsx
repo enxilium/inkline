@@ -9,6 +9,7 @@ import {
 } from "../ui/Dialog";
 import { Label } from "../ui/Label";
 import { Button } from "../ui/Button";
+import { DownloadIcon } from "../ui/Icons";
 import { useAppStore } from "../../state/appStore";
 import { getTextStats } from "../../utils/textStats";
 import { EditChapterRangeDialog } from "../dialogs/EditChapterRangeDialog";
@@ -120,14 +121,15 @@ export const TitlebarMenuBar: React.FC = () => {
                             </button>
                             <button
                                 type="button"
-                                className="project-card-menu-item"
+                                className="project-card-menu-item titlebar-menu-item-with-icon"
                                 role="menuitem"
                                 onClick={() => {
                                     setOpenMenu(null);
                                     setIsExportDialogOpen(true);
                                 }}
                             >
-                                Export Manuscript...
+                                <DownloadIcon size={14} aria-hidden="true" />
+                                <span> Export Manuscript...</span>
                             </button>
 
                             <button

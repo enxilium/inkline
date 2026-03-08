@@ -568,6 +568,12 @@ h2 {
     z-index: var(--z-titlebar-menu);
 }
 
+.titlebar-menu-item-with-icon {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
 /* ============================================================
  * UTILITIES
  * ============================================================ */
@@ -633,8 +639,7 @@ h2 {
 
 .btn-ghost {
     background: transparent;
-    border-color: var(--overlay-18);
-    border-style: dashed;
+    border-color: var(--overlay-8);
     color: var(--text-subtle);
 }
 
@@ -949,6 +954,7 @@ html {
 
 .settings-page {
     width: 100%;
+    height: 100%;
     max-width: 1200px;
     margin-inline: auto;
     padding: clamp(1rem, 3vw, 2rem);
@@ -979,15 +985,31 @@ html {
 .settings-layout {
     display: grid;
     grid-template-columns: minmax(220px, 280px) 1fr;
-    gap: 1rem;
+    gap: 2rem;
     align-items: flex-start;
+    height: 100%;
+}
+
+
+.settings-content {
+    height: 100%;
+}
+
+.settings-content-inner {
+    animation: settingsFadeInUp 200ms ease;
+    animation-fill-mode: both;
+}
+
+.settings-content-inner h2 {
+    width: 100%;
+}
+
+.settings-content-inner .panel-subtitle {
+    width: 100%;
+    max-width: none;
 }
 
 .settings-sidebar {
-    background: var(--surface-strong);
-    border: 1px solid var(--stroke);
-    border-radius: var(--radius);
-    padding: 0.5rem;
     display: flex;
     flex-direction: column;
     gap: 0.35rem;
@@ -1010,6 +1032,17 @@ html {
     color: var(--text);
 }
 
+.settings-nav-icon {
+    width: 20px;
+    height: 20px;
+    margin-bottom: 0.4rem;
+    opacity: 0.7;
+}
+
+.settings-nav-button.is-active .settings-nav-icon {
+    opacity: 1;
+}
+
 .settings-nav-title {
     font-size: var(--text-base2);
     font-weight: 600;
@@ -1020,18 +1053,6 @@ html {
     font-size: var(--text-xs2);
     color: var(--text-subtle);
     font-weight: 500;
-}
-
-.settings-content {
-    background: var(--surface-strong);
-    border: 1px solid var(--stroke);
-    border-radius: var(--radius);
-    padding: clamp(1rem, 2vw, 1.5rem);
-}
-
-.settings-content-inner {
-    animation: settingsFadeInUp 200ms ease;
-    animation-fill-mode: both;
 }
 
 .settings-section {
@@ -1950,8 +1971,11 @@ input.toolbar-color:focus {
     height: 100%;
     min-height: 0;
     gap: 0;
-    border-radius: 0;
-    border: 1px solid var(--stroke);
+    border-top: 1px solid var(--stroke);
+    border-left: 1px solid var(--stroke);
+    border-right: 1px solid var(--stroke);
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
 }
 
 .editor-surface {
@@ -3515,7 +3539,6 @@ input.toolbar-color:focus {
 .workspace-chat-container.is-open {
     width: var(--workspace-chat-width, 320px);
     min-width: var(--workspace-chat-width, 320px);
-    border-left: 1px solid var(--stroke);
 }
 
 .workspace-chat-container.is-closed {

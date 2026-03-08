@@ -6,7 +6,9 @@ import lineOnceAnimation from "../../../assets/line-once.json";
 import lineLoopAnimation from "../../../assets/line-loop.json";
 
 import { Button } from "../components/ui/Button";
-import { MoreVerticalIcon, RefreshCwIcon } from "../components/ui/Icons";
+import {
+    MoreVerticalIcon,
+} from "../components/ui/Icons";
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
 import type {
@@ -271,11 +273,12 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                         <Button
                             type="button"
                             variant="ghost"
-                            onClick={onRefresh}
-                            disabled={status === "loading"}
-                            title="Refresh Projects"
+                            onClick={onImportProject}
+                            disabled={isImporting}
+                            title="Import from EPUB"
+                            aria-label="Import from EPUB"
                         >
-                            <RefreshCwIcon />
+                            Import
                         </Button>
                         <form
                             className="create-project-form"
@@ -305,17 +308,6 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                 {isSubmitting ? "Creating…" : "Create"}
                             </Button>
                         </form>
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={onImportProject}
-                            disabled={isImporting}
-                            title="Import from EPUB"
-                        >
-                            {isImporting
-                                ? "Importing\u2026"
-                                : "Import Existing"}
-                        </Button>
                     </div>
 
                     {isImporting ? (
