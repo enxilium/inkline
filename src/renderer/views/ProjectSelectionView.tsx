@@ -365,10 +365,8 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setOpenMenuProjectId(null);
-                                                    // onAddCover(project.id);
-                                                    window.alert(
-                                                        "Rename not implemented yet.",
-                                                    );
+                                                    setRenameValue(project.title);
+                                                    setRenamingProjectId(project.id);
                                                 }}
                                             >
                                                 Rename Project
