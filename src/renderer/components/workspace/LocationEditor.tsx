@@ -1,7 +1,8 @@
 import React from "react";
 
 import type { WorkspaceLocation } from "../../types";
-import { Button } from "../ui/Button";
+import { ActionDropdown } from "../ui/ActionDropdown";
+import { ChevronLeftIcon, ChevronRightIcon } from "../ui/Icons";
 import { Label } from "../ui/Label";
 import { ListInput, type DocumentRef } from "../ui/ListInput";
 import { TagsInput } from "../ui/Tags";
@@ -374,24 +375,49 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                     </span>
                                 ) : null}
                             </div>
-                            <div className="portrait-actions">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    onClick={handleGenerate}
+                            <div className="portrait-toolbar">
+                                <div className="portrait-gallery-nav">
+                                    <button
+                                        type="button"
+                                        className="gallery-nav-btn"
+                                        onClick={showPreviousImage}
+                                        disabled={
+                                            !canCycleGallery
+                                        }
+                                    >
+                                        <ChevronLeftIcon size={14} />
+                                    </button>
+                                    <span className="gallery-nav-label">
+                                        {gallerySources.length > 0
+                                            ? `${currentImageIndex + 1} of ${gallerySources.length}`
+                                            : "0 of 0"}
+                                    </span>
+                                    <button
+                                        type="button"
+                                        className="gallery-nav-btn"
+                                        onClick={showNextImage}
+                                        disabled={
+                                            !canCycleGallery
+                                        }
+                                    >
+                                        <ChevronRightIcon size={14} />
+                                    </button>
+                                </div>
+                                <ActionDropdown
                                     disabled={assetBusy}
-                                >
-                                    {assetBusy ? "Working…" : "Generate art"}
-                                </Button>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={triggerFilePick}
-                                    disabled={assetBusy}
-                                >
-                                    Import image
-                                </Button>
+                                    options={[
+                                        {
+                                            label: "Generate art",
+                                            onClick: handleGenerate,
+                                            disabled: assetBusy,
+                                        },
+                                        {
+                                            label: "Import image",
+                                            onClick: triggerFilePick,
+                                            disabled: assetBusy,
+                                        },
+                                    ]}
+                                />
                                 <input
                                     ref={fileInputRef}
                                     type="file"
@@ -400,116 +426,77 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                     onChange={handleFileChange}
                                 />
                             </div>
-                            {gallerySources.length ? (
-                                <div className="portrait-actions">
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={showPreviousImage}
-                                        disabled={!canCycleGallery}
-                                    >
-                                        Previous
-                                    </Button>
-                                    <span className="summary-label">
-                                        Image {currentImageIndex + 1} of{" "}
-                                        {gallerySources.length}
-                                    </span>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        onClick={showNextImage}
-                                        disabled={!canCycleGallery}
-                                    >
-                                        Next
-                                    </Button>
-                                </div>
-                            ) : null}
                         </div>
                         <div className="entity-summary">
                             <span className="summary-label">Audio Assets</span>
-                            <div className="portrait-actions">
-                                <div className="button-group">
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="secondary"
-                                        disabled={assetBusy}
-                                        onClick={() =>
-                                            handleAssetAction(
-                                                onGenerateSong,
-                                                "Song generation failed"
-                                            )
-                                        }
-                                    >
-                                        {location.bgmId
-                                            ? "Regenerate Song"
-                                            : "Generate Song"}
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        disabled={assetBusy}
-                                        onClick={triggerSongPick}
-                                    >
-                                        Import
-                                    </Button>
-                                    <input
-                                        ref={songInputRef}
-                                        type="file"
-                                        accept="audio/*"
-                                        className="sr-only"
-                                        onChange={handleSongChange}
-                                    />
-                                </div>
+                            <div className="audio-asset-row">
+                                <span className="audio-asset-label">Soundtrack</span>
                                 {songUrl && (
                                     <audio
                                         controls
                                         src={songUrl}
-                                        style={{
-                                            width: "100%",
-                                            marginTop: "0.5rem",
-                                            height: "32px",
-                                        }}
+                                        className="audio-asset-player"
                                     />
                                 )}
-
-                                <div className="button-group">
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="secondary"
-                                        disabled={assetBusy}
-                                        onClick={() =>
-                                            handleAssetAction(
-                                                onGeneratePlaylist,
-                                                "Playlist generation failed"
-                                            )
-                                        }
-                                    >
-                                        {location.playlistId
-                                            ? "Regenerate Playlist"
-                                            : "Generate Playlist"}
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="ghost"
-                                        disabled={assetBusy}
-                                        onClick={triggerPlaylistPick}
-                                    >
-                                        Import
-                                    </Button>
-                                    <input
-                                        ref={playlistInputRef}
-                                        type="file"
-                                        accept=".json"
-                                        className="sr-only"
-                                        onChange={handlePlaylistChange}
-                                    />
-                                </div>
+                                <ActionDropdown
+                                    disabled={assetBusy}
+                                    options={[
+                                        {
+                                            label: location.bgmId
+                                                ? "Regenerate"
+                                                : "Generate",
+                                            onClick: () =>
+                                                handleAssetAction(
+                                                    onGenerateSong,
+                                                    "Song generation failed"
+                                                ),
+                                            disabled: assetBusy,
+                                        },
+                                        {
+                                            label: "Import",
+                                            onClick: triggerSongPick,
+                                            disabled: assetBusy,
+                                        },
+                                    ]}
+                                />
+                                <input
+                                    ref={songInputRef}
+                                    type="file"
+                                    accept="audio/*"
+                                    className="sr-only"
+                                    onChange={handleSongChange}
+                                />
+                            </div>
+                            <div className="audio-asset-row">
+                                <span className="audio-asset-label">Playlist</span>
+                                <ActionDropdown
+                                    disabled={assetBusy}
+                                    options={[
+                                        {
+                                            label: location.playlistId
+                                                ? "Regenerate"
+                                                : "Generate",
+                                            onClick: () =>
+                                                handleAssetAction(
+                                                    onGeneratePlaylist,
+                                                    "Playlist generation failed"
+                                                ),
+                                            disabled: assetBusy,
+                                        },
+                                        {
+                                            label: "Import",
+                                            onClick: triggerPlaylistPick,
+                                            disabled: assetBusy,
+                                        },
+                                    ]}
+                                />
+                                <input
+                                    ref={playlistInputRef}
+                                    type="file"
+                                    accept=".json"
+                                    className="sr-only"
+                                    onChange={handlePlaylistChange}
+                                />
                             </div>
                         </div>
                         <div className="entity-summary">

@@ -19,7 +19,6 @@ export interface RichListInputProps {
     placeholderTitle?: string;
     placeholderDescription?: string;
     addButtonLabel?: string;
-    emptyMessage?: string;
     className?: string;
     availableDocuments?: DocumentRef[];
     onReferenceClick?: (ref: DocumentRef) => void;
@@ -32,7 +31,6 @@ export const RichListInput: React.FC<RichListInputProps> = ({
     placeholderTitle = "Title...",
     placeholderDescription = "Description...",
     addButtonLabel = "Add",
-    emptyMessage = "No items yet",
     className,
     availableDocuments = [],
     onReferenceClick,
@@ -140,38 +138,76 @@ export const RichListInput: React.FC<RichListInputProps> = ({
             )}
             onBlur={handleBlur}
         >
+            {/* Add new item input */}
+            <div className="list-input-add-wrapper rich-list-add-wrapper">
+                <div className="rich-list-add-column">
+                    <input
+                        type="text"
+                        className="rich-list-title-input"
+                        value={inputTitle}
+                        onChange={(e) => setInputTitle(e.target.value)}
+                        placeholder={placeholderTitle}
+                    />
+                    <RichTextAreaInput
+                        ref={inputDescriptionRef}
+                        value={inputDescription}
+                        onChange={setInputDescription}
+                        onKeyDown={handleKeyDown}
+                        placeholder={placeholderDescription}
+                        availableDocuments={availableDocuments}
+                        onReferenceClick={onReferenceClick}
+                        className="list-input-field-rich"
+                    />
+                </div>
+                <button
+                    type="button"
+                    className="list-input-add-btn"
+                    onClick={addItem}
+                    disabled={
+                        !inputTitle.trim() &&
+                        (!inputDescription.trim() ||
+                            inputDescription === "<p></p>")
+                    }
+                >
+                    <PlusIcon size={14} />
+                    {addButtonLabel && <span>{addButtonLabel}</span>}
+                </button>
+            </div>
+
             {/* Items list */}
-            <div className="list-input-items">
-                {value.length === 0 ? (
-                    <div className="list-input-empty">{emptyMessage}</div>
-                ) : (
-                    value.map((item, index) => (
+            {value.length > 0 && (
+                <div className="list-input-items">
+                    {value.map((item, index) => (
                         <div
                             key={index}
                             className="list-input-item rich-list-item"
                             onClick={handleItemClick}
                         >
                             {editingIndex === index ? (
-                                <div className="list-input-edit-wrapper rich-edit-wrapper">
-                                    <input
-                                        type="text"
-                                        className="rich-list-title-input"
-                                        value={editTitle}
-                                        onChange={(e) =>
-                                            setEditTitle(e.target.value)
-                                        }
-                                        placeholder={placeholderTitle}
-                                        autoFocus
-                                    />
-                                    <RichTextAreaInput
-                                        ref={editDescriptionRef}
-                                        value={editDescription}
-                                        onChange={setEditDescription}
-                                        onKeyDown={handleEditKeyDown}
-                                        availableDocuments={availableDocuments}
-                                        onReferenceClick={onReferenceClick}
-                                        className="list-input-edit-field-rich"
-                                    />
+                                <div className="list-input-edit-wrapper rich-list-edit-wrapper">
+                                    <div className="rich-list-edit-fields">
+                                        <input
+                                            type="text"
+                                            className="rich-list-title-input"
+                                            value={editTitle}
+                                            onChange={(e) =>
+                                                setEditTitle(e.target.value)
+                                            }
+                                            placeholder={placeholderTitle}
+                                            autoFocus
+                                        />
+                                        <RichTextAreaInput
+                                            ref={editDescriptionRef}
+                                            value={editDescription}
+                                            onChange={setEditDescription}
+                                            onKeyDown={handleEditKeyDown}
+                                            availableDocuments={
+                                                availableDocuments
+                                            }
+                                            onReferenceClick={onReferenceClick}
+                                            className="list-input-edit-field-rich"
+                                        />
+                                    </div>
                                     <div className="list-input-edit-actions">
                                         <button
                                             type="button"
@@ -190,19 +226,21 @@ export const RichListInput: React.FC<RichListInputProps> = ({
                                     </div>
                                 </div>
                             ) : (
-                                <div
-                                    className="rich-list-item-content"
-                                    onClick={() => startEditing(index)}
-                                >
-                                    <div className="rich-list-item-title">
-                                        {item.title}
-                                    </div>
+                                <>
                                     <div
-                                        className="rich-list-item-description rich-text-content"
-                                        dangerouslySetInnerHTML={{
-                                            __html: item.description,
-                                        }}
-                                    />
+                                        className="rich-list-item-content"
+                                        onClick={() => startEditing(index)}
+                                    >
+                                        <div className="rich-list-item-title">
+                                            {item.title}
+                                        </div>
+                                        <div
+                                            className="rich-list-item-description rich-text-content"
+                                            dangerouslySetInnerHTML={{
+                                                __html: item.description,
+                                            }}
+                                        />
+                                    </div>
                                     <button
                                         type="button"
                                         className="list-input-item-remove"
@@ -213,50 +251,12 @@ export const RichListInput: React.FC<RichListInputProps> = ({
                                     >
                                         <CloseIcon size={14} />
                                     </button>
-                                </div>
+                                </>
                             )}
                         </div>
-                    ))
-                )}
-            </div>
-
-            {/* Add new item input */}
-            <div className="list-input-add-wrapper rich-add-wrapper">
-                <div className="list-input-add-column">
-                    <input
-                        type="text"
-                        className="rich-list-title-input"
-                        value={inputTitle}
-                        onChange={(e) => setInputTitle(e.target.value)}
-                        placeholder={placeholderTitle}
-                    />
-                    <div className="rich-list-description-row">
-                        <RichTextAreaInput
-                            ref={inputDescriptionRef}
-                            value={inputDescription}
-                            onChange={setInputDescription}
-                            onKeyDown={handleKeyDown}
-                            placeholder={placeholderDescription}
-                            availableDocuments={availableDocuments}
-                            onReferenceClick={onReferenceClick}
-                            className="list-input-field-rich"
-                        />
-                        <button
-                            type="button"
-                            className="list-input-add-btn"
-                            onClick={addItem}
-                            disabled={
-                                !inputTitle.trim() &&
-                                (!inputDescription.trim() ||
-                                    inputDescription === "<p></p>")
-                            }
-                        >
-                            <PlusIcon size={14} />
-                            {addButtonLabel && <span>{addButtonLabel}</span>}
-                        </button>
-                    </div>
+                    ))}
                 </div>
-            </div>
+            )}
         </div>
     );
 };
