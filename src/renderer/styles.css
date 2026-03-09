@@ -1971,11 +1971,6 @@ input.toolbar-color:focus {
     height: 100%;
     min-height: 0;
     gap: 0;
-    border-top: 1px solid var(--stroke);
-    border-left: 1px solid var(--stroke);
-    border-right: 1px solid var(--stroke);
-    border-top-left-radius: var(--radius);
-    border-top-right-radius: var(--radius);
 }
 
 .editor-surface {
@@ -2867,7 +2862,7 @@ input.toolbar-color:focus {
 
 .portrait-frame {
     width: 100%;
-    padding-bottom: 100%;
+    aspect-ratio: 1 / 1;
     border-radius: 10px;
     border: 1px dashed var(--overlay-20);
     background: var(--backdrop-35);
@@ -2884,6 +2879,7 @@ input.toolbar-color:focus {
 
 .portrait-placeholder {
     display: flex;
+    height: 100%;
     align-items: center;
     justify-content: center;
     color: var(--text-subtle);
@@ -2893,6 +2889,146 @@ input.toolbar-color:focus {
     display: flex;
     gap: 0.5rem;
     flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* ── Portrait Toolbar (gallery nav + add dropdown) ── */
+
+.portrait-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.35rem 0;
+}
+
+.portrait-gallery-nav {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.gallery-nav-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--overlay-10);
+    border-radius: var(--radius-sm);
+    color: var(--text-subtle);
+    padding: 0.2rem;
+    cursor: pointer;
+    transition:
+        background var(--duration-fast) var(--ease-default),
+        color var(--duration-fast) var(--ease-default);
+}
+
+.gallery-nav-btn:hover:not(:disabled) {
+    background: var(--overlay-8);
+    color: var(--text);
+}
+
+.gallery-nav-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.gallery-nav-label {
+    font-size: var(--text-sm2);
+    color: var(--text-subtle);
+    min-width: 3.5rem;
+    text-align: center;
+    user-select: none;
+}
+
+/* ── Action Dropdown (plus-button with menu) ── */
+
+.action-dropdown {
+    position: relative;
+}
+
+.action-dropdown-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-radius: var(--radius-md);
+    color: var(--accent);
+    padding: 0.5rem;
+    cursor: pointer;
+    transition:
+        background var(--duration-fast) var(--ease-default),
+        border-color var(--duration-fast) var(--ease-default);
+}
+
+.action-dropdown-trigger:hover:not(:disabled) {
+    background: color-mix(in srgb, var(--accent) 20%, transparent);
+    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+}
+
+.action-dropdown-trigger:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.action-dropdown-menu {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    min-width: 140px;
+    background: var(--surface-strong);
+    border: 1px solid var(--stroke);
+    border-radius: var(--radius-md);
+    padding: 4px;
+    box-shadow: var(--shadow);
+    z-index: var(--z-dropdown);
+    overflow: hidden;
+}
+
+.action-dropdown-item {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text);
+    font-size: var(--text-sm2);
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background var(--duration-fast) var(--ease-default);
+}
+
+.action-dropdown-item:hover:not(:disabled) {
+    background: var(--overlay-5);
+}
+
+.action-dropdown-item:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ── Audio Asset Rows ── */
+
+.audio-asset-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.audio-asset-label {
+    flex: 1;
+    font-size: var(--text-base2);
+    color: var(--text);
+}
+
+.audio-asset-player {
+    width: 100%;
+    height: 32px;
+    flex: 1;
+    min-width: 0;
 }
 
 .entity-summary {
@@ -3081,12 +3217,11 @@ input.toolbar-color:focus {
     display: flex;
     flex-direction: column;
     max-height: 100%;
-}
-
-/* Entity editor tabs get borders, but only rounded on top when first in stack */
-.flexlayout__tab:has(.entity-editor) {
-    border: 1px solid var(--stroke);
-    border-radius: 0;
+    border-top: 1px solid var(--stroke);
+    border-left: 1px solid var(--stroke);
+    border-right: 1px solid var(--stroke);
+    border-top-left-radius: var(--radius);
+    border-top-right-radius: var(--radius);
 }
 
 /* Only the first tabset in a vertical stack should have rounded top corners */
@@ -4459,27 +4594,128 @@ input.toolbar-color:focus {
    ListInput Rich Text Overrides
    ───────────────────────────────────────────────────────────────────────────── */
 
-.list-input-field-rich .rich-textarea-input,
-.list-input-edit-field-rich .rich-textarea-input {
+/* Make the outer wrapper fill the flex row */
+.list-input-add-row .rich-textarea-wrapper {
+    flex: 1;
+    min-width: 0;
+}
+
+.rich-textarea-input.list-input-field-rich {
+    background: var(--overlay-4);
+    border: 1px solid var(--overlay-12);
+    border-radius: var(--radius-md);
+    padding: 0.65rem 0.5rem;
+    min-height: 42px;
+}
+
+.rich-textarea-input.list-input-field-rich:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 1px var(--accent-transparent2);
+}
+
+.rich-textarea-input.list-input-edit-field-rich {
     background: transparent;
     border: none;
     padding: 0;
-    min-height: auto !important;
+    min-height: auto;
 }
 
-.list-input-field-rich .rich-textarea-input:focus-within,
-.list-input-edit-field-rich .rich-textarea-input:focus-within {
+.rich-textarea-input.list-input-edit-field-rich:focus-within {
     box-shadow: none;
     border: none;
 }
 
-.list-input-field-rich .rich-textarea-placeholder {
-    top: 0;
-    left: 0;
+.rich-textarea-wrapper:has(.rich-textarea-input.list-input-field-rich) .rich-textarea-placeholder {
+    top: 0.65rem;
+    left: 0.5rem;
 }
 
 .rich-text-content p {
     margin: 0;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   RichListInput Component (title + description variant)
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* Items in the rich variant need column layout for title + description */
+.rich-list-input .list-input-item {
+    align-items: stretch;
+}
+
+.rich-list-item-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    cursor: text;
+    min-width: 0;
+}
+
+.rich-list-item-title {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1.4;
+}
+
+.rich-list-item-description {
+    font-size: var(--text-sm3);
+    color: var(--text-subtle);
+    line-height: 1.4;
+}
+
+.rich-list-title-input {
+    width: 100%;
+    padding: 0.35rem 0.5rem;
+    background: var(--overlay-4);
+    border: 1px solid var(--overlay-12);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font-size: var(--text-base);
+    font-family: inherit;
+    font-weight: 600;
+    transition: border-color var(--duration-normal) var(--ease-default);
+}
+
+.rich-list-title-input:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Add input: fields column + button column side by side */
+.rich-list-add-wrapper {
+    display: flex;
+    gap: 0.5rem;
+    align-items: flex-start;
+}
+
+.rich-list-add-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
+}
+
+.rich-list-add-wrapper > .list-input-add-btn {
+    align-self: stretch;
+}
+
+/* Edit mode: fields stacked, actions beside */
+.rich-list-edit-wrapper {
+    display: flex;
+    align-items: flex-start;
+    width: 100%;
+    gap: 0.5rem;
+}
+
+.rich-list-edit-fields {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+    min-width: 0;
 }
 
 .list-input-edit-wrapper {

@@ -52,7 +52,6 @@ export const ListInput: React.FC<ListInputProps> = ({
     onBlur,
     placeholder = "Add an item...",
     addButtonLabel = "Add",
-    emptyMessage = "No items yet",
     className,
     availableDocuments = [],
     onReferenceClick,
@@ -162,12 +161,39 @@ export const ListInput: React.FC<ListInputProps> = ({
             className={classNames("list-input-container", className)}
             onBlur={handleBlur}
         >
+            {/* Add new item input */}
+            <div className="list-input-add-wrapper">
+                <div className="list-input-add-row">
+                    <RichTextAreaInput
+                        ref={inputRef}
+                        value={inputValue}
+                        onChange={setInputValue}
+                        onKeyDown={handleKeyDown}
+                        placeholder={placeholder}
+                        availableDocuments={availableDocuments}
+                        onReferenceClick={onReferenceClick}
+                        singleLine
+                        rows={1}
+                        className="list-input-field-rich"
+                    />
+                    <button
+                        type="button"
+                        className="list-input-add-btn"
+                        onClick={addItem}
+                        disabled={
+                            !inputValue.trim() || inputValue === "<p></p>"
+                        }
+                    >
+                        <PlusIcon size={14} />
+                        {addButtonLabel && <span>{addButtonLabel}</span>}
+                    </button>
+                </div>
+            </div>
+
             {/* Items list */}
-            <div className="list-input-items">
-                {value.length === 0 ? (
-                    <div className="list-input-empty">{emptyMessage}</div>
-                ) : (
-                    value.map((item, index) => (
+            {value.length > 0 && (
+                <div className="list-input-items">
+                    {value.map((item, index) => (
                         <div
                             key={index}
                             className="list-input-item"
@@ -226,38 +252,9 @@ export const ListInput: React.FC<ListInputProps> = ({
                                 </>
                             )}
                         </div>
-                    ))
-                )}
-            </div>
-
-            {/* Add new item input */}
-            <div className="list-input-add-wrapper">
-                <div className="list-input-add-row">
-                    <RichTextAreaInput
-                        ref={inputRef}
-                        value={inputValue}
-                        onChange={setInputValue}
-                        onKeyDown={handleKeyDown}
-                        placeholder={placeholder}
-                        availableDocuments={availableDocuments}
-                        onReferenceClick={onReferenceClick}
-                        singleLine
-                        rows={1}
-                        className="list-input-field-rich"
-                    />
-                    <button
-                        type="button"
-                        className="list-input-add-btn"
-                        onClick={addItem}
-                        disabled={
-                            !inputValue.trim() || inputValue === "<p></p>"
-                        }
-                    >
-                        <PlusIcon size={14} />
-                        {addButtonLabel && <span>{addButtonLabel}</span>}
-                    </button>
+                    ))}
                 </div>
-            </div>
+            )}
         </div>
     );
 };
