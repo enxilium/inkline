@@ -23,6 +23,9 @@ Welcome to **INKLINE STUDIO** —— a dedicated document editor for creative wr
     <h3><i>"Built by writers, for writers."</i></h3>
 </div>
 
+<video controls width="600">
+  <source src="https://github.com/enxilium/inkline/raw/refs/heads/main/docs/inkline_demo.mp4" type="video/mp4">
+</video>
 
 ---
 
