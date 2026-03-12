@@ -39,9 +39,7 @@ type WorkflowGraphNode = {
 
 type WorkflowGraph = Record<string, WorkflowGraphNode>;
 
-export class ComfyAssetGenerationService
-    implements ICreativeAssetGenerationService
-{
+export class ComfyAssetGenerationService implements ICreativeAssetGenerationService {
     private sessionStore: IUserSessionStore;
     private chapterRepository: IChapterRepository;
     private characterRepository: ICharacterRepository;
@@ -60,7 +58,7 @@ export class ComfyAssetGenerationService
         characterRepository: ICharacterRepository,
         locationRepository: ILocationRepository,
         organizationRepository: IOrganizationRepository,
-        scrapNoteRepository: IScrapNoteRepository
+        scrapNoteRepository: IScrapNoteRepository,
     ) {
         this.sessionStore = sessionStore;
         this.chapterRepository = chapterRepository;
@@ -79,7 +77,7 @@ export class ComfyAssetGenerationService
     private async initializeServer() {
         if (process.platform !== "win32") {
             console.warn(
-                "[ComfyAssetGenerationService] ComfyUI server is only supported on Windows. Skipping initialization."
+                "[ComfyAssetGenerationService] ComfyUI server is only supported on Windows. Skipping initialization.",
             );
             return;
         }
@@ -92,25 +90,25 @@ export class ComfyAssetGenerationService
             const pythonPath = path.join(
                 this.basePath,
                 "python_embeded",
-                "python.exe"
+                "python.exe",
             );
             const mainScript = path.join(this.basePath, "ComfyUI", "main.py");
 
             // Check if ComfyUI is installed (downloaded during setup)
             if (!fs.existsSync(pythonPath) || !fs.existsSync(mainScript)) {
                 console.warn(
-                    "[ComfyAssetGenerationService] ComfyUI not installed. Local AI features will be unavailable until setup is completed."
+                    "[ComfyAssetGenerationService] ComfyUI not installed. Local AI features will be unavailable until setup is completed.",
                 );
                 return;
             }
 
             const port = await portfinder.getPortPromise({ port: 8188 });
             console.log(
-                `[ComfyAssetGenerationService] Found free port: ${port}`
+                `[ComfyAssetGenerationService] Found free port: ${port}`,
             );
 
             console.log(
-                `[ComfyAssetGenerationService] Launching ComfyUI from ${this.basePath}...`
+                `[ComfyAssetGenerationService] Launching ComfyUI from ${this.basePath}...`,
             );
 
             this.serverProcess = spawn(
@@ -127,13 +125,13 @@ export class ComfyAssetGenerationService
                     cwd: this.basePath,
                     stdio: "inherit", // Ignore stdio to prevent blocking, or 'inherit' for debugging
                     windowsHide: true,
-                }
+                },
             );
 
             this.serverProcess.on("error", (err) => {
                 console.error(
                     "[ComfyAssetGenerationService] Failed to start ComfyUI:",
-                    err
+                    err,
                 );
             });
 
@@ -142,12 +140,12 @@ export class ComfyAssetGenerationService
             this.api = new ComfyApi(`http://127.0.0.1:${port}`);
             this.api.init();
             console.log(
-                `[ComfyAssetGenerationService] ComfyUI SDK Initialized on port ${port}.`
+                `[ComfyAssetGenerationService] ComfyUI SDK Initialized on port ${port}.`,
             );
         } catch (error) {
             console.error(
                 "[ComfyAssetGenerationService] Initialization failed:",
-                error
+                error,
             );
         }
     }
@@ -156,7 +154,7 @@ export class ComfyAssetGenerationService
         for (let i = 0; i < retries; i++) {
             try {
                 const response = await fetch(
-                    `http://127.0.0.1:${port}/system_stats`
+                    `http://127.0.0.1:${port}/system_stats`,
                 );
                 if (response.ok) return;
             } catch (e) {
@@ -191,7 +189,7 @@ export class ComfyAssetGenerationService
         } catch (error) {
             console.warn(
                 "[ComfyAssetGenerationService] Failed to parse Gemini payload, falling back.",
-                error
+                error,
             );
             return fallback;
         }
@@ -209,7 +207,7 @@ export class ComfyAssetGenerationService
 
         if (!key) {
             throw new Error(
-                "Gemini API Key is missing. Please add it in Settings."
+                "Gemini API Key is missing. Please add it in Settings.",
             );
         }
 
@@ -219,11 +217,11 @@ export class ComfyAssetGenerationService
 
     async generateBGM(
         subject: Character | Location | Organization,
-        onProgress: (progress: number) => void
+        onProgress: (progress: number) => void,
     ): Promise<ArrayBuffer> {
         if (process.platform !== "win32") {
             throw new Error(
-                "Audio generation is currently only available on Windows."
+                "Audio generation is currently only available on Windows.",
             );
         }
         await this.serverReady;
@@ -281,7 +279,7 @@ export class ComfyAssetGenerationService
         const builder = new PromptBuilder(
             workflow,
             ["tags", "lyrics", "seconds"],
-            ["audio"]
+            ["audio"],
         )
             .setRawInputNode("tags", "74:14.inputs.tags")
             .setRawInputNode("lyrics", "74:14.inputs.lyrics")
@@ -295,7 +293,7 @@ export class ComfyAssetGenerationService
                 "seconds",
                 typeof data.seconds === "number" && data.seconds > 0
                     ? data.seconds
-                    : 60
+                    : 60,
             );
 
         return this.executeWorkflow(builder, "audio", onProgress);
@@ -303,11 +301,11 @@ export class ComfyAssetGenerationService
 
     async generatePortrait(
         subject: Character | Location | Organization,
-        onProgress: (progress: number) => void
+        onProgress: (progress: number) => void,
     ): Promise<ArrayBuffer> {
         if (process.platform !== "win32") {
             throw new Error(
-                "Image generation is currently only available on Windows."
+                "Image generation is currently only available on Windows.",
             );
         }
         await this.serverReady;
@@ -377,7 +375,7 @@ export class ComfyAssetGenerationService
         const builder = new PromptBuilder(
             workflow,
             ["positive", "negative"],
-            ["images"]
+            ["images"],
         )
             .setRawInputNode("positive", "6.inputs.text")
             .setRawInputNode("negative", "7.inputs.text")
@@ -387,7 +385,7 @@ export class ComfyAssetGenerationService
             .input("positive", result.text)
             .input(
                 "negative",
-                "You are an assistant designed to generate low-quality images based on textual prompts <Prompt Start> blurry, worst quality, low quality, jpeg artifacts, signature, watermark, username, error, deformed hands, bad anatomy, extra limbs, poorly drawn hands, poorly drawn face, mutation, deformed, extra eyes, extra arms, extra legs, malformed limbs, fused fingers, too many fingers, long neck, cross-eyed, bad proportions, missing arms, missing legs, extra digit, fewer digits, cropped"
+                "You are an assistant designed to generate low-quality images based on textual prompts <Prompt Start> blurry, worst quality, low quality, jpeg artifacts, signature, watermark, username, error, deformed hands, bad anatomy, extra limbs, poorly drawn hands, poorly drawn face, mutation, deformed, extra eyes, extra arms, extra legs, malformed limbs, fused fingers, too many fingers, long neck, cross-eyed, bad proportions, missing arms, missing legs, extra digit, fewer digits, cropped",
             );
 
         return this.executeWorkflow(builder, "images", onProgress);
@@ -400,7 +398,7 @@ export class ComfyAssetGenerationService
 
     async generateScene(
         description: string,
-        context: NarrativeContext
+        context: NarrativeContext,
     ): Promise<ArrayBuffer> {
         void description;
         void context;
@@ -408,7 +406,7 @@ export class ComfyAssetGenerationService
     }
 
     private async buildSubjectDescription(
-        subject: Character | Location | Organization
+        subject: Character | Location | Organization,
     ): Promise<string> {
         let description = `Type: ${subject.constructor.name}\nName: ${subject.name}\nDescription: ${subject.description}`;
 
@@ -420,7 +418,7 @@ export class ComfyAssetGenerationService
 
             if (subject.currentLocationId) {
                 const location = await this.locationRepository.findById(
-                    subject.currentLocationId
+                    subject.currentLocationId,
                 );
                 if (location) {
                     description += `\nCurrent Location (Background): ${location.name} - ${location.description}`;
@@ -434,7 +432,7 @@ export class ComfyAssetGenerationService
     private async executeWorkflow<I extends string, O extends string>(
         builder: PromptBuilder<I, O, WorkflowGraph>,
         outputKey: O,
-        onProgress: (progress: number) => void
+        onProgress: (progress: number) => void,
     ): Promise<ArrayBuffer> {
         if (!this.api) {
             throw new Error("ComfyUI server not initialized");
@@ -480,7 +478,7 @@ export class ComfyAssetGenerationService
                     err.name === "DisconnectedError"
                 ) {
                     console.warn(
-                        "[ComfyAssetGenerationService] Disconnected during generation. Attempting to recover..."
+                        "[ComfyAssetGenerationService] Disconnected during generation. Attempting to recover...",
                     );
                     if (promptId) {
                         try {
@@ -490,15 +488,15 @@ export class ComfyAssetGenerationService
                             if (!outputNodeId) {
                                 reject(
                                     new Error(
-                                        "Could not determine output node ID for recovery"
-                                    )
+                                        "Could not determine output node ID for recovery",
+                                    ),
                                 );
                                 return;
                             }
 
                             const fileInfo = await this.pollForCompletion(
                                 promptId,
-                                outputNodeId
+                                outputNodeId,
                             );
                             const buffer = await this.downloadOutput(fileInfo);
                             resolve(buffer);
@@ -506,7 +504,7 @@ export class ComfyAssetGenerationService
                         } catch (recoveryError) {
                             console.error(
                                 "[ComfyAssetGenerationService] Recovery failed:",
-                                recoveryError
+                                recoveryError,
                             );
                             reject(err); // Reject with original error if recovery fails
                             return;
@@ -522,7 +520,7 @@ export class ComfyAssetGenerationService
 
     private async pollForCompletion(
         promptId: string,
-        outputNodeId: string
+        outputNodeId: string,
     ): Promise<WorkflowFileInfo> {
         const maxRetries = 60; // 5 minutes (assuming 5s interval)
         const interval = 5000;
@@ -545,8 +543,8 @@ export class ComfyAssetGenerationService
                     ) {
                         throw new Error(
                             `Workflow failed: ${JSON.stringify(
-                                history.status.messages
-                            )}`
+                                history.status.messages,
+                            )}`,
                         );
                     }
                 }
@@ -611,7 +609,7 @@ export class ComfyAssetGenerationService
     }
 
     private async downloadOutput(
-        fileInfo: WorkflowFileInfo
+        fileInfo: WorkflowFileInfo,
     ): Promise<ArrayBuffer> {
         if (!this.api) {
             throw new Error("ComfyUI server not initialized");
@@ -626,10 +624,24 @@ export class ComfyAssetGenerationService
         const response = await this.api.fetchApi(`/view?${params.toString()}`);
         if (!response.ok) {
             throw new Error(
-                `Failed to download generated asset (${response.status})`
+                `Failed to download generated asset (${response.status})`,
             );
         }
 
         return response.arrayBuffer();
+    }
+
+    /**
+     * Shutdown the ComfyUI server process gracefully.
+     * Should be called on app quit to prevent orphan processes.
+     */
+    shutdown(): void {
+        if (this.serverProcess) {
+            console.log(
+                "[ComfyAssetGenerationService] Shutting down ComfyUI server...",
+            );
+            this.serverProcess.kill();
+            this.serverProcess = null;
+        }
     }
 }

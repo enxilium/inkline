@@ -417,6 +417,9 @@ export class AppBuilder {
                 deleteAccount: new DeleteAccount(
                     svc.auth,
                     svc.sessionStore,
+                    repo.project,
+                    repo.asset,
+                    svc.storage,
                 ),
             },
             generation: {
@@ -789,7 +792,7 @@ export class AppBuilder {
                     useCases.project.openProject,
                 ),
                 renameProject: new RenameProjectController(
-                    useCases.project.renameProject
+                    useCases.project.renameProject,
                 ),
                 reorderProjectItems: new ReorderProjectItemsController(
                     useCases.project.reorderProjectItems,
