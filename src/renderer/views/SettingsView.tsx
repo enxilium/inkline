@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
+import { ConfirmationDialog } from "../components/dialogs/ConfirmationDialog";
 import { showDownloadToast } from "../components/ui/DownloadToast";
 import { useAppStore } from "../state/appStore";
 import sparkleIcon from "../../../assets/icons/sparkle.png";
@@ -37,6 +38,7 @@ export const SettingsView: React.FC = () => {
     const updateAccountPassword = useAppStore(
         (state) => state.updateAccountPassword,
     );
+    const deleteAccount = useAppStore((state) => state.deleteAccount);
     const logout = useAppStore((state) => state.logout);
     const closeSettings = useAppStore((state) => state.closeSettings);
     const returnToProjects = useAppStore((state) => state.returnToProjects);
@@ -60,6 +62,8 @@ export const SettingsView: React.FC = () => {
     const [newPassword, setNewPassword] = useState("");
     const [accountStatus, setAccountStatus] = useState<string | null>(null);
     const [isSubmittingAccount, setIsSubmittingAccount] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
     // Feature management
     const [featureConfig, setFeatureConfig] = useState<{
@@ -455,6 +459,20 @@ export const SettingsView: React.FC = () => {
             );
         } finally {
             setIsSubmittingAccount(false);
+        }
+    };
+
+    const handleDeleteAccount = async () => {
+        setIsDeletingAccount(true);
+        setAccountStatus(null);
+        try {
+            await deleteAccount();
+        } catch (error) {
+            setAccountStatus(
+                (error as Error)?.message ?? "Failed to delete account.",
+            );
+        } finally {
+            setIsDeletingAccount(false);
         }
     };
 
@@ -975,6 +993,55 @@ export const SettingsView: React.FC = () => {
                                         Log Out
                                     </Button>
                                 </div>
+
+                                <div
+                                    className="settings-section"
+                                    style={{
+                                        marginTop: "2rem",
+                                        paddingTop: "1.5rem",
+                                        borderTop: "1px solid var(--border)",
+                                    }}
+                                >
+                                    <h3
+                                        style={{
+                                            margin: "0 0 0.5rem 0",
+                                            fontSize: "1rem",
+                                            color: "var(--danger, #e74c3c)",
+                                        }}
+                                    >
+                                        Danger Zone
+                                    </h3>
+                                    <p
+                                        className="panel-subtitle"
+                                        style={{ marginBottom: "1rem" }}
+                                    >
+                                        Permanently delete your account and all
+                                        associated data. This cannot be undone.
+                                    </p>
+                                    <Button
+                                        onClick={() =>
+                                            setShowDeleteConfirm(true)
+                                        }
+                                        variant="danger"
+                                        disabled={
+                                            !user || isDeletingAccount
+                                        }
+                                    >
+                                        {isDeletingAccount
+                                            ? "Deleting…"
+                                            : "Delete Account"}
+                                    </Button>
+                                </div>
+
+                                <ConfirmationDialog
+                                    open={showDeleteConfirm}
+                                    onOpenChange={setShowDeleteConfirm}
+                                    title="Delete your account?"
+                                    description="This will permanently delete your account and all your projects, characters, locations, and generated assets. This action cannot be undone."
+                                    confirmLabel="Delete My Account"
+                                    variant="danger"
+                                    onConfirm={handleDeleteAccount}
+                                />
                             </>
                         ) : null}
                     </div>

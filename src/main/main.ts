@@ -784,6 +784,27 @@ app.on("window-all-closed", () => {
     }
 });
 
+// Cleanup child processes before quitting to prevent orphan processes
+app.on("before-quit", async () => {
+    console.log("[Main] Cleaning up before quit...");
+
+    // Stop sync service (clears intervals and realtime subscriptions)
+    dependencies.syncService.stopAutoSync();
+
+    // Shutdown ComfyUI server (cast to access implementation-specific method)
+    const comfyService = dependencies.services.audioGeneration as unknown as {
+        shutdown?: () => void;
+    };
+    if (comfyService && typeof comfyService.shutdown === "function") {
+        comfyService.shutdown();
+    }
+
+    // Shutdown LanguageTool server
+    await languageToolService.shutdown();
+
+    console.log("[Main] Cleanup complete.");
+});
+
 app.on("activate", () => {
     // On OS X it's common to re-create a window in the app when the
     // dock icon is clicked and there are no other windows open.

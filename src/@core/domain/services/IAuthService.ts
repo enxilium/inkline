@@ -9,4 +9,5 @@ export interface IAuthService {
 
     updateEmail(newEmail: string): Promise<User>;
     updatePassword(newPassword: string): Promise<void>;
+    deleteAccount(): Promise<void>;
 }
