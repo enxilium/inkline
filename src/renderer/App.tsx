@@ -96,8 +96,7 @@ const App: React.FC = () => {
     }, [pendingEditsCount, stage]);
 
     React.useEffect(() => {
-        const ua =
-            typeof navigator !== "undefined" ? navigator.userAgent : "";
+        const ua = typeof navigator !== "undefined" ? navigator.userAgent : "";
 
         if (/Mac|iPhone|iPad|iPod/i.test(ua)) {
             document.documentElement.dataset.platform = "mac";
@@ -107,6 +106,30 @@ const App: React.FC = () => {
             document.documentElement.dataset.platform = "windows";
         }
     }, []);
+
+    React.useEffect(() => {
+        if (!user?.preferences) {
+            return;
+        }
+
+        const root = document.documentElement;
+        if (user.preferences.theme) {
+            root.dataset.theme = user.preferences.theme;
+        }
+
+        if (user.preferences.accentColor) {
+            const val = user.preferences.accentColor;
+            root.style.setProperty("--accent", val);
+            root.style.setProperty("--accent-transparent", val + "11");
+            root.style.setProperty("--accent-transparent2", val + "44");
+            root.style.setProperty("--accent-light", val);
+        }
+
+        // Ensure legacy inline overrides are cleared so theme tokens drive colors.
+        root.style.removeProperty("--text");
+        root.style.removeProperty("--surface");
+        root.style.removeProperty("--surface-strong");
+    }, [user?.preferences?.theme, user?.preferences?.accentColor]);
 
     React.useEffect(() => {
         const syncTitleBarOverlay = () => {
@@ -137,8 +160,46 @@ const App: React.FC = () => {
                 });
         };
 
-        // Initial sync after CSS/fonts load.
-        syncTitleBarOverlay();
+        let frameId: number | null = null;
+        const scheduleSync = () => {
+            if (frameId !== null) {
+                window.cancelAnimationFrame(frameId);
+            }
+            // Run after style mutations settle (e.g. data-theme and CSS vars).
+            frameId = window.requestAnimationFrame(() => {
+                frameId = null;
+                syncTitleBarOverlay();
+            });
+        };
+
+        const root = document.documentElement;
+        const observer = new MutationObserver((mutations) => {
+            for (const mutation of mutations) {
+                if (
+                    mutation.type === "attributes" &&
+                    (mutation.attributeName === "data-theme" ||
+                        mutation.attributeName === "style")
+                ) {
+                    scheduleSync();
+                    break;
+                }
+            }
+        });
+
+        observer.observe(root, {
+            attributes: true,
+            attributeFilter: ["data-theme", "style"],
+        });
+
+        // Initial sync after mount.
+        scheduleSync();
+
+        return () => {
+            observer.disconnect();
+            if (frameId !== null) {
+                window.cancelAnimationFrame(frameId);
+            }
+        };
     }, []);
 
     React.useEffect(() => {

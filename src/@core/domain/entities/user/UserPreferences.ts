@@ -15,6 +15,7 @@ export interface FeatureFlags {
 export class UserPreferences {
     constructor(
         public theme: ThemePreference,
+        public accentColor: string,
         public editorFontSize: number,
         public editorFontFamily: string,
         public defaultImageAiModel: string,
@@ -23,6 +24,6 @@ export class UserPreferences {
             aiChatEnabled: true,
             imageGenerationEnabled: false,
             audioGenerationEnabled: false,
-        }
+        },
     ) {}
 }

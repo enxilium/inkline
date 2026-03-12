@@ -19,6 +19,7 @@ type StoredUserPayload = {
     projectIds: string[];
     preferences: {
         theme: ThemePreference;
+        accentColor: string;
         editorFontSize: number;
         editorFontFamily: string;
         defaultImageAiModel: string;
@@ -42,69 +43,99 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
     private static SESSION_FILENAME = "user-session.json";
     private static LOCAL_PREFS_FILENAME = "local-preferences.json";
 
+    private operationQueue: Promise<any> = Promise.resolve();
+
+    private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+        const nextPromise = this.operationQueue.then(operation);
+        this.operationQueue = nextPromise.catch(() => {});
+        return nextPromise;
+    }
+
     async load(): Promise<User | null> {
-        try {
-            const filePath = await this.resolveSessionFilePath();
-            const raw = await fs.readFile(filePath, "utf-8");
-            const parsed = JSON.parse(raw) as SessionFileSchema;
-            const user = this.deserialize(parsed.user);
+        return this.enqueue(async () => {
+            try {
+                const filePath = await this.resolveSessionFilePath();
+                const raw = await fs.readFile(filePath, "utf-8");
 
-            // Merge device-local preferences (like API key) that persist across logouts
-            const localPrefs = await this.loadLocalPreferences();
-            if (localPrefs.geminiApiKey && !user.preferences.geminiApiKey) {
-                user.preferences = new UserPreferences(
-                    user.preferences.theme,
-                    user.preferences.editorFontSize,
-                    user.preferences.editorFontFamily,
-                    user.preferences.defaultImageAiModel,
-                    localPrefs.geminiApiKey
-                );
-            }
+                try {
+                    const parsed = JSON.parse(raw) as SessionFileSchema;
+                    const user = this.deserialize(parsed.user);
 
-            return user;
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                    // Merge device-local preferences (like API key) that persist across logouts
+                    const localPrefs =
+                        await this.loadLocalPreferencesInternal();
+                    if (
+                        localPrefs.geminiApiKey &&
+                        !user.preferences.geminiApiKey
+                    ) {
+                        user.preferences = new UserPreferences(
+                            user.preferences.theme,
+                            user.preferences.accentColor,
+                            user.preferences.editorFontSize,
+                            user.preferences.editorFontFamily,
+                            user.preferences.defaultImageAiModel,
+                            localPrefs.geminiApiKey,
+                        );
+                    }
+
+                    return user;
+                } catch (parseError) {
+                    console.warn(
+                        "[SessionStore] JSON Parse Error. Raw content was:",
+                        JSON.stringify(raw),
+                    );
+                    throw parseError; // Caught by outer catch
+                }
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                    return null;
+                }
+
+                console.warn("Failed to load user session:", error);
                 return null;
             }
-
-            throw error;
-        }
+        });
     }
 
     async save(user: User): Promise<void> {
-        const filePath = await this.resolveSessionFilePath();
-        const directory = path.dirname(filePath);
-        await fs.mkdir(directory, { recursive: true });
+        return this.enqueue(async () => {
+            const filePath = await this.resolveSessionFilePath();
+            const directory = path.dirname(filePath);
+            await fs.mkdir(directory, { recursive: true });
 
-        const payload: SessionFileSchema = {
-            user: this.serialize(user),
-        };
+            const payload: SessionFileSchema = {
+                user: this.serialize(user),
+            };
 
-        await fs.writeFile(filePath, JSON.stringify(payload, null, 2), {
-            encoding: "utf-8",
-        });
-
-        // Also persist device-local preferences so they survive logout
-        if (user.preferences.geminiApiKey) {
-            await this.saveLocalPreferences({
-                geminiApiKey: user.preferences.geminiApiKey,
+            const jsonString = JSON.stringify(payload, null, 2);
+            await fs.writeFile(filePath, jsonString, {
+                encoding: "utf-8",
             });
-        }
+
+            // Also persist device-local preferences so they survive logout
+            if (user.preferences.geminiApiKey) {
+                await this.saveLocalPreferencesInternal({
+                    geminiApiKey: user.preferences.geminiApiKey,
+                });
+            }
+        });
     }
 
     async clear(): Promise<void> {
-        // Only clear the session file, NOT the local preferences
-        // This preserves API keys across logouts
-        try {
-            const filePath = await this.resolveSessionFilePath();
-            await fs.unlink(filePath);
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code === "ENOENT") {
-                return;
-            }
+        return this.enqueue(async () => {
+            // Only clear the session file, NOT the local preferences
+            // This preserves API keys across logouts
+            try {
+                const filePath = await this.resolveSessionFilePath();
+                await fs.unlink(filePath);
+            } catch (error) {
+                if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+                    return;
+                }
 
-            throw error;
-        }
+                throw error;
+            }
+        });
     }
 
     private async resolveSessionFilePath(): Promise<string> {
@@ -115,7 +146,7 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
         const userDataPath = app.getPath("userData");
         return path.join(
             userDataPath,
-            FilesystemUserSessionStore.SESSION_FILENAME
+            FilesystemUserSessionStore.SESSION_FILENAME,
         );
     }
 
@@ -127,15 +158,23 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
         const userDataPath = app.getPath("userData");
         return path.join(
             userDataPath,
-            FilesystemUserSessionStore.LOCAL_PREFS_FILENAME
+            FilesystemUserSessionStore.LOCAL_PREFS_FILENAME,
         );
     }
 
-    private async loadLocalPreferences(): Promise<LocalPreferencesSchema> {
+    private async loadLocalPreferencesInternal(): Promise<LocalPreferencesSchema> {
         try {
             const filePath = await this.resolveLocalPrefsFilePath();
             const raw = await fs.readFile(filePath, "utf-8");
-            return JSON.parse(raw) as LocalPreferencesSchema;
+            try {
+                return JSON.parse(raw) as LocalPreferencesSchema;
+            } catch (parseError) {
+                console.warn(
+                    "[SessionStore] Local Prefs JSON Parse Error. Raw content was:",
+                    JSON.stringify(raw),
+                );
+                throw parseError; // Caught by outer catch
+            }
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code === "ENOENT") {
                 return {};
@@ -145,8 +184,8 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
         }
     }
 
-    private async saveLocalPreferences(
-        prefs: LocalPreferencesSchema
+    private async saveLocalPreferencesInternal(
+        prefs: LocalPreferencesSchema,
     ): Promise<void> {
         try {
             const filePath = await this.resolveLocalPrefsFilePath();
@@ -154,7 +193,7 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             await fs.mkdir(directory, { recursive: true });
 
             // Merge with existing preferences
-            const existing = await this.loadLocalPreferences();
+            const existing = await this.loadLocalPreferencesInternal();
             const merged = { ...existing, ...prefs };
 
             await fs.writeFile(filePath, JSON.stringify(merged, null, 2), {
@@ -179,6 +218,7 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             projectIds: [...user.projectIds],
             preferences: {
                 theme: user.preferences.theme,
+                accentColor: user.preferences.accentColor,
                 editorFontSize: user.preferences.editorFontSize,
                 editorFontFamily: user.preferences.editorFontFamily,
                 defaultImageAiModel: user.preferences.defaultImageAiModel,
@@ -188,12 +228,19 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
     }
 
     private deserialize(payload: StoredUserPayload): User {
+        const accentColor =
+            typeof payload.preferences.accentColor === "string" &&
+            /^#[0-9a-fA-F]{6}$/.test(payload.preferences.accentColor)
+                ? payload.preferences.accentColor
+                : "#2ef6ad";
+
         const preferences = new UserPreferences(
             payload.preferences.theme,
+            accentColor,
             payload.preferences.editorFontSize,
             payload.preferences.editorFontFamily,
             payload.preferences.defaultImageAiModel,
-            payload.preferences.geminiApiKey
+            payload.preferences.geminiApiKey,
         );
 
         return new User(
@@ -205,7 +252,7 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             new Date(payload.updatedAt),
             payload.lastLoginAt ? new Date(payload.lastLoginAt) : null,
             [...payload.projectIds],
-            preferences
+            preferences,
         );
     }
 }

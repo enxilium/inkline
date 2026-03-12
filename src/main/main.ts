@@ -701,19 +701,30 @@ ipcMain.handle(
             return;
         }
 
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (!win) {
-            return;
-        }
+        try {
+            if (event.sender.isDestroyed()) {
+                return;
+            }
 
-        const setOverlay = (
-            win as unknown as { setTitleBarOverlay?: (o: unknown) => void }
-        ).setTitleBarOverlay;
-        if (typeof setOverlay !== "function") {
-            return;
-        }
+            const win = BrowserWindow.fromWebContents(event.sender);
+            if (!win || win.isDestroyed()) {
+                return;
+            }
 
-        setOverlay(overlay);
+            const setOverlay = (
+                win as unknown as { setTitleBarOverlay?: (o: unknown) => void }
+            ).setTitleBarOverlay;
+            if (typeof setOverlay !== "function") {
+                return;
+            }
+
+            setOverlay.call(win, overlay);
+        } catch (error) {
+            console.warn(
+                "[Main] Failed to set title bar overlay (window may be closed):",
+                error,
+            );
+        }
     },
 );
 

@@ -7,7 +7,7 @@ create table if not exists public.users (
   email text not null,
   display_name text,
   auth_provider text,
-  preferences jsonb default '{"theme": "system", "editorFontSize": 16, "editorFontFamily": "sans-serif", "defaultImageAiModel": "flux"}'::jsonb,
+  preferences jsonb default '{"theme": "system", "accentColor": "#2ef6ad", "editorFontSize": 16, "editorFontFamily": "sans-serif", "defaultImageAiModel": "flux"}'::jsonb,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   updated_at timestamp with time zone default timezone('utc'::text, now()) not null,
   last_login_at timestamp with time zone
