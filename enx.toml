@@ -16,7 +16,7 @@ steps = [
 
 [start]
 commands = [
-	npm start
+	"npm start"
 ]
 
 [tasks]
@@ -24,3 +24,4 @@ publish = "npm run publish"
 
 [open]
 repo = "https://github.com/enxilium/inkline"
+website = "https://inkline.jacemu.xyz/"
