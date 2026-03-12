@@ -5,6 +5,7 @@ import { Label } from "../components/ui/Label";
 import { ConfirmationDialog } from "../components/dialogs/ConfirmationDialog";
 import { showDownloadToast } from "../components/ui/DownloadToast";
 import { useAppStore } from "../state/appStore";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import sparkleIcon from "../../../assets/icons/sparkle.png";
 import inkyIcon from "../../../assets/icons/inky.png";
 import wrenchIcon from "../../../assets/icons/wrench.png";
@@ -512,13 +513,19 @@ export const SettingsView: React.FC = () => {
                             onClick={() => setActiveSection(item.id)}
                             type="button"
                         >
-                            <div className="flex-row" style={{ alignItems: "flex-start" }}>
+                            <div
+                                className="flex-row"
+                                style={{ alignItems: "flex-start" }}
+                            >
                                 <img
                                     src={item.icon}
                                     alt=""
                                     className="settings-nav-icon"
                                 />
-                                <div className="flex-column" style={{ alignItems: "flex-start" }}>
+                                <div
+                                    className="flex-column"
+                                    style={{ alignItems: "flex-start" }}
+                                >
                                     <div className="settings-nav-title">
                                         {item.title}
                                     </div>
@@ -966,71 +973,81 @@ export const SettingsView: React.FC = () => {
                                 <div
                                     className="settings-section"
                                     style={{
-                                        marginTop: "2rem",
-                                        paddingTop: "1.5rem",
+                                        marginTop: "1.25rem",
+                                        paddingTop: "1rem",
                                         borderTop: "1px solid var(--border)",
                                     }}
                                 >
-                                    <h3
-                                        style={{
-                                            margin: "0 0 0.5rem 0",
-                                            fontSize: "1rem",
-                                        }}
-                                    >
-                                        Session
-                                    </h3>
-                                    <p
-                                        className="panel-subtitle"
-                                        style={{ marginBottom: "1rem" }}
-                                    >
-                                        Sign out of your account on this device.
-                                    </p>
-                                    <Button
-                                        onClick={logout}
-                                        variant="secondary"
-                                        disabled={!user}
-                                    >
-                                        Log Out
-                                    </Button>
+                                    <div style={{
+                                        display: "flex",
+                                        flexDirection: "column",
+                                        gap: "1rem",
+                                    }}>
+                                        <h3
+                                            style={{
+                                                margin: "0 0 0 0",
+                                                fontSize: "1rem",
+                                            }}
+                                        >
+                                            Session
+                                        </h3>
+                                        <p
+                                            className="panel-subtitle"
+                                            style={{ marginBottom: "0.75rem" }}
+                                        >
+                                            Sign out of your account on this
+                                            device.
+                                        </p>
+                                        <Button
+                                            onClick={logout}
+                                            variant="secondary"
+                                            disabled={!user}
+                                        >
+                                            Log Out
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 <div
                                     className="settings-section"
                                     style={{
-                                        marginTop: "2rem",
-                                        paddingTop: "1.5rem",
+                                        marginTop: "1rem",
+                                        paddingTop: "1rem",
                                         borderTop: "1px solid var(--border)",
                                     }}
                                 >
-                                    <h3
-                                        style={{
-                                            margin: "0 0 0.5rem 0",
-                                            fontSize: "1rem",
-                                            color: "var(--danger, #e74c3c)",
-                                        }}
-                                    >
-                                        Danger Zone
-                                    </h3>
-                                    <p
-                                        className="panel-subtitle"
-                                        style={{ marginBottom: "1rem" }}
-                                    >
-                                        Permanently delete your account and all
-                                        associated data. This cannot be undone.
-                                    </p>
-                                    <Button
-                                        onClick={() =>
-                                            setShowDeleteConfirm(true)
-                                        }
-                                        variant="danger"
-                                        disabled={
-                                            !user || isDeletingAccount
-                                        }
-                                    >
-                                        {isDeletingAccount
-                                            ? "Deleting…"
-                                            : "Delete Account"}
-                                    </Button>
+                                    <div className="danger-callout">
+                                        <div className="danger-callout-header">
+                                            <span className="danger-callout-icon">
+                                                <WarningAmberIcon
+                                                    style={{ fontSize: 18 }}
+                                                />
+                                            </span>
+                                            Danger Zone
+                                        </div>
+                                        <p className="danger-callout-body">
+                                            Permanently deletes your account and{" "}
+                                            <strong>all associated data</strong>{" "}
+                                            — projects, characters, locations,
+                                            and generated assets. This cannot be
+                                            undone.
+                                        </p>
+                                        <div>
+                                            <Button
+                                                onClick={() =>
+                                                    setShowDeleteConfirm(true)
+                                                }
+                                                variant="danger"
+                                                disabled={
+                                                    !user || isDeletingAccount
+                                                }
+                                            >
+                                                {isDeletingAccount
+                                                    ? "Deleting…"
+                                                    : "Delete Account"}
+                                            </Button>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <ConfirmationDialog

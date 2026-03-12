@@ -4,6 +4,14 @@ import strokeLargeLogo from "../../../../assets/stroke-large.png";
 import inkyLargeIcon from "../../../../assets/icons/inky-large.png";
 import genAiIcon from "../../../../assets/icons/gen-ai.png";
 import musicIcon from "../../../../assets/icons/music.png";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
+import CheckIcon from "@mui/icons-material/Check";
+import BlockIcon from "@mui/icons-material/Block";
+import DownloadIcon from "@mui/icons-material/Download";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CancelIcon from "@mui/icons-material/Cancel";
+import InfoIcon from "@mui/icons-material/Info";
+import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
 
 // Types for IPC communication
 interface DownloadProgress {
@@ -106,7 +114,14 @@ const FeaturesStep: React.FC<{
 
             {!isWindows && (
                 <div style={styles.platformWarning}>
-                    ⚠️ Local AI features (Image & Audio Generation) are only
+                    <WarningAmberIcon
+                        style={{
+                            fontSize: 16,
+                            verticalAlign: "middle",
+                            marginRight: 6,
+                        }}
+                    />
+                    Local AI features (Image &amp; Audio Generation) are only
                     available on Windows.
                 </div>
             )}
@@ -125,7 +140,11 @@ const FeaturesStep: React.FC<{
                         <img
                             src={inkyLargeIcon}
                             alt="AI Chat Icon"
-                            style={{ width: "24px", height: "24px", objectFit: "contain" }}
+                            style={{
+                                width: "24px",
+                                height: "24px",
+                                objectFit: "contain",
+                            }}
                         />
                     </div>
                     <div style={styles.featureInfo}>
@@ -135,7 +154,14 @@ const FeaturesStep: React.FC<{
                             use AI-powered editing tools.
                         </p>
                         <p style={styles.featureNote}>
-                            ⚠️ Requires Gemini API key (add in Settings after
+                            <WarningAmberIcon
+                                style={{
+                                    fontSize: 13,
+                                    verticalAlign: "middle",
+                                    marginRight: 4,
+                                }}
+                            />
+                            Requires Gemini API key (add in Settings after
                             sign-in)
                         </p>
                     </div>
@@ -147,7 +173,9 @@ const FeaturesStep: React.FC<{
                                 : styles.checkboxInactive),
                         }}
                     >
-                        {config.features.aiChat && "✓"}
+                        {config.features.aiChat && (
+                            <CheckIcon style={{ fontSize: 16 }} />
+                        )}
                     </div>
                 </div>
 
@@ -167,7 +195,11 @@ const FeaturesStep: React.FC<{
                         <img
                             src={genAiIcon}
                             alt="Image Generation Icon"
-                            style={{ width: "24px", height: "24px", objectFit: "contain" }}
+                            style={{
+                                width: "24px",
+                                height: "24px",
+                                objectFit: "contain",
+                            }}
                         />
                     </div>
                     <div style={styles.featureInfo}>
@@ -177,9 +209,29 @@ const FeaturesStep: React.FC<{
                             scene illustrations locally.
                         </p>
                         <p style={styles.featureNote}>
-                            {isLocalAiDisabled
-                                ? "🚫 Windows only"
-                                : "📥 Requires ~10 GB download"}
+                            {isLocalAiDisabled ? (
+                                <>
+                                    <BlockIcon
+                                        style={{
+                                            fontSize: 13,
+                                            verticalAlign: "middle",
+                                            marginRight: 4,
+                                        }}
+                                    />
+                                    Windows only
+                                </>
+                            ) : (
+                                <>
+                                    <DownloadIcon
+                                        style={{
+                                            fontSize: 13,
+                                            verticalAlign: "middle",
+                                            marginRight: 4,
+                                        }}
+                                    />
+                                    Requires ~10 GB download
+                                </>
+                            )}
                         </p>
                     </div>
                     <div
@@ -193,7 +245,9 @@ const FeaturesStep: React.FC<{
                                 : {}),
                         }}
                     >
-                        {config.features.imageGeneration && "✓"}
+                        {config.features.imageGeneration && (
+                            <CheckIcon style={{ fontSize: 16 }} />
+                        )}
                     </div>
                 </div>
 
@@ -213,7 +267,11 @@ const FeaturesStep: React.FC<{
                         <img
                             src={musicIcon}
                             alt="Audio Generation Icon"
-                            style={{ width: "24px", height: "24px", objectFit: "contain" }}
+                            style={{
+                                width: "24px",
+                                height: "24px",
+                                objectFit: "contain",
+                            }}
                         />
                     </div>
                     <div style={styles.featureInfo}>
@@ -223,9 +281,29 @@ const FeaturesStep: React.FC<{
                             background music locally.
                         </p>
                         <p style={styles.featureNote}>
-                            {isLocalAiDisabled
-                                ? "🚫 Windows only"
-                                : "📥 Requires ~7.5 GB download"}
+                            {isLocalAiDisabled ? (
+                                <>
+                                    <BlockIcon
+                                        style={{
+                                            fontSize: 13,
+                                            verticalAlign: "middle",
+                                            marginRight: 4,
+                                        }}
+                                    />
+                                    Windows only
+                                </>
+                            ) : (
+                                <>
+                                    <DownloadIcon
+                                        style={{
+                                            fontSize: 13,
+                                            verticalAlign: "middle",
+                                            marginRight: 4,
+                                        }}
+                                    />
+                                    Requires ~7.5 GB download
+                                </>
+                            )}
                         </p>
                     </div>
                     <div
@@ -239,7 +317,9 @@ const FeaturesStep: React.FC<{
                                 : {}),
                         }}
                     >
-                        {config.features.audioGeneration && "✓"}
+                        {config.features.audioGeneration && (
+                            <CheckIcon style={{ fontSize: 16 }} />
+                        )}
                     </div>
                 </div>
             </div>
@@ -423,9 +503,30 @@ const DownloadsStep: React.FC<{
                             `${progress.percentage}%`}
                         {progress.status === "extracting" &&
                             `Extracting... ${progress.percentage}%`}
-                        {progress.status === "completed" && "✓ Complete"}
-                        {progress.status === "error" &&
-                            `❌ ${progress.error || "Error"}`}
+                        {progress.status === "completed" && (
+                            <>
+                                <CheckCircleIcon
+                                    style={{
+                                        fontSize: 13,
+                                        verticalAlign: "middle",
+                                        marginRight: 4,
+                                    }}
+                                />
+                                Complete
+                            </>
+                        )}
+                        {progress.status === "error" && (
+                            <>
+                                <CancelIcon
+                                    style={{
+                                        fontSize: 13,
+                                        verticalAlign: "middle",
+                                        marginRight: 4,
+                                    }}
+                                />
+                                {progress.error || "Error"}
+                            </>
+                        )}
                     </span>
                 </div>
                 <div style={styles.progressBarContainer}>
@@ -460,8 +561,8 @@ const DownloadsStep: React.FC<{
             <div style={styles.stepContainer}>
                 <h2 style={styles.stepTitle}>No Downloads Required</h2>
                 <p style={styles.stepDescription}>
-                    You've chosen not to enable local AI features. <br></br>You can
-                    enable them later in Settings.
+                    You've chosen not to enable local AI features. <br></br>You
+                    can enable them later in Settings.
                 </p>
                 <div style={styles.buttonRow}>
                     <button style={styles.secondaryButton} onClick={onBack}>
@@ -503,7 +604,14 @@ const DownloadsStep: React.FC<{
             {comfyProgress?.status === "error" &&
                 comfyProgress.error?.includes("7-Zip") && (
                     <div style={styles.errorNote}>
-                        💡 Please install 7-Zip from{" "}
+                        <InfoIcon
+                            style={{
+                                fontSize: 14,
+                                verticalAlign: "middle",
+                                marginRight: 6,
+                            }}
+                        />
+                        Please install 7-Zip from{" "}
                         <a
                             href="https://7-zip.org"
                             target="_blank"
@@ -766,14 +874,18 @@ const FinalizingStep: React.FC<{
 
                 {status === "complete" && (
                     <>
-                        <div style={styles.successIcon}>✨</div>
+                        <div style={styles.successIcon}>
+                            <AutoAwesomeIcon style={{ color: "#2ef6ad" }} />
+                        </div>
                         <h2 style={styles.stepTitle}>All set!</h2>
                     </>
                 )}
 
                 {status === "error" && (
                     <>
-                        <div style={styles.errorIcon}>⚠️</div>
+                        <div style={styles.errorIcon}>
+                            <WarningAmberIcon style={{ color: "#e74c3c" }} />
+                        </div>
                         <h2 style={styles.stepTitle}>Something went wrong</h2>
                         <p style={styles.stepDescription}>
                             {error ||
@@ -796,8 +908,6 @@ const FinalizingStep: React.FC<{
         </div>
     );
 };
-
-
 
 const CompleteStep: React.FC<{
     config: SetupConfig;
@@ -822,24 +932,99 @@ const CompleteStep: React.FC<{
             <ul style={styles.summaryList}>
                 <li>
                     AI Chat & Editor:{" "}
-                    {config.features.aiChat ? "✅ Enabled" : "❌ Disabled"}
+                    {config.features.aiChat ? (
+                        <>
+                            <CheckCircleIcon
+                                style={{
+                                    fontSize: 13,
+                                    verticalAlign: "middle",
+                                    marginRight: 4,
+                                    color: "#2ef6ad",
+                                }}
+                            />
+                            Enabled
+                        </>
+                    ) : (
+                        <>
+                            <CancelIcon
+                                style={{
+                                    fontSize: 13,
+                                    verticalAlign: "middle",
+                                    marginRight: 4,
+                                    color: "#e74c3c",
+                                }}
+                            />
+                            Disabled
+                        </>
+                    )}
                 </li>
                 <li>
                     Image Generation:{" "}
-                    {config.features.imageGeneration
-                        ? "✅ Enabled"
-                        : "❌ Disabled"}
+                    {config.features.imageGeneration ? (
+                        <>
+                            <CheckCircleIcon
+                                style={{
+                                    fontSize: 13,
+                                    verticalAlign: "middle",
+                                    marginRight: 4,
+                                    color: "#2ef6ad",
+                                }}
+                            />
+                            Enabled
+                        </>
+                    ) : (
+                        <>
+                            <CancelIcon
+                                style={{
+                                    fontSize: 13,
+                                    verticalAlign: "middle",
+                                    marginRight: 4,
+                                    color: "#e74c3c",
+                                }}
+                            />
+                            Disabled
+                        </>
+                    )}
                 </li>
                 <li>
                     Audio Generation:{" "}
-                    {config.features.audioGeneration
-                        ? "✅ Enabled"
-                        : "❌ Disabled"}
+                    {config.features.audioGeneration ? (
+                        <>
+                            <CheckCircleIcon
+                                style={{
+                                    fontSize: 13,
+                                    verticalAlign: "middle",
+                                    marginRight: 4,
+                                    color: "#2ef6ad",
+                                }}
+                            />
+                            Enabled
+                        </>
+                    ) : (
+                        <>
+                            <CancelIcon
+                                style={{
+                                    fontSize: 13,
+                                    verticalAlign: "middle",
+                                    marginRight: 4,
+                                    color: "#e74c3c",
+                                }}
+                            />
+                            Disabled
+                        </>
+                    )}
                 </li>
             </ul>
             {config.features.aiChat && (
                 <p style={styles.reminderNote}>
-                    💡 Remember to add your Gemini API key in Settings after
+                    <InfoIcon
+                        style={{
+                            fontSize: 14,
+                            verticalAlign: "middle",
+                            marginRight: 6,
+                        }}
+                    />
+                    Remember to add your Gemini API key in Settings after
                     signing in!
                 </p>
             )}

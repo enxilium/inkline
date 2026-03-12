@@ -990,7 +990,6 @@ html {
     height: 100%;
 }
 
-
 .settings-content {
     height: 100%;
 }
@@ -1331,6 +1330,79 @@ html {
 
 .auth-form .btn {
     width: 100%;
+}
+
+.card-hint.is-success {
+    color: var(--accent);
+}
+
+/* ── Auth reset flow ── */
+
+.auth-reset-icon {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    color: var(--accent);
+    margin-bottom: 0.25rem;
+}
+
+.auth-reset-success {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem;
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-radius: var(--radius);
+    background: color-mix(in srgb, var(--accent) 6%, transparent);
+    color: var(--accent);
+    width: 100%;
+}
+
+.auth-reset-success-text {
+    font-size: var(--text-sm);
+    color: var(--text-subtle);
+    text-align: center;
+    margin: 0;
+}
+
+/* ── Danger callout (settings delete-account) ── */
+
+.danger-callout {
+    background: var(--color-danger-bg);
+    border: 1px solid var(--color-danger-border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.danger-callout-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-error);
+    font-weight: 600;
+    font-size: var(--text-base2);
+}
+
+.danger-callout-icon {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    color: var(--text-error);
+}
+
+.danger-callout-body {
+    font-size: var(--text-sm);
+    color: var(--text-subtle);
+    margin: 0;
+    line-height: 1.5;
 }
 
 .projects {
@@ -4625,7 +4697,8 @@ input.toolbar-color:focus {
     border: none;
 }
 
-.rich-textarea-wrapper:has(.rich-textarea-input.list-input-field-rich) .rich-textarea-placeholder {
+.rich-textarea-wrapper:has(.rich-textarea-input.list-input-field-rich)
+    .rich-textarea-placeholder {
     top: 0.65rem;
     left: 0.5rem;
 }

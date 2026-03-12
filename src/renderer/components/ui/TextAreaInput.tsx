@@ -1,6 +1,12 @@
 import * as React from "react";
 import classNames from "clsx";
 import type { DocumentRef, DocumentRefKind } from "./ListInput";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+import ArticleIcon from "@mui/icons-material/Article";
+import PersonIcon from "@mui/icons-material/Person";
+import LocationOnIcon from "@mui/icons-material/LocationOn";
+import AccountBalanceIcon from "@mui/icons-material/AccountBalance";
+import DescriptionIcon from "@mui/icons-material/Description";
 
 // Re-export types for convenience
 export type { DocumentRef, DocumentRefKind };
@@ -83,13 +89,13 @@ export const TextAreaInput: React.FC<TextAreaInputProps> = ({
                         const textarea = textareaRef.current;
                         const rect = textarea.getBoundingClientRect();
                         const lineHeight = parseInt(
-                            getComputedStyle(textarea).lineHeight || "20"
+                            getComputedStyle(textarea).lineHeight || "20",
                         );
                         const lines = textBeforeCursor.split("\n");
                         const currentLineIndex = lines.length - 1;
                         const top = Math.min(
                             currentLineIndex * lineHeight + lineHeight,
-                            textarea.clientHeight
+                            textarea.clientHeight,
                         );
                         setCursorPosition({ top, left: 0 });
                     }
@@ -142,20 +148,20 @@ export const TextAreaInput: React.FC<TextAreaInputProps> = ({
         }
     };
 
-    const getDocumentIcon = (kind: DocumentRefKind): string => {
+    const getDocumentIcon = (kind: DocumentRefKind): React.ReactElement => {
         switch (kind) {
             case "chapter":
-                return "📖";
+                return <MenuBookIcon style={{ fontSize: 14 }} />;
             case "scrapNote":
-                return "📝";
+                return <ArticleIcon style={{ fontSize: 14 }} />;
             case "character":
-                return "👤";
+                return <PersonIcon style={{ fontSize: 14 }} />;
             case "location":
-                return "📍";
+                return <LocationOnIcon style={{ fontSize: 14 }} />;
             case "organization":
-                return "🏛️";
+                return <AccountBalanceIcon style={{ fontSize: 14 }} />;
             default:
-                return "📄";
+                return <DescriptionIcon style={{ fontSize: 14 }} />;
         }
     };
 
