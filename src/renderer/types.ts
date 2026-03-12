@@ -14,7 +14,7 @@ export type AppStage =
     | "workspace"
     | "settings";
 
-export type AuthMode = "login" | "register";
+export type AuthMode = "login" | "register" | "resetPassword";
 
 export type ProjectsStatus = "idle" | "loading" | "error";
 

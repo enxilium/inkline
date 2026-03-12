@@ -40,6 +40,7 @@ const App: React.FC = () => {
         authForm,
         authError,
         isAuthSubmitting,
+        resetPasswordSuccess,
         user,
         projects,
         projectCovers,
@@ -49,8 +50,10 @@ const App: React.FC = () => {
         openingProjectId,
         bootstrapSession,
         setAuthField,
+        setAuthMode,
         toggleAuthMode,
         submitAuth,
+        requestPasswordReset,
         loadProjects,
         setProjectsError,
         createProject,
@@ -227,6 +230,20 @@ const App: React.FC = () => {
         toggleAuthMode();
     }, [toggleAuthMode]);
 
+    const handleForgotPassword = React.useCallback(() => {
+        setAuthMode("resetPassword");
+    }, [setAuthMode]);
+
+    const handleResetPassword = React.useCallback(
+        (event: React.FormEvent<HTMLFormElement>) => {
+            event.preventDefault();
+            requestPasswordReset().catch(() => {
+                /* noop */
+            });
+        },
+        [requestPasswordReset],
+    );
+
     const handleCreateProject = React.useCallback(
         async (title: string) => {
             if (!user) {
@@ -339,9 +356,12 @@ const App: React.FC = () => {
                             form={authForm}
                             error={authError}
                             isSubmitting={isAuthSubmitting}
+                            resetPasswordSuccess={resetPasswordSuccess}
                             onSubmit={handleAuthSubmit}
                             onFieldChange={handleAuthFieldChange}
                             onToggleMode={handleToggleAuthMode}
+                            onForgotPassword={handleForgotPassword}
+                            onResetPassword={handleResetPassword}
                         />
                     </div>
                 );

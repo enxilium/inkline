@@ -312,8 +312,10 @@ type AppStore = {
     closeSettings: () => void;
     bootstrapSession: () => Promise<void>;
     setAuthField: (field: keyof typeof initialAuthForm, value: string) => void;
+    setAuthMode: (mode: AuthMode) => void;
     toggleAuthMode: () => void;
     submitAuth: () => Promise<void>;
+    requestPasswordReset: () => Promise<void>;
     loadProjects: (userId?: string) => Promise<void>;
     setProjectsError: (message: string | null) => void;
     createProject: (params: { title: string }) => Promise<void>;
@@ -323,6 +325,7 @@ type AppStore = {
     setProjectSelectionError: (message: string | null) => void;
     returnToProjects: () => Promise<void>;
     logout: () => Promise<void>;
+    deleteAccount: () => Promise<void>;
     setActiveDocument: (selection: WorkspaceDocumentRef) => void;
     closeTab: (selection: WorkspaceDocumentRef) => void;
     reorderTabs: (newOrder: WorkspaceDocumentRef[]) => void;
@@ -454,6 +457,7 @@ type AppStore = {
     saveUserSettings: RendererApi["logistics"]["saveUserSettings"];
     updateAccountEmail: RendererApi["auth"]["updateEmail"];
     updateAccountPassword: RendererApi["auth"]["updatePassword"];
+    resetPasswordSuccess: boolean;
     globalFind: (request: GlobalFindRequest) => Promise<GlobalFindResponse>;
     globalFindAndReplace: (
         request: GlobalFindAndReplaceRequest,
@@ -904,6 +908,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         authForm: initialAuthForm,
         authError: null,
         isAuthSubmitting: false,
+        resetPasswordSuccess: false,
         user: null,
         currentUserId: "",
         projects: [],
@@ -957,10 +962,14 @@ export const useAppStore = create<AppStore>((set, get) => {
                 },
             }));
         },
+        setAuthMode: (mode) => {
+            set({ authMode: mode, authError: null, resetPasswordSuccess: false });
+        },
         toggleAuthMode: () => {
             set((state) => ({
                 authMode: state.authMode === "login" ? "register" : "login",
                 authError: null,
+                resetPasswordSuccess: false,
             }));
         },
         submitAuth: async () => {
@@ -989,6 +998,29 @@ export const useAppStore = create<AppStore>((set, get) => {
                     authError: createErrorMessage(
                         error,
                         "Unable to complete request.",
+                    ),
+                });
+            } finally {
+                set({ isAuthSubmitting: false });
+            }
+        },
+        requestPasswordReset: async () => {
+            const { authForm } = get();
+            const email = authForm.email.trim().toLowerCase();
+            if (!email) {
+                set({ authError: "Email is required." });
+                return;
+            }
+
+            set({ isAuthSubmitting: true, authError: null, resetPasswordSuccess: false });
+            try {
+                await rendererApi.auth.resetPassword({ email });
+                set({ resetPasswordSuccess: true });
+            } catch (error) {
+                set({
+                    authError: createErrorMessage(
+                        error,
+                        "Unable to send reset email.",
                     ),
                 });
             } finally {
@@ -1209,6 +1241,13 @@ export const useAppStore = create<AppStore>((set, get) => {
                 await rendererApi.auth.logoutUser();
             } catch (_error) {
                 // Ignore logout failures locally; intent is to clear session.
+            }
+        },
+        deleteAccount: async () => {
+            try {
+                await rendererApi.auth.deleteAccount();
+            } catch (error) {
+                throw error;
             }
         },
         setActiveDocument: (selection) => {

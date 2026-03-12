@@ -11,6 +11,8 @@ import type { RegisterUserController } from "./auth/RegisterUserController";
 import type { GetAuthStateController } from "./auth/GetAuthStateController";
 import type { UpdateUserEmailController } from "./auth/UpdateUserEmailController";
 import type { UpdateUserPasswordController } from "./auth/UpdateUserPasswordController";
+import type { ResetPasswordController } from "./auth/ResetPasswordController";
+import type { DeleteAccountController } from "./auth/DeleteAccountController";
 import type { GenerateCharacterImageController } from "./generation/GenerateCharacterImageController";
 import type { GenerateCharacterPlaylistController } from "./generation/GenerateCharacterPlaylistController";
 import type { GenerateCharacterSongController } from "./generation/GenerateCharacterSongController";
@@ -86,6 +88,8 @@ export interface ControllerInstanceMap {
         getState: GetAuthStateController;
         updateEmail: UpdateUserEmailController;
         updatePassword: UpdateUserPasswordController;
+        resetPassword: ResetPasswordController;
+        deleteAccount: DeleteAccountController;
     };
     generation: {
         generateCharacterImage: GenerateCharacterImageController;
@@ -187,6 +191,8 @@ export const controllerChannels: ControllerChannelMap = {
         getState: "auth:getState",
         updateEmail: "auth:updateEmail",
         updatePassword: "auth:updatePassword",
+        resetPassword: "auth:resetPassword",
+        deleteAccount: "auth:deleteAccount",
     },
     generation: {
         generateCharacterImage: "generation:generateCharacterImage",
