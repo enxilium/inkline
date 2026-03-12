@@ -18,6 +18,8 @@ import { RegisterUser } from "../@core/application/use-cases/auth/RegisterUser";
 import { LoadStoredSession } from "../@core/application/use-cases/auth/LoadStoredSession";
 import { UpdateUserEmail } from "../@core/application/use-cases/auth/UpdateUserEmail";
 import { UpdateUserPassword } from "../@core/application/use-cases/auth/UpdateUserPassword";
+import { ResetPassword } from "../@core/application/use-cases/auth/ResetPassword";
+import { DeleteAccount } from "../@core/application/use-cases/auth/DeleteAccount";
 import { GenerateCharacterImage } from "../@core/application/use-cases/generation/GenerateCharacterImage";
 import { GenerateCharacterPlaylist } from "../@core/application/use-cases/generation/GenerateCharacterPlaylist";
 import { GenerateCharacterSong } from "../@core/application/use-cases/generation/GenerateCharacterSong";
@@ -81,6 +83,8 @@ import { RegisterUserController } from "../@interface-adapters/controllers/auth/
 import { GetAuthStateController } from "../@interface-adapters/controllers/auth/GetAuthStateController";
 import { UpdateUserEmailController } from "../@interface-adapters/controllers/auth/UpdateUserEmailController";
 import { UpdateUserPasswordController } from "../@interface-adapters/controllers/auth/UpdateUserPasswordController";
+import { ResetPasswordController } from "../@interface-adapters/controllers/auth/ResetPasswordController";
+import { DeleteAccountController } from "../@interface-adapters/controllers/auth/DeleteAccountController";
 import { GenerateCharacterImageController } from "../@interface-adapters/controllers/generation/GenerateCharacterImageController";
 import { GenerateCharacterPlaylistController } from "../@interface-adapters/controllers/generation/GenerateCharacterPlaylistController";
 import { GenerateCharacterSongController } from "../@interface-adapters/controllers/generation/GenerateCharacterSongController";
@@ -206,6 +210,8 @@ type UseCaseMap = {
         loadStoredSession: LoadStoredSession;
         updateEmail: UpdateUserEmail;
         updatePassword: UpdateUserPassword;
+        resetPassword: ResetPassword;
+        deleteAccount: DeleteAccount;
     };
     generation: {
         generateCharacterImage: GenerateCharacterImage;
@@ -405,6 +411,11 @@ export class AppBuilder {
                 updatePassword: new UpdateUserPassword(
                     svc.auth,
                     repo.user,
+                    svc.sessionStore,
+                ),
+                resetPassword: new ResetPassword(svc.auth),
+                deleteAccount: new DeleteAccount(
+                    svc.auth,
                     svc.sessionStore,
                 ),
             },
@@ -662,6 +673,13 @@ export class AppBuilder {
                 ),
                 updatePassword: new UpdateUserPasswordController(
                     useCases.auth.updatePassword,
+                    this.authStateGateway,
+                ),
+                resetPassword: new ResetPasswordController(
+                    useCases.auth.resetPassword,
+                ),
+                deleteAccount: new DeleteAccountController(
+                    useCases.auth.deleteAccount,
                     this.authStateGateway,
                 ),
             },
