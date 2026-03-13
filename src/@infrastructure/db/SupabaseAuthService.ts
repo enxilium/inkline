@@ -88,9 +88,10 @@ export class SupabaseAuthService implements IAuthService {
         // Default preferences for a new/auth-only user instance
         const defaultPreferences = new UserPreferences(
             "system",
+            "#2ef6ad",
             16,
             "sans-serif",
-            "flux"
+            "flux",
         );
 
         return new User(
@@ -104,7 +105,7 @@ export class SupabaseAuthService implements IAuthService {
                 ? new Date(supabaseUser.last_sign_in_at)
                 : null,
             [], // Project IDs are not available from Auth object
-            defaultPreferences
+            defaultPreferences,
         );
     }
 }

@@ -15,6 +15,10 @@ import {
     ChevronDownIcon,
     SettingsIcon,
 } from "../components/ui/Icons";
+import MenuBookIcon from "@mui/icons-material/MenuBook";
+import ArticleIcon from "@mui/icons-material/Article";
+import StarIcon from "@mui/icons-material/Star";
+import ConstructionIcon from "@mui/icons-material/Construction";
 import { Button } from "../components/ui/Button";
 import { TimelineCreationDialog } from "../components/dialogs/TimelineCreationDialog";
 import { TimelineNodeCreationDialog } from "../components/dialogs/TimelineNodeCreationDialog";
@@ -58,14 +62,14 @@ interface TimelineTransformContext extends TimelineTransformState {
 }
 
 const TimelineTransformContext = createContext<TimelineTransformContext | null>(
-    null
+    null,
 );
 
 const useTimelineTransform = () => {
     const context = useContext(TimelineTransformContext);
     if (!context) {
         throw new Error(
-            "useTimelineTransform must be used within TimelineTransformProvider"
+            "useTimelineTransform must be used within TimelineTransformProvider",
         );
     }
     return context;
@@ -292,7 +296,7 @@ const isCalendarUnit = (unit: string): boolean => {
 
 // Convert a fractional year position to year/month/day (used for display)
 const yearToDate = (
-    yearFraction: number
+    yearFraction: number,
 ): { year: number; month: number; day: number } => {
     const year = Math.floor(yearFraction);
     const remainder = yearFraction - year;
@@ -371,11 +375,11 @@ const TimelineTransformProvider: React.FC<TimelineTransformProviderProps> = ({
             // Clamp to reasonable bounds
             return Math.min(MAX_SCALE, Math.max(MIN_SCALE, calculatedScale));
         },
-        [startValue, viewportWidth]
+        [startValue, viewportWidth],
     );
 
     const [scale, setScaleState] = useState(() =>
-        calculateIdealScale(maxEventTime)
+        calculateIdealScale(maxEventTime),
     );
     const [offsetX, setOffsetXState] = useState(0);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -401,7 +405,7 @@ const TimelineTransformProvider: React.FC<TimelineTransformProviderProps> = ({
             const timeDiff = time - start;
             return timeDiff * pixelsPerYear - offsetX;
         },
-        [scale, offsetX]
+        [scale, offsetX],
     );
 
     // Convert screen X position to time (years from epoch)
@@ -411,7 +415,7 @@ const TimelineTransformProvider: React.FC<TimelineTransformProviderProps> = ({
             const timeDiff = (pixel + offsetX) / pixelsPerYear;
             return start + timeDiff;
         },
-        [scale, offsetX]
+        [scale, offsetX],
     );
 
     // Get visible time range based on current viewport
@@ -422,7 +426,7 @@ const TimelineTransformProvider: React.FC<TimelineTransformProviderProps> = ({
                 maxTime: pixelToTime(viewportWidth, start),
             };
         },
-        [pixelToTime, viewportWidth]
+        [pixelToTime, viewportWidth],
     );
 
     // Constrain offsetX so we can't pan past time=startValue (left boundary)
@@ -442,7 +446,7 @@ const TimelineTransformProvider: React.FC<TimelineTransformProviderProps> = ({
         (newOffsetX: number) => {
             setOffsetXState(constrainOffsetX(newOffsetX));
         },
-        [constrainOffsetX]
+        [constrainOffsetX],
     );
 
     const zoomIn = useCallback(() => {
@@ -467,14 +471,14 @@ const TimelineTransformProvider: React.FC<TimelineTransformProviderProps> = ({
             const zoomFactor = 1 - e.deltaY * ZOOM_SENSITIVITY;
             const newScale = Math.min(
                 MAX_SCALE,
-                Math.max(MIN_SCALE, scale * zoomFactor)
+                Math.max(MIN_SCALE, scale * zoomFactor),
             );
 
             // Just update scale - don't adjust offsetX
             // This keeps the left edge anchored and zooms "from the left"
             setScaleState(newScale);
         },
-        [scale]
+        [scale],
     );
 
     // Handle mouse drag for panning
@@ -492,7 +496,7 @@ const TimelineTransformProvider: React.FC<TimelineTransformProviderProps> = ({
             lastMouseX.current = e.clientX;
             setOffsetX(offsetX - deltaX * PAN_SENSITIVITY);
         },
-        [offsetX, setOffsetX]
+        [offsetX, setOffsetX],
     );
 
     const handleMouseUp = useCallback(() => {
@@ -1091,16 +1095,16 @@ const EventNodes: React.FC<{
         }
     };
 
-    const getEventIcon = (type: EventType) => {
+    const getEventIcon = (type: EventType): React.ReactNode => {
         switch (type) {
             case "chapter":
-                return "📖";
+                return <MenuBookIcon style={{ fontSize: "inherit" }} />;
             case "scrap_note":
-                return "📝";
+                return <ArticleIcon style={{ fontSize: "inherit" }} />;
             case "event":
-                return "⭐";
+                return <StarIcon style={{ fontSize: "inherit" }} />;
             default:
-                return "•";
+                return null;
         }
     };
 
@@ -1113,7 +1117,7 @@ const EventNodes: React.FC<{
                     eventTime = dateToYear(
                         event.year,
                         event.month - 1,
-                        event.day ?? 1
+                        event.day ?? 1,
                     );
                 } else {
                     eventTime = event.year;
@@ -1316,7 +1320,7 @@ const TimelineView: React.FC = () => {
                     return dateToYear(e.year, e.month - 1, e.day ?? 1);
                 }
                 return e.year;
-            })
+            }),
         );
     }, [timelineEvents]);
 
@@ -1324,7 +1328,7 @@ const TimelineView: React.FC = () => {
     const [isAxisHovered, setIsAxisHovered] = useState(false);
     const [hoverPosition, setHoverPosition] = useState({ x: 0, y: 0 });
     const [tooltipPosition, setTooltipPosition] = useState<"above" | "below">(
-        "above"
+        "above",
     );
     const [eventTypeMenuOpen, setEventTypeMenuOpen] = useState(false);
     const [menuPosition, setMenuPosition] = useState({ x: 0, y: 0 });
@@ -1393,7 +1397,7 @@ const TimelineView: React.FC = () => {
                         eventPosition = dateToYear(
                             event.year,
                             (event.month as number) - 1,
-                            event.day ?? 1
+                            event.day ?? 1,
                         );
                     } else {
                         eventPosition = event.year;
@@ -1518,7 +1522,7 @@ const TimelineView: React.FC = () => {
                 (e) =>
                     e.timelineId === selectedTimelineId &&
                     e.year === data.year &&
-                    e.title === data.title
+                    e.title === data.title,
             );
             if (newEvent) {
                 setSelectedEvent(newEvent);
@@ -1583,7 +1587,7 @@ const TimelineView: React.FC = () => {
                 (e) =>
                     e.timelineId === selectedTimelineId &&
                     e.year === parsed.year &&
-                    e.associatedId === document.id
+                    e.associatedId === document.id,
             );
             if (newEvent) {
                 setSelectedEvent(newEvent);
@@ -1723,7 +1727,7 @@ const TimelineView: React.FC = () => {
                     opacity: 0.3,
                 }}
             >
-                🚧
+                <ConstructionIcon style={{ fontSize: "4rem", opacity: 0.3 }} />
             </div>
             <h1
                 style={{

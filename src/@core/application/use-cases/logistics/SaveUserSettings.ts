@@ -10,11 +10,12 @@ export interface SaveUserSettingsRequest {
 export class SaveUserSettings {
     constructor(
         private readonly userRepository: IUserRepository,
-        private readonly sessionStore: IUserSessionStore
+        private readonly sessionStore: IUserSessionStore,
     ) {}
 
     async execute(request: SaveUserSettingsRequest): Promise<void> {
         const { userId, preferences } = request;
+        const normalizedAccent = preferences.accentColor?.trim();
 
         if (!userId.trim()) {
             throw new Error("User ID is required.");
@@ -27,11 +28,12 @@ export class SaveUserSettings {
 
         const updatedPreferences = new UserPreferences(
             preferences.theme ?? user.preferences.theme,
+            normalizedAccent ?? user.preferences.accentColor,
             preferences.editorFontSize ?? user.preferences.editorFontSize,
             preferences.editorFontFamily ?? user.preferences.editorFontFamily,
             preferences.defaultImageAiModel ??
                 user.preferences.defaultImageAiModel,
-            preferences.geminiApiKey ?? user.preferences.geminiApiKey
+            preferences.geminiApiKey ?? user.preferences.geminiApiKey,
         );
 
         if (
@@ -41,9 +43,17 @@ export class SaveUserSettings {
             throw new Error("Editor font size must be greater than zero.");
         }
 
+        if (
+            normalizedAccent !== undefined &&
+            !/^#[0-9a-fA-F]{6}$/.test(normalizedAccent)
+        ) {
+            throw new Error("Accent color must be a valid hex color.");
+        }
+
         // Check if anything actually changed
         const hasChanges =
             user.preferences.theme !== updatedPreferences.theme ||
+            user.preferences.accentColor !== updatedPreferences.accentColor ||
             user.preferences.editorFontSize !==
                 updatedPreferences.editorFontSize ||
             user.preferences.editorFontFamily !==

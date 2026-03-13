@@ -1,4 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
+import CheckIcon from "@mui/icons-material/Check";
+import CloseIcon from "@mui/icons-material/Close";
 
 interface DownloadToastItem {
     id: number;
@@ -51,7 +53,11 @@ export const DownloadToast: React.FC = () => {
                     className={`download-toast download-toast--${toast.variant}`}
                 >
                     <span className="download-toast-icon">
-                        {toast.variant === "success" ? "✓" : "✕"}
+                        {toast.variant === "success" ? (
+                            <CheckIcon style={{ fontSize: 14 }} />
+                        ) : (
+                            <CloseIcon style={{ fontSize: 14 }} />
+                        )}
                     </span>
                     <span className="download-toast-message">
                         {toast.message}

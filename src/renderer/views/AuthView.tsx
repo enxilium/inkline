@@ -3,6 +3,8 @@ import React from "react";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
+import LockResetIcon from "@mui/icons-material/LockReset";
+import CheckCircleOutlineIcon from "@mui/icons-material/CheckCircleOutline";
 import type { AuthMode } from "../types";
 
 type AuthForm = {
@@ -18,7 +20,7 @@ type AuthViewProps = {
     resetPasswordSuccess: boolean;
     onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
     onFieldChange: (
-        field: keyof AuthForm
+        field: keyof AuthForm,
     ) => (event: React.ChangeEvent<HTMLInputElement>) => void;
     onToggleMode: () => void;
     onForgotPassword: () => void;
@@ -40,38 +42,46 @@ export const AuthView: React.FC<AuthViewProps> = ({
     if (mode === "resetPassword") {
         return (
             <section className="gateway-panel auth-card">
+                <div className="auth-reset-icon">
+                    <LockResetIcon style={{ fontSize: 24 }} />
+                </div>
                 <p className="panel-label">Password Recovery</p>
                 <h2>Reset your password</h2>
                 <p className="panel-subtitle">
-                    Enter your email and we'll send you a link to reset your
-                    password.
+                    Enter your email and we'll send you a link to create a new
+                    password. Check your spam folder if you don't see it.
                 </p>
                 {resetPasswordSuccess ? (
-                    <>
-                        <span className="card-hint is-success">
-                            Check your email for a password reset link.
-                        </span>
+                    <div className="auth-reset-success">
+                        <CheckCircleOutlineIcon style={{ fontSize: 32 }} />
+                        <p className="auth-reset-success-text">
+                            Email sent! Check your inbox for a password reset
+                            link.
+                        </p>
                         <Button
                             type="button"
                             variant="ghost"
-                            style={{ width: "100%", marginTop: "0.5rem" }}
+                            style={{ width: "100%", marginTop: "0.25rem" }}
                             onClick={onToggleMode}
                         >
                             Back to sign in
                         </Button>
-                    </>
+                    </div>
                 ) : (
                     <>
                         <form className="auth-form" onSubmit={onResetPassword}>
                             <div className="auth-form-inputs">
                                 <div className="input-field">
-                                    <Label htmlFor="auth-email">Email</Label>
+                                    <Label htmlFor="auth-email">
+                                        Email address
+                                    </Label>
                                     <Input
                                         id="auth-email"
                                         type="email"
                                         value={form.email}
                                         onChange={onFieldChange("email")}
                                         autoComplete="email"
+                                        placeholder="you@example.com"
                                         required
                                     />
                                 </div>
@@ -84,12 +94,10 @@ export const AuthView: React.FC<AuthViewProps> = ({
                             <Button
                                 type="submit"
                                 variant="primary"
-                                style={{ marginBottom: "0.5rem" }}
+                                style={{ marginBottom: "0.25rem" }}
                                 disabled={isSubmitting}
                             >
-                                {isSubmitting
-                                    ? "Sending…"
-                                    : "Send Reset Email"}
+                                {isSubmitting ? "Sending…" : "Send Reset Link"}
                             </Button>
                         </form>
                         <Button

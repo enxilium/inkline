@@ -74,6 +74,54 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
         return this.serverReady;
     }
 
+    private hardenApiBackgroundCalls(api: ComfyApi): void {
+        const originalSetTerminalSubscription =
+            api.setTerminalSubscription.bind(api);
+        api.setTerminalSubscription = async (subscribe: boolean) => {
+            try {
+                await originalSetTerminalSubscription(subscribe);
+            } catch (error) {
+                console.warn(
+                    "[ComfyAssetGenerationService] Ignoring terminal subscription failure:",
+                    error,
+                );
+            }
+        };
+
+        const originalGetNodeDefs = api.getNodeDefs.bind(api);
+        api.getNodeDefs = async (nodeName?: string) => {
+            try {
+                return await originalGetNodeDefs(nodeName);
+            } catch (error) {
+                console.warn(
+                    "[ComfyAssetGenerationService] Ignoring node definitions fetch failure:",
+                    error,
+                );
+                return null;
+            }
+        };
+
+        const originalGetSystemStats = api.getSystemStats.bind(api);
+        api.getSystemStats = async () => {
+            try {
+                return await originalGetSystemStats();
+            } catch (error) {
+                console.warn(
+                    "[ComfyAssetGenerationService] Ignoring system stats fetch failure:",
+                    error,
+                );
+                return {
+                    system: {
+                        os: process.platform,
+                        python_version: "unknown",
+                        embedded_python: true,
+                    },
+                    devices: [],
+                } as unknown as Awaited<ReturnType<ComfyApi["getSystemStats"]>>;
+            }
+        };
+    }
+
     private async initializeServer() {
         if (process.platform !== "win32") {
             console.warn(
@@ -138,6 +186,7 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
             await this.waitForServer(port);
 
             this.api = new ComfyApi(`http://127.0.0.1:${port}`);
+            this.hardenApiBackgroundCalls(this.api);
             this.api.init();
             console.log(
                 `[ComfyAssetGenerationService] ComfyUI SDK Initialized on port ${port}.`,
@@ -636,6 +685,17 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
      * Should be called on app quit to prevent orphan processes.
      */
     shutdown(): void {
+        if (this.api) {
+            try {
+                this.api.destroy();
+            } catch (error) {
+                console.warn(
+                    "[ComfyAssetGenerationService] Failed to destroy ComfyUI SDK client cleanly:",
+                    error,
+                );
+            }
+        }
+
         if (this.serverProcess) {
             console.log(
                 "[ComfyAssetGenerationService] Shutting down ComfyUI server...",

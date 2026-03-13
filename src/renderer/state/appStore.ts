@@ -1244,11 +1244,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             }
         },
         deleteAccount: async () => {
-            try {
-                await rendererApi.auth.deleteAccount();
-            } catch (error) {
-                throw error;
-            }
+            await rendererApi.auth.deleteAccount();
         },
         setActiveDocument: (selection) => {
             set((state) => {

@@ -101,15 +101,20 @@ export class SupabaseUserRepository implements IUserRepository {
             typeof value === "string" && value.trim().length > 0
                 ? value
                 : fallback;
+        const coerceHexColor = (value: unknown, fallback: string): string =>
+            typeof value === "string" && /^#[0-9a-fA-F]{6}$/.test(value)
+                ? value
+                : fallback;
 
         const userPreferences = new UserPreferences(
             coerceTheme(prefs.theme),
+            coerceHexColor(prefs.accentColor, "#2ef6ad"),
             coerceNumber(prefs.editorFontSize, 16),
             coerceString(prefs.editorFontFamily, "sans-serif"),
             coerceString(prefs.defaultImageAiModel, "flux"),
             typeof prefs.geminiApiKey === "string"
                 ? prefs.geminiApiKey
-                : undefined
+                : undefined,
         );
 
         return new User(
@@ -121,7 +126,7 @@ export class SupabaseUserRepository implements IUserRepository {
             new Date(data.updated_at),
             data.last_login_at ? new Date(data.last_login_at) : null,
             [...projectIds],
-            userPreferences
+            userPreferences,
         );
     }
 
@@ -137,15 +142,16 @@ export class SupabaseUserRepository implements IUserRepository {
         }
 
         return ((data as Array<{ id: string }> | null) ?? []).map(
-            (row) => row.id
+            (row) => row.id,
         );
     }
 
     private serializePreferences(
-        preferences: UserPreferences
+        preferences: UserPreferences,
     ): Record<string, unknown> {
         return {
             theme: preferences.theme,
+            accentColor: preferences.accentColor,
             editorFontSize: preferences.editorFontSize,
             editorFontFamily: preferences.editorFontFamily,
             defaultImageAiModel: preferences.defaultImageAiModel,

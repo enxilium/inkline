@@ -5,6 +5,7 @@ import { Label } from "../components/ui/Label";
 import { ConfirmationDialog } from "../components/dialogs/ConfirmationDialog";
 import { showDownloadToast } from "../components/ui/DownloadToast";
 import { useAppStore } from "../state/appStore";
+import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import sparkleIcon from "../../../assets/icons/sparkle.png";
 import inkyIcon from "../../../assets/icons/inky.png";
 import wrenchIcon from "../../../assets/icons/wrench.png";
@@ -20,6 +21,8 @@ interface FeatureDownloadProgress {
     status: "pending" | "downloading" | "extracting" | "completed" | "error";
     error?: string;
 }
+
+type ThemeMode = "dark" | "light";
 
 /** Helper to format bytes into a human-readable string. */
 const formatBytes = (bytes: number): string => {
@@ -49,8 +52,6 @@ export const SettingsView: React.FC = () => {
 
     // Theme & personalization (CSS vars)
     const [accent, setAccent] = useState("#2ef6ad");
-    const [surface, setSurface] = useState("#222324");
-    const [surfaceStrong, setSurfaceStrong] = useState("#202022");
     const [isDarkMode, setIsDarkMode] = useState(true);
 
     // Model configuration
@@ -82,6 +83,14 @@ export const SettingsView: React.FC = () => {
         useState<FeatureDownloadProgress | null>(null);
     const [togglingFeature, setTogglingFeature] = useState<string | null>(null);
 
+    const setThemeMode = useCallback((mode: ThemeMode) => {
+        const root = document.documentElement;
+        root.dataset.theme = mode;
+        // Clear legacy inline overrides so theme tokens drive colors.
+        root.style.removeProperty("--text");
+        setIsDarkMode(mode === "dark");
+    }, []);
+
     useEffect(() => {
         const styles = getComputedStyle(document.documentElement);
         const getHex = (varName: string) => {
@@ -95,17 +104,19 @@ export const SettingsView: React.FC = () => {
         const currentAccent = getHex("--accent");
         if (currentAccent) setAccent(currentAccent);
 
-        const currentSurface = getHex("--surface");
-        if (currentSurface) setSurface(currentSurface);
-
-        const currentSurfaceStrong = getHex("--surface-strong");
-        if (currentSurfaceStrong) setSurfaceStrong(currentSurfaceStrong);
+        const root = document.documentElement;
+        const existingTheme = root.dataset.theme;
+        if (existingTheme === "dark" || existingTheme === "light") {
+            setThemeMode(existingTheme);
+            return;
+        }
 
         const textColor = styles.getPropertyValue("--text").trim();
-        // Check if text is light (indicating dark mode)
-        // #f6f7fb is the default light text color
-        setIsDarkMode(textColor.toLowerCase() === "#f6f7fb");
-    }, []);
+        // Legacy fallback for sessions before `data-theme` was introduced.
+        const resolvedMode =
+            textColor.toLowerCase() === "#242424" ? "light" : "dark";
+        setThemeMode(resolvedMode);
+    }, [setThemeMode]);
 
     useEffect(() => {
         if (!user) {
@@ -296,17 +307,32 @@ export const SettingsView: React.FC = () => {
             .getPropertyValue("--titlebar-height")
             .trim();
         const titlebarHeight = Number.parseInt(titlebarHeightRaw, 10) || 36;
+        const overlayHeight = Math.max(0, titlebarHeight - 1);
 
         window.windowControls
             .setTitleBarOverlay({
                 color: surfaceValue || "#222324",
                 symbolColor: textValue || "#f6f7fb",
-                height: titlebarHeight,
+                height: overlayHeight,
             })
             .catch(() => {
                 /* noop */
             });
     };
+
+    const saveAppearancePreferences = useCallback(
+        async (payload: { theme?: ThemeMode; accentColor?: string }) => {
+            if (!currentUserId.trim()) {
+                return;
+            }
+
+            await saveUserSettings({
+                userId: currentUserId,
+                preferences: payload,
+            });
+        },
+        [currentUserId, saveUserSettings],
+    );
 
     const handleAccentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
@@ -315,50 +341,32 @@ export const SettingsView: React.FC = () => {
         updateCssVar("--accent-transparent", val + "11");
         updateCssVar("--accent-transparent2", val + "44");
         updateCssVar("--accent-light", val);
+        void saveAppearancePreferences({ accentColor: val });
     };
 
-    const handleSurfaceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        setSurface(val);
-        updateCssVar("--surface", val);
-        syncTitleBarOverlay();
-    };
-
-    const handleSurfaceStrongChange = (
-        e: React.ChangeEvent<HTMLInputElement>,
-    ) => {
-        const val = e.target.value;
-        setSurfaceStrong(val);
-        updateCssVar("--surface-strong", val);
-    };
-
-    const toggleTheme = () => {
-        const newMode = !isDarkMode;
-        setIsDarkMode(newMode);
-        if (newMode) {
-            updateCssVar("--text", "#f6f7fb");
-        } else {
-            updateCssVar("--text", "#242424");
-        }
-
-        syncTitleBarOverlay();
+    const handleThemeModeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const mode: ThemeMode = e.target.checked ? "dark" : "light";
+        setThemeMode(mode);
+        void saveAppearancePreferences({ theme: mode });
+        window.requestAnimationFrame(syncTitleBarOverlay);
     };
 
     const handleReset = () => {
         setAccent("#2ef6ad");
-        setSurface("#222324");
-        setSurfaceStrong("#202022");
-        setIsDarkMode(true);
+        setThemeMode("dark");
 
         updateCssVar("--accent", "#2ef6ad");
         updateCssVar("--accent-transparent", "#2ef6ad11");
         updateCssVar("--accent-transparent2", "#2ef6ad44");
         updateCssVar("--accent-light", "#b4ffeb");
 
-        updateCssVar("--surface", "#222324");
-        updateCssVar("--surface-strong", "#202022");
+        document.documentElement.style.removeProperty("--surface");
+        document.documentElement.style.removeProperty("--surface-strong");
 
-        updateCssVar("--text", "#f6f7fb");
+        void saveAppearancePreferences({
+            theme: "dark",
+            accentColor: "#2ef6ad",
+        });
 
         syncTitleBarOverlay();
     };
@@ -512,13 +520,19 @@ export const SettingsView: React.FC = () => {
                             onClick={() => setActiveSection(item.id)}
                             type="button"
                         >
-                            <div className="flex-row" style={{ alignItems: "flex-start" }}>
+                            <div
+                                className="flex-row"
+                                style={{ alignItems: "flex-start" }}
+                            >
                                 <img
                                     src={item.icon}
                                     alt=""
                                     className="settings-nav-icon"
                                 />
-                                <div className="flex-column" style={{ alignItems: "flex-start" }}>
+                                <div
+                                    className="flex-column"
+                                    style={{ alignItems: "flex-start" }}
+                                >
                                     <div className="settings-nav-title">
                                         {item.title}
                                     </div>
@@ -542,21 +556,39 @@ export const SettingsView: React.FC = () => {
 
                                 <div className="settings-section">
                                     <div className="dialog-field">
-                                        <Label>Theme Mode</Label>
-                                        <div className="settings-row">
-                                            <Button
-                                                onClick={toggleTheme}
-                                                variant="secondary"
-                                                style={{ flex: 1 }}
+                                        <Label htmlFor="theme-mode-toggle">
+                                            Theme Mode
+                                        </Label>
+                                        <div className="settings-theme-toggle-row">
+                                            <span className="settings-theme-mode-label">
+                                                Light
+                                            </span>
+                                            <label
+                                                className="settings-theme-switch"
+                                                htmlFor="theme-mode-toggle"
                                             >
-                                                {isDarkMode
-                                                    ? "Switch to Dark Text for Light Background"
-                                                    : "Switch to Light Text for Dark Background"}
-                                            </Button>
+                                                <input
+                                                    id="theme-mode-toggle"
+                                                    className="settings-theme-switch-input"
+                                                    type="checkbox"
+                                                    checked={isDarkMode}
+                                                    onChange={
+                                                        handleThemeModeChange
+                                                    }
+                                                    aria-label="Toggle dark mode"
+                                                />
+                                                <span
+                                                    className="settings-theme-switch-slider"
+                                                    aria-hidden="true"
+                                                />
+                                            </label>
+                                            <span className="settings-theme-mode-label">
+                                                Dark
+                                            </span>
                                         </div>
                                         <p className="helper-text">
-                                            Toggles the text color between light
-                                            and dark.
+                                            Switches the entire interface
+                                            between dark and light mode.
                                         </p>
                                     </div>
 
@@ -583,62 +615,6 @@ export const SettingsView: React.FC = () => {
                                                 }}
                                             >
                                                 {accent}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="dialog-field">
-                                        <Label htmlFor="surface-color">
-                                            Surface Color
-                                        </Label>
-                                        <div className="settings-row">
-                                            <Input
-                                                id="surface-color"
-                                                type="color"
-                                                value={surface}
-                                                onChange={handleSurfaceChange}
-                                                style={{
-                                                    height: "40px",
-                                                    padding: "2px",
-                                                    width: "60px",
-                                                    flex: "none",
-                                                }}
-                                            />
-                                            <span
-                                                style={{
-                                                    fontFamily: "monospace",
-                                                }}
-                                            >
-                                                {surface}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="dialog-field">
-                                        <Label htmlFor="surface-strong-color">
-                                            Surface Strong Color
-                                        </Label>
-                                        <div className="settings-row">
-                                            <Input
-                                                id="surface-strong-color"
-                                                type="color"
-                                                value={surfaceStrong}
-                                                onChange={
-                                                    handleSurfaceStrongChange
-                                                }
-                                                style={{
-                                                    height: "40px",
-                                                    padding: "2px",
-                                                    width: "60px",
-                                                    flex: "none",
-                                                }}
-                                            />
-                                            <span
-                                                style={{
-                                                    fontFamily: "monospace",
-                                                }}
-                                            >
-                                                {surfaceStrong}
                                             </span>
                                         </div>
                                     </div>
@@ -966,71 +942,83 @@ export const SettingsView: React.FC = () => {
                                 <div
                                     className="settings-section"
                                     style={{
-                                        marginTop: "2rem",
-                                        paddingTop: "1.5rem",
+                                        marginTop: "1.25rem",
+                                        paddingTop: "1rem",
                                         borderTop: "1px solid var(--border)",
                                     }}
                                 >
-                                    <h3
+                                    <div
                                         style={{
-                                            margin: "0 0 0.5rem 0",
-                                            fontSize: "1rem",
+                                            display: "flex",
+                                            flexDirection: "column",
+                                            gap: "1rem",
                                         }}
                                     >
-                                        Session
-                                    </h3>
-                                    <p
-                                        className="panel-subtitle"
-                                        style={{ marginBottom: "1rem" }}
-                                    >
-                                        Sign out of your account on this device.
-                                    </p>
-                                    <Button
-                                        onClick={logout}
-                                        variant="secondary"
-                                        disabled={!user}
-                                    >
-                                        Log Out
-                                    </Button>
+                                        <h3
+                                            style={{
+                                                margin: "0 0 0 0",
+                                                fontSize: "1rem",
+                                            }}
+                                        >
+                                            Session
+                                        </h3>
+                                        <p
+                                            className="panel-subtitle"
+                                            style={{ marginBottom: "0.75rem" }}
+                                        >
+                                            Sign out of your account on this
+                                            device.
+                                        </p>
+                                        <Button
+                                            onClick={logout}
+                                            variant="secondary"
+                                            disabled={!user}
+                                        >
+                                            Log Out
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 <div
                                     className="settings-section"
                                     style={{
-                                        marginTop: "2rem",
-                                        paddingTop: "1.5rem",
+                                        marginTop: "1rem",
+                                        paddingTop: "1rem",
                                         borderTop: "1px solid var(--border)",
                                     }}
                                 >
-                                    <h3
-                                        style={{
-                                            margin: "0 0 0.5rem 0",
-                                            fontSize: "1rem",
-                                            color: "var(--danger, #e74c3c)",
-                                        }}
-                                    >
-                                        Danger Zone
-                                    </h3>
-                                    <p
-                                        className="panel-subtitle"
-                                        style={{ marginBottom: "1rem" }}
-                                    >
-                                        Permanently delete your account and all
-                                        associated data. This cannot be undone.
-                                    </p>
-                                    <Button
-                                        onClick={() =>
-                                            setShowDeleteConfirm(true)
-                                        }
-                                        variant="danger"
-                                        disabled={
-                                            !user || isDeletingAccount
-                                        }
-                                    >
-                                        {isDeletingAccount
-                                            ? "Deleting…"
-                                            : "Delete Account"}
-                                    </Button>
+                                    <div className="danger-callout">
+                                        <div className="danger-callout-header">
+                                            <span className="danger-callout-icon">
+                                                <WarningAmberIcon
+                                                    style={{ fontSize: 18 }}
+                                                />
+                                            </span>
+                                            Danger Zone
+                                        </div>
+                                        <p className="danger-callout-body">
+                                            Permanently deletes your account and{" "}
+                                            <strong>all associated data</strong>{" "}
+                                            — projects, characters, locations,
+                                            and generated assets. This cannot be
+                                            undone.
+                                        </p>
+                                        <div>
+                                            <Button
+                                                onClick={() =>
+                                                    setShowDeleteConfirm(true)
+                                                }
+                                                variant="danger"
+                                                disabled={
+                                                    !user || isDeletingAccount
+                                                }
+                                            >
+                                                {isDeletingAccount
+                                                    ? "Deleting…"
+                                                    : "Delete Account"}
+                                            </Button>
+                                        </div>
+                                    </div>
                                 </div>
 
                                 <ConfirmationDialog

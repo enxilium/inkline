@@ -14,6 +14,7 @@ export type SerializableUser = {
     projectIds: string[];
     preferences: {
         theme: ThemePreference;
+        accentColor: string;
         editorFontSize: number;
         editorFontFamily: string;
         defaultImageAiModel: string;
@@ -40,6 +41,7 @@ export const mapUserToSerializable = (user: User): SerializableUser => ({
     projectIds: [...user.projectIds],
     preferences: {
         theme: user.preferences.theme,
+        accentColor: user.preferences.accentColor,
         editorFontSize: user.preferences.editorFontSize,
         editorFontFamily: user.preferences.editorFontFamily,
         defaultImageAiModel: user.preferences.defaultImageAiModel,
