@@ -16,7 +16,7 @@ import { EventType } from "../../../@core/domain/entities/story/timeline/Event";
 
 // Convert a fractional year position to year/month/day
 const yearToDate = (
-    yearFraction: number
+    yearFraction: number,
 ): { year: number; month: number; day: number } => {
     const year = Math.floor(yearFraction);
     const remainder = yearFraction - year;
@@ -58,6 +58,7 @@ interface TimelineNodeCreationDialogProps {
 export const TimelineNodeCreationDialog: React.FC<
     TimelineNodeCreationDialogProps
 > = ({ open, onOpenChange, timelineId, initialTime, onCreate }) => {
+    void timelineId;
     const { chapters, scrapNotes } = useAppStore();
     const [type, setType] = useState<EventType>("event");
     const [title, setTitle] = useState("");
@@ -164,7 +165,7 @@ export const TimelineNodeCreationDialog: React.FC<
                                     setMonth(
                                         e.target.value
                                             ? Number(e.target.value)
-                                            : null
+                                            : null,
                                     )
                                 }
                             >
@@ -190,7 +191,7 @@ export const TimelineNodeCreationDialog: React.FC<
                                     setDay(
                                         e.target.value
                                             ? Number(e.target.value)
-                                            : null
+                                            : null,
                                     )
                                 }
                                 placeholder="Day"

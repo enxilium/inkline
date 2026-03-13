@@ -105,7 +105,7 @@ const DraggableBinderItem = ({
     const renameDocument = useAppStore((state) => state.renameDocument);
     const renamingDocument = useAppStore((state) => state.renamingDocument);
     const setRenamingDocument = useAppStore(
-        (state) => state.setRenamingDocument
+        (state) => state.setRenamingDocument,
     );
 
     const [isRenaming, setIsRenaming] = React.useState(false);
@@ -276,13 +276,13 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     showTabbar = true,
 }) => {
     const pendingEditsByChapterId = useAppStore(
-        (state) => state.pendingEditsByChapterId
+        (state) => state.pendingEditsByChapterId,
     );
     const setDraggedDocument = useAppStore((state) => state.setDraggedDocument);
 
     const [uncontrolledActiveKind, setUncontrolledActiveKind] =
         React.useState<WorkspaceDocumentKind>(
-            activeDocument?.kind ?? "chapter"
+            activeDocument?.kind ?? "chapter",
         );
 
     const activeKind = controlledActiveKind ?? uncontrolledActiveKind;
@@ -317,7 +317,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     const chapterItems: BinderItem[] = chapters
         .slice()
         .sort((a, b) => a.order - b.order)
-        .map((chapter, index) => ({
+        .map((chapter) => ({
             id: chapter.id,
             label: normalizeLabel(chapter.title, "Untitled Chapter"),
             prefix: String(chapter.order + 1),
@@ -352,7 +352,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             id: organization.id,
             label: normalizeLabel(organization.name, "Untitled Organization"),
             kind: "organization",
-        })
+        }),
     );
 
     const sections: BinderSection[] = [
@@ -414,7 +414,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                 id: item.id,
                 kind: item.kind,
                 title: item.label,
-            })
+            }),
         );
         e.dataTransfer.effectAllowed = "copyMove";
     };
@@ -432,10 +432,10 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
 
         if (draggedId && draggedId !== targetItem.id) {
             const oldIndex = activeSection.items.findIndex(
-                (i) => i.id === draggedId
+                (i) => i.id === draggedId,
             );
             const newIndex = activeSection.items.findIndex(
-                (i) => i.id === targetItem.id
+                (i) => i.id === targetItem.id,
             );
 
             if (oldIndex !== -1 && newIndex !== -1) {
@@ -530,7 +530,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                         <ul className="binder-list">
                             {(() => {
                                 const draggedIndex = renderedItems.findIndex(
-                                    (i) => i.id === draggedId
+                                    (i) => i.id === draggedId,
                                 );
                                 return renderedItems.map((item, index) => {
                                     const isActive =
@@ -564,11 +564,11 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                                             onDelete={() => {
                                                 if (
                                                     window.confirm(
-                                                        `Delete "${item.label}"?`
+                                                        `Delete "${item.label}"?`,
                                                     )
                                                 ) {
                                                     activeSection.onDelete(
-                                                        item.id
+                                                        item.id,
                                                     );
                                                 }
                                             }}

@@ -10,7 +10,7 @@ export interface SaveManuscriptStructureRequest {
 export class SaveManuscriptStructure {
     constructor(
         private readonly projectRepository: IProjectRepository,
-        private readonly chapterRepository: IChapterRepository
+        private readonly chapterRepository: IChapterRepository,
     ) {}
 
     async execute(request: SaveManuscriptStructureRequest): Promise<void> {
@@ -28,12 +28,12 @@ export class SaveManuscriptStructure {
         const chapters =
             await this.chapterRepository.findByProjectId(projectId);
         const chapterMap = new Map(
-            chapters.map((chapter) => [chapter.id, chapter])
+            chapters.map((chapter) => [chapter.id, chapter]),
         );
 
         const normalizedOrder = this.validateChapterOrdering(
             orderedChapterIds,
-            chapterMap
+            chapterMap,
         );
 
         const now = new Date();
@@ -41,14 +41,19 @@ export class SaveManuscriptStructure {
 
         await Promise.all(
             normalizedOrder.map(async (chapterId, index) => {
-                const chapter = chapterMap.get(chapterId)!;
+                const chapter = chapterMap.get(chapterId);
+                if (!chapter) {
+                    throw new Error(
+                        "Chapter ordering references an unknown chapter.",
+                    );
+                }
                 if (chapter.order !== index) {
                     chapter.order = index;
                     chapter.updatedAt = now;
                     await this.chapterRepository.update(chapter);
                     hasChanges = true;
                 }
-            })
+            }),
         );
 
         // Check if project structure actually changed
@@ -66,11 +71,11 @@ export class SaveManuscriptStructure {
 
     private validateChapterOrdering(
         orderedChapterIds: string[],
-        chapterMap: Map<string, Chapter>
+        chapterMap: Map<string, Chapter>,
     ): string[] {
         if (orderedChapterIds.length !== chapterMap.size) {
             throw new Error(
-                "Ordered chapter list is out of sync with project chapters."
+                "Ordered chapter list is out of sync with project chapters.",
             );
         }
 
@@ -85,14 +90,14 @@ export class SaveManuscriptStructure {
 
             if (seen.has(normalized)) {
                 throw new Error(
-                    "Duplicate chapter IDs supplied in ordering payload."
+                    "Duplicate chapter IDs supplied in ordering payload.",
                 );
             }
 
             const chapter = chapterMap.get(normalized);
             if (!chapter) {
                 throw new Error(
-                    "Chapter ordering references an unknown chapter."
+                    "Chapter ordering references an unknown chapter.",
                 );
             }
 

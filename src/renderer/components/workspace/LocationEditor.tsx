@@ -7,6 +7,11 @@ import { Label } from "../ui/Label";
 import { ListInput, type DocumentRef } from "../ui/ListInput";
 import { TagsInput } from "../ui/Tags";
 import { RichTextAreaInput } from "../ui/RichTextAreaInput";
+import { showToast } from "../ui/GenerationProgressToast";
+import {
+    normalizeUserFacingError,
+    type UserErrorContext,
+} from "../../utils/userFacingError";
 
 export type LocationEditorValues = {
     name: string;
@@ -58,9 +63,9 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     onNavigateToDocument,
 }) => {
     const [values, setValues] = React.useState<LocationEditorValues>(() =>
-        defaultValues(location)
+        defaultValues(location),
     );
-    const [isSaving, setSaving] = React.useState(false);
+    const [, setSaving] = React.useState(false);
     const [assetBusy, setAssetBusy] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
@@ -69,6 +74,12 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     const songInputRef = React.useRef<HTMLInputElement>(null);
     const playlistInputRef = React.useRef<HTMLInputElement>(null);
     const isUserChange = React.useRef(false);
+
+    const toFriendlyError = React.useCallback(
+        (error: unknown, fallback: string, context?: UserErrorContext) =>
+            normalizeUserFacingError(error, fallback, context),
+        [],
+    );
 
     React.useEffect(() => {
         isUserChange.current = false;
@@ -103,7 +114,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
 
     const handleChange = (
         field: keyof LocationEditorValues,
-        value: string | string[]
+        value: string | string[],
     ) => {
         isUserChange.current = true;
         setValues((prev) => ({
@@ -119,9 +130,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
         try {
             await onSubmit(values);
         } catch (submitError) {
-            setError(
-                (submitError as Error)?.message ?? "Failed to save location."
-            );
+            setError(toFriendlyError(submitError, "Failed to save location."));
         } finally {
             setSaving(false);
         }
@@ -162,7 +171,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     };
 
     const handleFileChange = async (
-        event: React.ChangeEvent<HTMLInputElement>
+        event: React.ChangeEvent<HTMLInputElement>,
     ) => {
         const file = event.target.files?.[0];
         if (!file) {
@@ -174,9 +183,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
         try {
             await onImportPortrait(file);
         } catch (importError) {
-            setError(
-                (importError as Error)?.message ?? "Failed to import artwork."
-            );
+            setError(toFriendlyError(importError, "Failed to import artwork."));
         } finally {
             setAssetBusy(false);
             event.target.value = "";
@@ -184,7 +191,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     };
 
     const handleSongChange = async (
-        event: React.ChangeEvent<HTMLInputElement>
+        event: React.ChangeEvent<HTMLInputElement>,
     ) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -194,9 +201,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
         try {
             await onImportSong(file);
         } catch (importError) {
-            setError(
-                (importError as Error)?.message ?? "Failed to import song."
-            );
+            setError(toFriendlyError(importError, "Failed to import song."));
         } finally {
             setAssetBusy(false);
             event.target.value = "";
@@ -204,7 +209,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     };
 
     const handlePlaylistChange = async (
-        event: React.ChangeEvent<HTMLInputElement>
+        event: React.ChangeEvent<HTMLInputElement>,
     ) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -215,7 +220,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
             await onImportPlaylist(file);
         } catch (importError) {
             setError(
-                (importError as Error)?.message ?? "Failed to import playlist."
+                toFriendlyError(importError, "Failed to import playlist."),
             );
         } finally {
             setAssetBusy(false);
@@ -229,10 +234,17 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
         try {
             await onGeneratePortrait();
         } catch (generateError) {
-            setError(
-                (generateError as Error)?.message ??
-                    "Failed to generate artwork."
-            );
+            showToast({
+                id: "generation-image",
+                variant: "error",
+                title: "Image generation failed",
+                description: toFriendlyError(
+                    generateError,
+                    "Failed to generate artwork.",
+                    "generation-image",
+                ),
+                durationMs: 6000,
+            });
         } finally {
             setAssetBusy(false);
         }
@@ -240,14 +252,23 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
 
     const handleAssetAction = async (
         action: () => Promise<void>,
-        errorMessage: string
+        errorMessage: string,
+        context: UserErrorContext,
+        toastId: string,
+        toastTitle: string,
     ) => {
         setAssetBusy(true);
         setError(null);
         try {
             await action();
         } catch (err) {
-            setError((err as Error)?.message ?? errorMessage);
+            showToast({
+                id: toastId,
+                variant: "error",
+                title: toastTitle,
+                description: toFriendlyError(err, errorMessage, context),
+                durationMs: 6000,
+            });
         } finally {
             setAssetBusy(false);
         }
@@ -268,7 +289,8 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
             return;
         }
         setCurrentImageIndex(
-            (prev) => (prev - 1 + gallerySources.length) % gallerySources.length
+            (prev) =>
+                (prev - 1 + gallerySources.length) % gallerySources.length,
         );
     };
 
@@ -381,9 +403,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                         type="button"
                                         className="gallery-nav-btn"
                                         onClick={showPreviousImage}
-                                        disabled={
-                                            !canCycleGallery
-                                        }
+                                        disabled={!canCycleGallery}
                                     >
                                         <ChevronLeftIcon size={14} />
                                     </button>
@@ -396,9 +416,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                         type="button"
                                         className="gallery-nav-btn"
                                         onClick={showNextImage}
-                                        disabled={
-                                            !canCycleGallery
-                                        }
+                                        disabled={!canCycleGallery}
                                     >
                                         <ChevronRightIcon size={14} />
                                     </button>
@@ -430,7 +448,9 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                         <div className="entity-summary">
                             <span className="summary-label">Audio Assets</span>
                             <div className="audio-asset-row">
-                                <span className="audio-asset-label">Soundtrack</span>
+                                <span className="audio-asset-label">
+                                    Soundtrack
+                                </span>
                                 {songUrl && (
                                     <audio
                                         controls
@@ -448,7 +468,10 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                             onClick: () =>
                                                 handleAssetAction(
                                                     onGenerateSong,
-                                                    "Song generation failed"
+                                                    "Song generation failed",
+                                                    "generation-audio",
+                                                    "generation-audio",
+                                                    "Audio generation failed",
                                                 ),
                                             disabled: assetBusy,
                                         },
@@ -468,7 +491,9 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                 />
                             </div>
                             <div className="audio-asset-row">
-                                <span className="audio-asset-label">Playlist</span>
+                                <span className="audio-asset-label">
+                                    Playlist
+                                </span>
                                 <ActionDropdown
                                     disabled={assetBusy}
                                     options={[
@@ -479,7 +504,10 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                                             onClick: () =>
                                                 handleAssetAction(
                                                     onGeneratePlaylist,
-                                                    "Playlist generation failed"
+                                                    "Playlist generation failed",
+                                                    "generation-playlist",
+                                                    "generation-playlist",
+                                                    "Playlist generation failed",
                                                 ),
                                             disabled: assetBusy,
                                         },

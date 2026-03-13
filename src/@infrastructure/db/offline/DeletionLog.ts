@@ -1,5 +1,4 @@
 import { fileSystemService } from "../../storage/FileSystemService";
-import * as path from "path";
 
 export type EntityType =
     | "chapter"
@@ -23,7 +22,7 @@ export class DeletionLog {
     private mutex = Promise.resolve();
 
     private lock(): Promise<() => void> {
-        let unlockNext: () => void = () => {};
+        let unlockNext!: () => void;
 
         const willLock = new Promise<void>((resolve) => {
             unlockNext = resolve;
@@ -90,7 +89,7 @@ export class DeletionLog {
      * Remove deletion log entries older than the specified number of days.
      * Called on app launch to prevent unbounded log growth.
      */
-    async cleanupOldEntries(olderThanDays: number = 30): Promise<number> {
+    async cleanupOldEntries(olderThanDays = 30): Promise<number> {
         const unlock = await this.lock();
         try {
             const log = await this.getAllInternal();
@@ -100,9 +99,6 @@ export class DeletionLog {
 
             if (removedCount > 0) {
                 await this.saveInternal(newLog);
-                console.log(
-                    `[DeletionLog] Cleaned up ${removedCount} entries older than ${olderThanDays} days`
-                );
             }
 
             return removedCount;

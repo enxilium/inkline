@@ -31,7 +31,10 @@ interface ExportDialogProps {
  */
 function sanitizeFilename(raw: string): string {
     return raw
-        .replace(/[<>:"/\\|?*\x00-\x1f]/g, "")
+        .replace(/[<>:"/\\|?*]/g, "")
+        .split("")
+        .filter((char) => char.charCodeAt(0) >= 32)
+        .join("")
         .replace(/\s+/g, " ")
         .trim();
 }

@@ -23,11 +23,14 @@ import * as path from "path";
 import { Buffer } from "buffer";
 import { deletionLog, EntityType } from "../db/offline/DeletionLog";
 import { SupabaseDeletionLogRepository } from "../db/SupabaseDeletionLogRepository";
+import { createTerminalLogger } from "./TerminalLogger";
 import {
     SyncStateGateway,
     RemoteChangePayload,
     EntityType as SyncEntityType,
 } from "../../@interface-adapters/controllers/sync/SyncStateGateway";
+
+const logger = createTerminalLogger("SynchronizationService");
 
 /**
  * Queued realtime event to be processed after a sync operation completes.
@@ -78,7 +81,7 @@ export class SynchronizationService extends EventEmitter {
         private fsScrapNoteRepo: FileSystemScrapNoteRepository,
         private supabaseAssetRepo: SupabaseAssetRepository,
         private fsAssetRepo: FileSystemAssetRepository,
-        private supabaseDeletionLogRepo: SupabaseDeletionLogRepository
+        private supabaseDeletionLogRepo: SupabaseDeletionLogRepository,
     ) {
         super();
     }
@@ -122,9 +125,6 @@ export class SynchronizationService extends EventEmitter {
         this.stopAutoSync();
         this.currentUserId = userId;
         this.reconnectAttempts = 0;
-        console.log(
-            `[SynchronizationService] Starting auto-sync for user ${userId}`
-        );
 
         // Cleanup old deletion logs on app launch (30+ days old)
         void this.cleanupOldDeletionLogs(userId);
@@ -137,11 +137,6 @@ export class SynchronizationService extends EventEmitter {
 
         // Immediate connection check
         this.checkConnection(userId).then((online) => {
-            console.log(
-                `[SynchronizationService] Initial connection check: ${
-                    online ? "Online" : "Offline"
-                }`
-            );
             this.isOnline = online;
             this.syncStateGateway?.setStatus(online ? "online" : "offline");
         });
@@ -157,9 +152,6 @@ export class SynchronizationService extends EventEmitter {
 
             if (online) {
                 if (this.wasOffline) {
-                    console.log(
-                        "[SynchronizationService] Connection restored. Running re-connection sync."
-                    );
                     await this.syncAll(userId, "reconnect");
                     this.wasOffline = false;
                 }
@@ -180,14 +172,12 @@ export class SynchronizationService extends EventEmitter {
         }
 
         if (this.syncInterval) {
-            console.log("[SynchronizationService] Stopping auto-sync");
             clearInterval(this.syncInterval);
             this.syncInterval = null;
         }
 
         // Unsubscribe from realtime channel
         if (this.realtimeChannel) {
-            console.log("[SynchronizationService] Unsubscribing from realtime");
             SupabaseService.getClient().removeChannel(this.realtimeChannel);
             this.realtimeChannel = null;
         }
@@ -218,42 +208,39 @@ export class SynchronizationService extends EventEmitter {
                     table: "projects",
                     filter: `user_id=eq.${userId}`,
                 },
-                (payload) => this.handleRealtimeChange("project", payload)
+                (payload) => this.handleRealtimeChange("project", payload),
             )
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "chapters" },
-                (payload) => this.handleRealtimeChange("chapter", payload)
+                (payload) => this.handleRealtimeChange("chapter", payload),
             )
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "characters" },
-                (payload) => this.handleRealtimeChange("character", payload)
+                (payload) => this.handleRealtimeChange("character", payload),
             )
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "locations" },
-                (payload) => this.handleRealtimeChange("location", payload)
+                (payload) => this.handleRealtimeChange("location", payload),
             )
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "organizations" },
-                (payload) => this.handleRealtimeChange("organization", payload)
+                (payload) => this.handleRealtimeChange("organization", payload),
             )
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "scrap_notes" },
-                (payload) => this.handleRealtimeChange("scrapNote", payload)
+                (payload) => this.handleRealtimeChange("scrapNote", payload),
             )
             .on(
                 "postgres_changes",
                 { event: "*", schema: "public", table: "assets" },
-                (payload) => this.handleAssetRealtimeChange(payload)
+                (payload) => this.handleAssetRealtimeChange(payload),
             )
             .subscribe(async (status) => {
-                console.log(
-                    `[SynchronizationService] Realtime subscription status: ${status}`
-                );
                 if (status === "SUBSCRIBED") {
                     const wasOfflineBefore = this.wasOffline;
                     this.isOnline = true;
@@ -269,9 +256,6 @@ export class SynchronizationService extends EventEmitter {
 
                     // If we were offline before, trigger a reconnect sync to detect conflicts
                     if (wasOfflineBefore) {
-                        console.log(
-                            "[SynchronizationService] Realtime reconnected after offline. Running reconnect sync."
-                        );
                         void this.syncAll(userId, "reconnect");
                     }
                 } else if (status === "CLOSED" || status === "CHANNEL_ERROR") {
@@ -297,8 +281,8 @@ export class SynchronizationService extends EventEmitter {
         }
 
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-            console.error(
-                "[SynchronizationService] Max reconnection attempts reached. Manual refresh required."
+            logger.error(
+                "Max reconnection attempts reached. Manual refresh required.",
             );
             return;
         }
@@ -306,20 +290,13 @@ export class SynchronizationService extends EventEmitter {
         // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 60s (capped)
         const delay = Math.min(
             this.baseReconnectDelay * Math.pow(2, this.reconnectAttempts),
-            60000
+            60000,
         );
         this.reconnectAttempts++;
-
-        console.log(
-            `[SynchronizationService] Scheduling reconnect attempt ${this.reconnectAttempts} in ${delay}ms`
-        );
 
         this.reconnectTimeout = setTimeout(() => {
             this.reconnectTimeout = null; // Clear the reference before attempting reconnection
             if (this.currentUserId === userId) {
-                console.log(
-                    `[SynchronizationService] Attempting reconnection...`
-                );
                 this.setupRealtimeSubscriptions(userId);
             }
         }, delay);
@@ -342,7 +319,7 @@ export class SynchronizationService extends EventEmitter {
     }
 
     private getTableNameForEntityType(
-        entityType: SyncEntityType
+        entityType: SyncEntityType,
     ): string | null {
         switch (entityType) {
             case "project":
@@ -368,7 +345,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async lookupProjectIdForEntity(
         entityType: SyncEntityType,
-        entityId: string
+        entityId: string,
     ): Promise<string | null> {
         const tableName = this.getTableNameForEntityType(entityType);
         if (!tableName || tableName === "projects") return null;
@@ -381,9 +358,9 @@ export class SynchronizationService extends EventEmitter {
             .maybeSingle();
 
         if (error) {
-            console.warn(
-                `[SynchronizationService] Failed to lookup project_id for ${entityType} ${entityId}`,
-                error
+            logger.warn(
+                `Failed to lookup project_id for ${entityType} ${entityId}`,
+                error,
             );
             return null;
         }
@@ -401,9 +378,9 @@ export class SynchronizationService extends EventEmitter {
             .maybeSingle();
 
         if (error) {
-            console.warn(
-                `[SynchronizationService] Failed to lookup asset type for asset ${entityId}`,
-                error
+            logger.warn(
+                `Failed to lookup asset type for asset ${entityId}`,
+                error,
             );
             return null;
         }
@@ -415,7 +392,7 @@ export class SynchronizationService extends EventEmitter {
     private handleRealtimeChangeResolved(
         entityType: SyncEntityType,
         payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
-        resolved: { projectId: string; entityId: string; updatedAt: string }
+        resolved: { projectId: string; entityId: string; updatedAt: string },
     ): void {
         const { projectId, entityId, updatedAt } = resolved;
 
@@ -455,11 +432,6 @@ export class SynchronizationService extends EventEmitter {
             updatedAt,
         };
 
-        console.log(
-            `[SynchronizationService] Realtime change: ${entityType} ${payload.eventType}`,
-            entityId
-        );
-
         // Emit event for the UI to handle
         this.emit("remote-change", changePayload);
         this.syncStateGateway?.notifyRemoteChange(changePayload);
@@ -473,9 +445,6 @@ export class SynchronizationService extends EventEmitter {
                 eventType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
                 timestamp: Date.now(),
             });
-            console.log(
-                `[SynchronizationService] Queued event during sync: ${entityType} ${payload.eventType}`
-            );
             return;
         }
 
@@ -485,14 +454,14 @@ export class SynchronizationService extends EventEmitter {
                 entityType,
                 entityId,
                 projectId,
-                payload.eventType
+                payload.eventType,
             );
         }
     }
 
     private handleRealtimeChange(
         entityType: SyncEntityType,
-        payload: RealtimePostgresChangesPayload<Record<string, unknown>>
+        payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
     ): void {
         const record = (payload.new || payload.old) as
             | Record<string, unknown>
@@ -512,11 +481,11 @@ export class SynchronizationService extends EventEmitter {
                 const resolvedProjectId =
                     (await this.lookupProjectIdForEntity(
                         entityType,
-                        entityId
+                        entityId,
                     )) || "";
                 if (!resolvedProjectId) {
-                    console.warn(
-                        `[SynchronizationService] Realtime payload missing project_id; cannot process ${entityType} ${payload.eventType} ${entityId}`
+                    logger.warn(
+                        `Realtime payload missing project_id; cannot process ${entityType} ${payload.eventType} ${entityId}`,
                     );
                     return;
                 }
@@ -537,7 +506,7 @@ export class SynchronizationService extends EventEmitter {
     }
 
     private handleAssetRealtimeChange(
-        payload: RealtimePostgresChangesPayload<Record<string, unknown>>
+        payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
     ): void {
         const record = (payload.new || payload.old) as
             | Record<string, unknown>
@@ -572,7 +541,7 @@ export class SynchronizationService extends EventEmitter {
                     projectId ||
                     (await this.lookupProjectIdForEntity(
                         resolvedEntityType,
-                        entityId
+                        entityId,
                     )) ||
                     "";
                 if (!resolvedProjectId) return;
@@ -628,7 +597,7 @@ export class SynchronizationService extends EventEmitter {
         entityType: SyncEntityType,
         entityId: string,
         projectId: string,
-        eventType: string
+        eventType: string,
     ): Promise<void> {
         // Handle project entity changes - sync and notify
         if (entityType === "project") {
@@ -656,10 +625,7 @@ export class SynchronizationService extends EventEmitter {
                     });
                 }
             } catch (error) {
-                console.error(
-                    `[SynchronizationService] Failed to sync project ${entityId}`,
-                    error
-                );
+                logger.error(`Failed to sync project ${entityId}`, error);
             }
             return;
         }
@@ -679,11 +645,11 @@ export class SynchronizationService extends EventEmitter {
         try {
             const remoteUpdatedAt = await this.getRemoteUpdatedAt(
                 entityType as EntityType,
-                entityId
+                entityId,
             );
             const localUpdatedAt = await this.getLocalUpdatedAt(
                 entityType as EntityType,
-                entityId
+                entityId,
             );
 
             if (!remoteUpdatedAt) return;
@@ -694,7 +660,7 @@ export class SynchronizationService extends EventEmitter {
                 const entity = await this.syncSingleEntityAndReturn(
                     entityType as EntityType,
                     entityId,
-                    projectId
+                    projectId,
                 );
                 if (entity) {
                     this.syncStateGateway?.notifyEntityUpdated({
@@ -711,7 +677,7 @@ export class SynchronizationService extends EventEmitter {
             if (remoteUpdatedAt > localUpdatedAt) {
                 const entityName = await this.getEntityName(
                     entityType as EntityType,
-                    entityId
+                    entityId,
                 );
                 this.syncStateGateway?.notifyConflict({
                     entityType,
@@ -730,7 +696,7 @@ export class SynchronizationService extends EventEmitter {
                 if (this.activeSyncMode === "reconnect") {
                     const entityName = await this.getEntityName(
                         entityType as EntityType,
-                        entityId
+                        entityId,
                     );
                     this.syncStateGateway?.notifyConflict({
                         entityType,
@@ -746,7 +712,7 @@ export class SynchronizationService extends EventEmitter {
                 await this.pushLocalToRemoteAndReturn(
                     entityType as EntityType,
                     entityId,
-                    projectId
+                    projectId,
                 );
 
                 // Refresh local from remote after push so timestamps converge
@@ -754,7 +720,7 @@ export class SynchronizationService extends EventEmitter {
                 const refreshed = await this.syncSingleEntityAndReturn(
                     entityType as EntityType,
                     entityId,
-                    projectId
+                    projectId,
                 );
                 if (refreshed) {
                     this.syncStateGateway?.notifyEntityUpdated({
@@ -766,16 +732,16 @@ export class SynchronizationService extends EventEmitter {
                 }
             }
         } catch (error) {
-            console.error(
-                `[SynchronizationService] Failed to handle remote change for ${entityType}:${entityId}`,
-                error
+            logger.error(
+                `Failed to handle remote change for ${entityType}:${entityId}`,
+                error,
             );
         }
     }
 
     private async getEntityName(
         type: EntityType | "project",
-        id: string
+        id: string,
     ): Promise<string | null> {
         try {
             switch (type) {
@@ -819,7 +785,7 @@ export class SynchronizationService extends EventEmitter {
     private async syncSingleEntityAndReturn(
         type: EntityType,
         id: string,
-        projectId: string
+        projectId: string,
     ): Promise<unknown | null> {
         switch (type) {
             case "chapter": {
@@ -900,7 +866,7 @@ export class SynchronizationService extends EventEmitter {
     private async syncSingleEntity(
         type: EntityType,
         id: string,
-        projectId: string
+        projectId: string,
     ): Promise<void> {
         switch (type) {
             case "chapter": {
@@ -967,7 +933,7 @@ export class SynchronizationService extends EventEmitter {
         entityType: EntityType,
         entityId: string,
         projectId: string,
-        resolution: "accept-remote" | "keep-local"
+        resolution: "accept-remote" | "keep-local",
     ): Promise<void> {
         let entity: unknown = null;
 
@@ -975,7 +941,7 @@ export class SynchronizationService extends EventEmitter {
             entity = await this.syncSingleEntityAndReturn(
                 entityType,
                 entityId,
-                projectId
+                projectId,
             );
         } else {
             // keep-local: push local version to remote
@@ -985,7 +951,7 @@ export class SynchronizationService extends EventEmitter {
                 entityType,
                 entityId,
                 projectId,
-                true // forceUpdateTimestamp
+                true, // forceUpdateTimestamp
             );
 
             // We do NOT fetch from remote here anymore, because we just pushed our version
@@ -1011,7 +977,7 @@ export class SynchronizationService extends EventEmitter {
         type: EntityType,
         id: string,
         projectId: string,
-        forceUpdateTimestamp = false
+        forceUpdateTimestamp = false,
     ): Promise<unknown | null> {
         switch (type) {
             case "chapter": {
@@ -1107,14 +1073,14 @@ export class SynchronizationService extends EventEmitter {
                         playlist.updatedAt = new Date();
                         await this.fsAssetRepo.savePlaylist(
                             projectId,
-                            playlist
+                            playlist,
                         );
                     }
                     if (playlist.storagePath)
                         await this.uploadAsset(playlist.storagePath);
                     await this.supabaseAssetRepo.savePlaylist(
                         projectId,
-                        playlist
+                        playlist,
                     );
                     return playlist;
                 }
@@ -1134,18 +1100,12 @@ export class SynchronizationService extends EventEmitter {
                 .limit(1);
 
             if (error) {
-                console.error(
-                    "[SynchronizationService] Connection check failed:",
-                    error
-                );
+                logger.debug("Connection check failed", error);
                 return false;
             }
             return true;
         } catch (error) {
-            console.error(
-                "[SynchronizationService] Connection check exception:",
-                error
-            );
+            logger.debug("Connection check exception", error);
             return false;
         }
     }
@@ -1155,21 +1115,12 @@ export class SynchronizationService extends EventEmitter {
      */
     private async cleanupOldDeletionLogs(userId: string): Promise<void> {
         try {
-            const [localRemoved, remoteRemoved] = await Promise.all([
+            await Promise.all([
                 deletionLog.cleanupOldEntries(30),
                 this.supabaseDeletionLogRepo.cleanupOldEntries(userId, 30),
             ]);
-
-            if (localRemoved > 0 || remoteRemoved > 0) {
-                console.log(
-                    `[SynchronizationService] Deletion log cleanup: ${localRemoved} local, ${remoteRemoved} remote entries removed`
-                );
-            }
         } catch (error) {
-            console.error(
-                "[SynchronizationService] Failed to cleanup old deletion logs",
-                error
-            );
+            logger.warn("Failed to cleanup old deletion logs", error);
         }
     }
 
@@ -1199,7 +1150,7 @@ export class SynchronizationService extends EventEmitter {
             const localProjects =
                 await this.fsProjectRepo.findAllByUserId(userId);
             const localProjectMap = new Map(
-                localProjects.map((p) => [p.id, p])
+                localProjects.map((p) => [p.id, p]),
             );
 
             // Update the project IDs cache for filtering realtime events
@@ -1250,10 +1201,7 @@ export class SynchronizationService extends EventEmitter {
 
                     await this.syncProjectChildren(remoteP.id, mode);
                 } catch (err) {
-                    console.error(
-                        `[SynchronizationService] Failed to sync project ${remoteP.id}`,
-                        err
-                    );
+                    logger.error(`Failed to sync project ${remoteP.id}`, err);
                 }
             }
 
@@ -1265,13 +1213,12 @@ export class SynchronizationService extends EventEmitter {
                 }
             }
 
-            console.log("[SynchronizationService] Sync complete");
             this.lastSyncedAt = new Date();
             this.syncStateGateway?.setLastSyncedAt(this.lastSyncedAt);
             this.isOnline = true;
             this.syncStateGateway?.setStatus("online");
         } catch (error) {
-            console.error("[SynchronizationService] Sync failed:", error);
+            logger.error("Sync failed", error);
             this.syncStateGateway?.setStatus("offline");
         } finally {
             this.isSyncing = false;
@@ -1312,10 +1259,6 @@ export class SynchronizationService extends EventEmitter {
             // Clear the queue
             this.eventQueue = [];
 
-            console.log(
-                `[SynchronizationService] Processing ${latestByEntity.size} queued events`
-            );
-
             // Process each unique event
             for (const event of latestByEntity.values()) {
                 if (!this.currentUserId) break; // User logged out
@@ -1324,14 +1267,11 @@ export class SynchronizationService extends EventEmitter {
                     event.entityType,
                     event.entityId,
                     event.projectId,
-                    event.eventType
+                    event.eventType,
                 );
             }
         } catch (error) {
-            console.error(
-                "[SynchronizationService] Error processing event queue:",
-                error
-            );
+            logger.error("Error processing event queue", error);
         } finally {
             this.isProcessingQueue = false;
 
@@ -1346,7 +1286,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async syncProjectChildren(
         projectId: string,
-        mode: "normal" | "reconnect"
+        mode: "normal" | "reconnect",
     ) {
         await this.syncChapters(projectId, mode);
         await this.syncCharacters(projectId, mode);
@@ -1366,7 +1306,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async syncChapters(
         projectId: string,
-        mode: "normal" | "reconnect"
+        mode: "normal" | "reconnect",
     ) {
         const remote =
             await this.supabaseChapterRepo.findByProjectId(projectId);
@@ -1414,7 +1354,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async syncCharacters(
         projectId: string,
-        mode: "normal" | "reconnect"
+        mode: "normal" | "reconnect",
     ) {
         const remote =
             await this.supabaseCharacterRepo.findByProjectId(projectId);
@@ -1460,7 +1400,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async syncLocations(
         projectId: string,
-        mode: "normal" | "reconnect"
+        mode: "normal" | "reconnect",
     ) {
         const remote =
             await this.supabaseLocationRepo.findByProjectId(projectId);
@@ -1506,7 +1446,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async syncOrganizations(
         projectId: string,
-        mode: "normal" | "reconnect"
+        mode: "normal" | "reconnect",
     ) {
         const remote =
             await this.supabaseOrganizationRepo.findByProjectId(projectId);
@@ -1552,7 +1492,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async syncScrapNotes(
         projectId: string,
-        mode: "normal" | "reconnect"
+        mode: "normal" | "reconnect",
     ) {
         const remote =
             await this.supabaseScrapNoteRepo.findByProjectId(projectId);
@@ -1571,11 +1511,15 @@ export class SynchronizationService extends EventEmitter {
                     localN.updatedAt.getTime() > remoteN.updatedAt.getTime()
                 ) {
                     if (mode === "reconnect") {
+                        const localTitle =
+                            typeof localN.title === "string"
+                                ? localN.title
+                                : remoteN.id;
                         this.syncStateGateway?.notifyConflict({
                             entityType: "scrapNote",
                             entityId: remoteN.id,
                             projectId,
-                            entityName: (localN as any).title || remoteN.id,
+                            entityName: localTitle,
                             localUpdatedAt: localN.updatedAt.toISOString(),
                             remoteUpdatedAt: remoteN.updatedAt.toISOString(),
                         });
@@ -1701,7 +1645,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async syncPlaylists(
         projectId: string,
-        mode: "normal" | "reconnect"
+        mode: "normal" | "reconnect",
     ) {
         const remote =
             await this.supabaseAssetRepo.findPlaylistsByProjectId(projectId);
@@ -1717,18 +1661,18 @@ export class SynchronizationService extends EventEmitter {
             if (!localPlaylist) {
                 if (remotePlaylist.storagePath) {
                     const success = await this.downloadAsset(
-                        remotePlaylist.storagePath
+                        remotePlaylist.storagePath,
                     );
                     if (success) {
                         await this.fsAssetRepo.savePlaylist(
                             projectId,
-                            remotePlaylist
+                            remotePlaylist,
                         );
                     }
                 } else {
                     await this.fsAssetRepo.savePlaylist(
                         projectId,
-                        remotePlaylist
+                        remotePlaylist,
                     );
                 }
                 continue;
@@ -1740,18 +1684,18 @@ export class SynchronizationService extends EventEmitter {
             ) {
                 if (remotePlaylist.storagePath) {
                     const success = await this.downloadAsset(
-                        remotePlaylist.storagePath
+                        remotePlaylist.storagePath,
                     );
                     if (success) {
                         await this.fsAssetRepo.savePlaylist(
                             projectId,
-                            remotePlaylist
+                            remotePlaylist,
                         );
                     }
                 } else {
                     await this.fsAssetRepo.savePlaylist(
                         projectId,
-                        remotePlaylist
+                        remotePlaylist,
                     );
                 }
                 continue;
@@ -1781,7 +1725,7 @@ export class SynchronizationService extends EventEmitter {
                 }
                 await this.supabaseAssetRepo.savePlaylist(
                     projectId,
-                    localPlaylist
+                    localPlaylist,
                 );
             }
         }
@@ -1798,7 +1742,7 @@ export class SynchronizationService extends EventEmitter {
             try {
                 const remoteTimestamp = await this.getRemoteUpdatedAt(
                     item.entityType,
-                    item.entityId
+                    item.entityId,
                 );
 
                 // If remote was updated after local deletion, skip the deletion (remote wins)
@@ -1806,8 +1750,8 @@ export class SynchronizationService extends EventEmitter {
                     remoteTimestamp &&
                     remoteTimestamp.getTime() > item.timestamp
                 ) {
-                    console.log(
-                        `[SynchronizationService] Skipping deletion of ${item.entityId}: remote is newer`
+                    logger.debug(
+                        `Skipping deletion of ${item.entityId}: remote is newer`,
                     );
                     await deletionLog.remove(item.entityId);
                     continue;
@@ -1821,16 +1765,12 @@ export class SynchronizationService extends EventEmitter {
                     item.entityId,
                     item.entityType,
                     item.projectId,
-                    userId
+                    userId,
                 );
 
                 await deletionLog.remove(item.entityId);
             } catch (error) {
-                console.warn(
-                    "[SynchronizationService] Failed to process pending deletion",
-                    item,
-                    error
-                );
+                logger.warn("Failed to process pending deletion", item, error);
             }
         }
 
@@ -1842,29 +1782,29 @@ export class SynchronizationService extends EventEmitter {
                 const deletedAt = new Date(deletion.deleted_at).getTime();
                 const localUpdatedAt = await this.getLocalUpdatedAt(
                     deletion.entity_type as EntityType,
-                    deletion.entity_id
+                    deletion.entity_id,
                 );
 
                 if (localUpdatedAt) {
                     if (localUpdatedAt.getTime() > deletedAt) {
                         // Local is newer - resurrect by re-uploading (handled by normal sync)
-                        console.log(
-                            `[SynchronizationService] Resurrecting ${deletion.entity_id}: local is newer`
+                        logger.debug(
+                            `Resurrecting ${deletion.entity_id}: local is newer`,
                         );
                         await this.supabaseDeletionLogRepo.delete(deletion.id);
                     } else {
                         // Remote deletion is newer - delete locally
                         await this.deleteLocalEntity(
                             deletion.entity_type as EntityType,
-                            deletion.entity_id
+                            deletion.entity_id,
                         );
                     }
                 }
             } catch (error) {
-                console.warn(
-                    "[SynchronizationService] Failed to process remote deletion",
+                logger.warn(
+                    "Failed to process remote deletion",
                     deletion,
-                    error
+                    error,
                 );
             }
         }
@@ -1872,7 +1812,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async getRemoteUpdatedAt(
         type: EntityType,
-        id: string
+        id: string,
     ): Promise<Date | null> {
         try {
             let entity: { updatedAt: Date } | null = null;
@@ -1912,7 +1852,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async getLocalUpdatedAt(
         type: EntityType,
-        id: string
+        id: string,
     ): Promise<Date | null> {
         try {
             let entity: { updatedAt: Date } | null = null;
@@ -1952,7 +1892,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async deleteRemoteEntity(
         type: EntityType,
-        id: string
+        id: string,
     ): Promise<void> {
         switch (type) {
             case "chapter":
@@ -1987,7 +1927,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async deleteLocalEntity(
         type: EntityType,
-        id: string
+        id: string,
     ): Promise<void> {
         switch (type) {
             case "chapter":
@@ -2031,7 +1971,7 @@ export class SynchronizationService extends EventEmitter {
         }
 
         const match = pathOrUrl.match(
-            /\/storage\/v1\/object\/public\/[^/]+\/(.*)$/
+            /\/storage\/v1\/object\/public\/[^/]+\/(.*)$/,
         );
         if (match && match[1]) {
             return match[1];
@@ -2042,7 +1982,7 @@ export class SynchronizationService extends EventEmitter {
 
     private async deleteRemoteAssetFile(
         type: "image" | "bgm" | "playlist",
-        id: string
+        id: string,
     ): Promise<void> {
         try {
             let storagePath: string | null = null;
@@ -2064,7 +2004,7 @@ export class SynchronizationService extends EventEmitter {
             }
 
             const objectPath = this.extractStorageObjectPath(
-                (storagePath || url || "").trim()
+                (storagePath || url || "").trim(),
             );
             if (!objectPath) return;
 
@@ -2073,22 +2013,22 @@ export class SynchronizationService extends EventEmitter {
                 .from("inkline-assets")
                 .remove([objectPath]);
             if (error) {
-                console.warn(
-                    `[SynchronizationService] Failed to delete remote asset object ${objectPath}`,
-                    error
+                logger.warn(
+                    `Failed to delete remote asset object ${objectPath}`,
+                    error,
                 );
             }
         } catch (error) {
-            console.warn(
-                `[SynchronizationService] Failed to delete remote asset file for ${type}:${id}`,
-                error
+            logger.warn(
+                `Failed to delete remote asset file for ${type}:${id}`,
+                error,
             );
         }
     }
 
     private async deleteLocalAssetFile(
         type: "image" | "bgm" | "playlist",
-        id: string
+        id: string,
     ): Promise<void> {
         try {
             let storagePath: string | null = null;

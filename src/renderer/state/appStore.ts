@@ -34,6 +34,7 @@ import type {
     WorkspaceEvent,
     WorkspaceViewMode,
 } from "../types";
+import { normalizeUserFacingError } from "../utils/userFacingError";
 
 const initialAuthForm = {
     email: "",
@@ -79,13 +80,18 @@ const authEvents = getAuthEvents();
 const syncEvents = getSyncEvents();
 let unsubscribeAuthState: (() => void) | null = null;
 let unsubscribeSyncState: (() => void) | null = null;
-let unsubscribeRemoteChange: (() => void) | null = null;
-let unsubscribeConflict: (() => void) | null = null;
-let unsubscribeEntityUpdated: (() => void) | null = null;
-let unsubscribeEntityDeleted: (() => void) | null = null;
+
+const omitKey = <T extends Record<string, unknown>>(
+    record: T,
+    key: string,
+): T => {
+    const next = { ...record };
+    delete next[key];
+    return next;
+};
 
 const createErrorMessage = (error: unknown, fallback: string): string => {
-    return (error as Error)?.message ?? fallback;
+    return normalizeUserFacingError(error, fallback);
 };
 
 const generateOptimisticId = (): string => {
@@ -600,42 +606,26 @@ export const useAppStore = create<AppStore>((set, get) => {
         });
 
         // Subscribe to remote changes - log only, actual updates come via entity events
-        unsubscribeRemoteChange = syncEvents.onRemoteChange((payload) => {
-            const { projectId, stage } = get();
-
-            // Only log changes for the currently open project
-            if (stage === "workspace" && payload.projectId === projectId) {
-                console.log(
-                    `[appStore] Remote change detected: ${payload.entityType} ${payload.changeType}`,
-                );
-            }
-        });
+        syncEvents.onRemoteChange(() => undefined);
 
         // Subscribe to conflicts - show conflict resolution dialog
-        unsubscribeConflict = syncEvents.onConflict((payload) => {
+        syncEvents.onConflict((payload) => {
             const { projectId, stage } = get();
 
             // Only show conflicts for the currently open project
             if (stage === "workspace" && payload.projectId === projectId) {
-                console.log(
-                    `[appStore] Conflict detected: ${payload.entityType} ${payload.entityName}`,
-                );
                 set({ pendingConflict: payload });
             }
         });
 
         // Subscribe to incremental entity updates - update state in place
-        unsubscribeEntityUpdated = syncEvents.onEntityUpdated((payload) => {
+        syncEvents.onEntityUpdated((payload) => {
             const { projectId, stage, assets } = get();
 
             // Only handle updates for the currently open project
             if (stage !== "workspace" || payload.projectId !== projectId) {
                 return;
             }
-
-            console.log(
-                `[appStore] Entity updated: ${payload.entityType} ${payload.entityId}`,
-            );
 
             const data = payload.data;
 
@@ -751,7 +741,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         });
 
         // Subscribe to entity deletions - remove from state
-        unsubscribeEntityDeleted = syncEvents.onEntityDeleted((payload) => {
+        syncEvents.onEntityDeleted((payload) => {
             const { projectId, stage, assets, activeDocument, openTabs } =
                 get();
 
@@ -759,10 +749,6 @@ export const useAppStore = create<AppStore>((set, get) => {
             if (stage !== "workspace" || payload.projectId !== projectId) {
                 return;
             }
-
-            console.log(
-                `[appStore] Entity deleted: ${payload.entityType} ${payload.entityId}`,
-            );
 
             const entityId = payload.entityId;
 
@@ -839,22 +825,24 @@ export const useAppStore = create<AppStore>((set, get) => {
                     break;
                 }
                 case "image": {
-                    const { [entityId]: _, ...remainingImages } = assets.images;
+                    const remainingImages = omitKey(assets.images, entityId);
                     set({
                         assets: { ...assets, images: remainingImages },
                     });
                     break;
                 }
                 case "bgm": {
-                    const { [entityId]: _, ...remainingBgms } = assets.bgms;
+                    const remainingBgms = omitKey(assets.bgms, entityId);
                     set({
                         assets: { ...assets, bgms: remainingBgms },
                     });
                     break;
                 }
                 case "playlist": {
-                    const { [entityId]: _, ...remainingPlaylists } =
-                        assets.playlists;
+                    const remainingPlaylists = omitKey(
+                        assets.playlists,
+                        entityId,
+                    );
                     set({
                         assets: { ...assets, playlists: remainingPlaylists },
                     });
@@ -963,7 +951,11 @@ export const useAppStore = create<AppStore>((set, get) => {
             }));
         },
         setAuthMode: (mode) => {
-            set({ authMode: mode, authError: null, resetPasswordSuccess: false });
+            set({
+                authMode: mode,
+                authError: null,
+                resetPasswordSuccess: false,
+            });
         },
         toggleAuthMode: () => {
             set((state) => ({
@@ -995,9 +987,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                 set({ authForm: initialAuthForm });
             } catch (error) {
                 set({
-                    authError: createErrorMessage(
+                    authError: normalizeUserFacingError(
                         error,
                         "Unable to complete request.",
+                        authMode === "login" ? "auth-login" : "auth-register",
                     ),
                 });
             } finally {
@@ -1012,15 +1005,20 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return;
             }
 
-            set({ isAuthSubmitting: true, authError: null, resetPasswordSuccess: false });
+            set({
+                isAuthSubmitting: true,
+                authError: null,
+                resetPasswordSuccess: false,
+            });
             try {
                 await rendererApi.auth.resetPassword({ email });
                 set({ resetPasswordSuccess: true });
             } catch (error) {
                 set({
-                    authError: createErrorMessage(
+                    authError: normalizeUserFacingError(
                         error,
                         "Unable to send reset email.",
+                        "auth-reset-password",
                     ),
                 });
             } finally {
@@ -1722,14 +1720,14 @@ export const useAppStore = create<AppStore>((set, get) => {
                     projects: state.projects.map((p) =>
                         p.id === projectId
                             ? { ...p, title, updatedAt: new Date() }
-                            : p
+                            : p,
                     ),
                 }));
             } catch (error) {
                 set({
                     projectsError: createErrorMessage(
                         error,
-                        "Failed to rename project."
+                        "Failed to rename project.",
                     ),
                 });
             }

@@ -1,9 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import {
-    controllerChannels,
-    type ControllerChannelMap,
-    type RendererApi,
-} from "../controllers/contracts";
+import { controllerChannels, type RendererApi } from "../controllers/contracts";
 import {
     AUTH_STATE_CHANGED_CHANNEL,
     type AuthStatePayload,
@@ -67,15 +63,18 @@ const createRendererApi = (): RendererApi => {
     return bindings as RendererApi;
 };
 
+type ContextMenuPayload = {
+    command: string;
+    data: unknown;
+};
+
 const ui = {
-    showContextMenu: (type: string, data?: any) =>
+    showContextMenu: (type: string, data?: unknown) =>
         ipcRenderer.send("ui:show-context-menu", type, data),
-    onContextMenuCommand: (
-        listener: (payload: { command: string; data: any }) => void,
-    ) => {
+    onContextMenuCommand: (listener: (payload: ContextMenuPayload) => void) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            payload: { command: string; data: any },
+            payload: ContextMenuPayload,
         ) => {
             listener(payload);
         };

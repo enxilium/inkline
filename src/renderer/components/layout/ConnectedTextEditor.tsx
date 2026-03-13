@@ -5,7 +5,7 @@ import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
 import { FontFamily } from "@tiptap/extension-font-family";
 import { TextAlign } from "@tiptap/extension-text-align";
-import Image from "@tiptap/extension-image";
+import TiptapImage from "@tiptap/extension-image";
 
 import { useAppStore } from "../../state/appStore";
 import { TextEditor } from "../workspace/TextEditor";
@@ -351,7 +351,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                       }),
                   ]
                 : []),
-            Image.configure({
+            TiptapImage.configure({
                 inline: false,
                 allowBase64: false,
             }),

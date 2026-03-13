@@ -7,6 +7,9 @@ import { IUserSessionStore } from "../../@core/domain/services/IUserSessionStore
 import { ILocationRepository } from "../../@core/domain/repositories/ILocationRepository";
 import { GoogleGenAI, Type, Tool, Part } from "@google/genai";
 import { generateId } from "../../@core/application/utils/id";
+import { createTerminalLogger } from "../services/TerminalLogger";
+
+const logger = createTerminalLogger("PlaylistGenerationService");
 
 interface YouTubeVideo {
     id: string;
@@ -36,7 +39,7 @@ export class PlaylistGenerationService implements IPlaylistGenerationService {
 
     constructor(
         sessionStore: IUserSessionStore,
-        locationRepository: ILocationRepository
+        locationRepository: ILocationRepository,
     ) {
         this.sessionStore = sessionStore;
         this.locationRepository = locationRepository;
@@ -54,7 +57,7 @@ export class PlaylistGenerationService implements IPlaylistGenerationService {
 
         if (!key) {
             throw new Error(
-                "Gemini API Key is missing. Please add it in Settings."
+                "Gemini API Key is missing. Please add it in Settings.",
             );
         }
 
@@ -63,7 +66,7 @@ export class PlaylistGenerationService implements IPlaylistGenerationService {
     }
 
     private async buildSubjectDescription(
-        subject: Character | Location | Organization
+        subject: Character | Location | Organization,
     ): Promise<string> {
         let description = `Type: ${subject.constructor.name}\nName: ${subject.name}\nDescription: ${subject.description}`;
 
@@ -75,7 +78,7 @@ export class PlaylistGenerationService implements IPlaylistGenerationService {
 
             if (subject.currentLocationId) {
                 const location = await this.locationRepository.findById(
-                    subject.currentLocationId
+                    subject.currentLocationId,
                 );
                 if (location) {
                     description += `\nCurrent Location (Background): ${location.name} - ${location.description}`;
@@ -92,7 +95,7 @@ export class PlaylistGenerationService implements IPlaylistGenerationService {
         for (const query of queries) {
             try {
                 const url = new URL(
-                    "https://www.googleapis.com/youtube/v3/search"
+                    "https://www.googleapis.com/youtube/v3/search",
                 );
                 url.searchParams.append("part", "snippet");
                 url.searchParams.append("q", query);
@@ -105,7 +108,7 @@ export class PlaylistGenerationService implements IPlaylistGenerationService {
                 if (!response.ok) {
                     const errorText = await response.text();
                     throw new Error(
-                        `YouTube API error: ${response.status} ${response.statusText} - ${errorText}`
+                        `YouTube API error: ${response.status} ${response.statusText} - ${errorText}`,
                     );
                 }
 
@@ -132,9 +135,9 @@ export class PlaylistGenerationService implements IPlaylistGenerationService {
                     results: videos,
                 });
             } catch (error) {
-                console.error(
-                    `Failed to search YouTube for query "${query}":`,
-                    error
+                logger.warn(
+                    `YouTube search failed for query "${query}"`,
+                    error,
                 );
                 allResults.push({ query, error: (error as Error).message });
             }
@@ -144,7 +147,7 @@ export class PlaylistGenerationService implements IPlaylistGenerationService {
     }
 
     async generatePlaylist(
-        subject: Character | Location | Organization
+        subject: Character | Location | Organization,
     ): Promise<Playlist> {
         const client = await this.getGeminiClient();
         const description = await this.buildSubjectDescription(subject);
@@ -243,11 +246,11 @@ Process:
                 for (const call of calls) {
                     if (call.name === "search_youtube") {
                         const args = call.args as { queries: string[] };
-                        console.log(
-                            `[PlaylistGenerationService] Searching YouTube for: ${args.queries}`
+                        logger.debug(
+                            `Searching YouTube for ${args.queries.length} query(s)`,
                         );
                         const searchResults = await this.searchYoutube(
-                            args.queries
+                            args.queries,
                         );
                         parts.push({
                             functionResponse: {
@@ -279,7 +282,7 @@ Process:
                         playlistUrl,
                         "",
                         new Date(),
-                        new Date()
+                        new Date(),
                     );
                 }
 
@@ -301,7 +304,7 @@ Process:
         }
 
         throw new Error(
-            "Failed to generate playlist: Max turns reached or no playlist finalized."
+            "Failed to generate playlist: Max turns reached or no playlist finalized.",
         );
     }
 }

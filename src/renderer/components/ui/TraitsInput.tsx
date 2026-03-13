@@ -71,7 +71,7 @@ import StraightenIcon from "@mui/icons-material/Straighten";
 // Trait Icon Mapping - Common character personality traits with MUI icons
 // ─────────────────────────────────────────────────────────────────────────────
 
-const TRAIT_ICONS: Record<string, React.ComponentType<any>> = {
+const TRAIT_ICONS: Record<string, React.ComponentType<unknown>> = {
     // Positive traits
     optimistic: WbSunnyIcon,
     hopeful: WbSunnyIcon,

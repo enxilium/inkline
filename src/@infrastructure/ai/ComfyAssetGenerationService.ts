@@ -20,10 +20,12 @@ import path from "path";
 import fs from "fs";
 import { app } from "electron";
 import { GoogleGenAI } from "@google/genai";
+import { createTerminalLogger } from "../services/TerminalLogger";
 
 import { ICreativeAssetGenerationService } from "../../@core/domain/services/ICreativeAssetGenerationService";
 
 const ERROR_MESSAGE = "Audio generation is not available in this build.";
+const logger = createTerminalLogger("ComfyAssetGenerationService");
 
 type WorkflowFileInfo = {
     filename: string;
@@ -81,10 +83,7 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
             try {
                 await originalSetTerminalSubscription(subscribe);
             } catch (error) {
-                console.warn(
-                    "[ComfyAssetGenerationService] Ignoring terminal subscription failure:",
-                    error,
-                );
+                logger.debug("Ignoring terminal subscription failure", error);
             }
         };
 
@@ -93,10 +92,7 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
             try {
                 return await originalGetNodeDefs(nodeName);
             } catch (error) {
-                console.warn(
-                    "[ComfyAssetGenerationService] Ignoring node definitions fetch failure:",
-                    error,
-                );
+                logger.debug("Ignoring node definitions fetch failure", error);
                 return null;
             }
         };
@@ -106,10 +102,7 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
             try {
                 return await originalGetSystemStats();
             } catch (error) {
-                console.warn(
-                    "[ComfyAssetGenerationService] Ignoring system stats fetch failure:",
-                    error,
-                );
+                logger.debug("Ignoring system stats fetch failure", error);
                 return {
                     system: {
                         os: process.platform,
@@ -124,8 +117,8 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
 
     private async initializeServer() {
         if (process.platform !== "win32") {
-            console.warn(
-                "[ComfyAssetGenerationService] ComfyUI server is only supported on Windows. Skipping initialization.",
+            logger.warn(
+                "ComfyUI server is only supported on Windows. Skipping initialization.",
             );
             return;
         }
@@ -144,19 +137,22 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
 
             // Check if ComfyUI is installed (downloaded during setup)
             if (!fs.existsSync(pythonPath) || !fs.existsSync(mainScript)) {
-                console.warn(
-                    "[ComfyAssetGenerationService] ComfyUI not installed. Local AI features will be unavailable until setup is completed.",
+                logger.warn(
+                    "ComfyUI not installed. Local AI features will be unavailable until setup is completed.",
                 );
                 return;
             }
 
             const port = await portfinder.getPortPromise({ port: 8188 });
-            console.log(
-                `[ComfyAssetGenerationService] Found free port: ${port}`,
-            );
+            logger.info(`Found free port: ${port}`);
 
-            console.log(
-                `[ComfyAssetGenerationService] Launching ComfyUI from ${this.basePath}...`,
+            logger.info(`Launching ComfyUI from ${this.basePath}...`);
+
+            const inheritComfyOutput =
+                process.env.INKLINE_DEBUG_COMFY_STDIO === "1" ||
+                process.env.INKLINE_DEBUG_COMFY_STDIO === "true";
+            logger.info(
+                `ComfyUI subprocess output mode: ${inheritComfyOutput ? "inherited" : "quiet"}`,
             );
 
             this.serverProcess = spawn(
@@ -171,16 +167,13 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
                 ],
                 {
                     cwd: this.basePath,
-                    stdio: "inherit", // Ignore stdio to prevent blocking, or 'inherit' for debugging
+                    stdio: inheritComfyOutput ? "inherit" : "ignore",
                     windowsHide: true,
                 },
             );
 
             this.serverProcess.on("error", (err) => {
-                console.error(
-                    "[ComfyAssetGenerationService] Failed to start ComfyUI:",
-                    err,
-                );
+                logger.error("Failed to start ComfyUI", err);
             });
 
             await this.waitForServer(port);
@@ -188,14 +181,9 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
             this.api = new ComfyApi(`http://127.0.0.1:${port}`);
             this.hardenApiBackgroundCalls(this.api);
             this.api.init();
-            console.log(
-                `[ComfyAssetGenerationService] ComfyUI SDK Initialized on port ${port}.`,
-            );
+            logger.success(`ComfyUI SDK initialized on port ${port}`);
         } catch (error) {
-            console.error(
-                "[ComfyAssetGenerationService] Initialization failed:",
-                error,
-            );
+            logger.error("Initialization failed", error);
         }
     }
 
@@ -236,10 +224,7 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
         try {
             return JSON.parse(value) as T;
         } catch (error) {
-            console.warn(
-                "[ComfyAssetGenerationService] Failed to parse Gemini payload, falling back.",
-                error,
-            );
+            logger.warn("Failed to parse Gemini payload, falling back", error);
             return fallback;
         }
     }
@@ -526,8 +511,8 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
                     err.message.includes("Disconnected") ||
                     err.name === "DisconnectedError"
                 ) {
-                    console.warn(
-                        "[ComfyAssetGenerationService] Disconnected during generation. Attempting to recover...",
+                    logger.warn(
+                        "Disconnected during generation. Attempting to recover",
                     );
                     if (promptId) {
                         try {
@@ -548,13 +533,13 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
                                 outputNodeId,
                             );
                             const buffer = await this.downloadOutput(fileInfo);
+                            logger.info(
+                                "Recovered generation result via history polling",
+                            );
                             resolve(buffer);
                             return;
                         } catch (recoveryError) {
-                            console.error(
-                                "[ComfyAssetGenerationService] Recovery failed:",
-                                recoveryError,
-                            );
+                            logger.error("Recovery failed", recoveryError);
                             reject(err); // Reject with original error if recovery fails
                             return;
                         }
@@ -573,11 +558,13 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
     ): Promise<WorkflowFileInfo> {
         const maxRetries = 60; // 5 minutes (assuming 5s interval)
         const interval = 5000;
+        let pollErrorCount = 0;
 
         for (let i = 0; i < maxRetries; i++) {
             try {
                 const history: HistoryEntry | undefined =
                     await this.api.getHistory(promptId);
+                pollErrorCount = 0;
                 if (history) {
                     // Job finished
                     const output = history.outputs?.[outputNodeId];
@@ -599,7 +586,15 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
                 }
             } catch (e) {
                 // Ignore errors during polling (e.g. connection issues)
-                console.warn("[ComfyAssetGenerationService] Polling error:", e);
+                pollErrorCount += 1;
+                if (pollErrorCount % 6 === 0) {
+                    logger.warn(
+                        `Polling still failing after ${pollErrorCount} attempts`,
+                        e,
+                    );
+                } else {
+                    logger.debug("Transient polling error", e);
+                }
                 // Try to reconnect if needed
                 try {
                     await this.api.reconnectWs(false);
@@ -689,17 +684,15 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
             try {
                 this.api.destroy();
             } catch (error) {
-                console.warn(
-                    "[ComfyAssetGenerationService] Failed to destroy ComfyUI SDK client cleanly:",
+                logger.warn(
+                    "Failed to destroy ComfyUI SDK client cleanly",
                     error,
                 );
             }
         }
 
         if (this.serverProcess) {
-            console.log(
-                "[ComfyAssetGenerationService] Shutting down ComfyUI server...",
-            );
+            logger.info("Shutting down ComfyUI server");
             this.serverProcess.kill();
             this.serverProcess = null;
         }

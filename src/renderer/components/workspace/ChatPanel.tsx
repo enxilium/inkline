@@ -2,7 +2,6 @@ import React from "react";
 import ReactMarkdown from "react-markdown";
 import { Button } from "../ui/Button";
 import {
-    ChevronRightIcon,
     SendIcon,
     BinderChapterIcon,
     BinderScrapNoteIcon,
@@ -15,6 +14,8 @@ import {
 } from "../ui/Icons";
 import { useAppStore } from "../../state/appStore";
 import type { WorkspaceDocumentKind } from "../../types";
+import { showToast } from "../ui/GenerationProgressToast";
+import { normalizeUserFacingError } from "../../utils/userFacingError";
 
 type ChatMessage = {
     id: string;
@@ -110,7 +111,7 @@ export const ChatPanel: React.FC = () => {
                     result.conversations.map((c) => ({
                         ...c,
                         updatedAt: new Date(c.updatedAt),
-                    }))
+                    })),
                 );
             } catch (error) {
                 console.error("Failed to load chat history", error);
@@ -129,7 +130,7 @@ export const ChatPanel: React.FC = () => {
                     role: m.role,
                     content: m.content,
                     timestamp: m.timestamp,
-                }))
+                })),
             );
             setConversationId(id);
             setShowHistory(false);
@@ -206,11 +207,23 @@ export const ChatPanel: React.FC = () => {
             };
             setMessages((prev) => [...prev, aiMessage]);
         } catch (error) {
+            const friendlyError = normalizeUserFacingError(
+                error,
+                "Sorry, I encountered an error processing your request.",
+                "analysis",
+            );
+
+            showToast({
+                variant: "error",
+                title: "AI request failed",
+                description: friendlyError,
+                durationMs: 6000,
+            });
+
             const errorMessage: ChatMessage = {
                 id: (Date.now() + 1).toString(),
                 role: "assistant",
-                content:
-                    "Sorry, I encountered an error processing your request.",
+                content: friendlyError,
                 timestamp: Date.now(),
             };
             setMessages((prev) => [...prev, errorMessage]);
@@ -229,7 +242,7 @@ export const ChatPanel: React.FC = () => {
     const handleDrop = (e: React.DragEvent) => {
         e.preventDefault();
         const data = e.dataTransfer.getData(
-            "application/x-inkline-document-ref"
+            "application/x-inkline-document-ref",
         );
         if (data) {
             try {

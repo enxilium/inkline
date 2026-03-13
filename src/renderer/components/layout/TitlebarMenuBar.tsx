@@ -12,8 +12,10 @@ import { Button } from "../ui/Button";
 import { DownloadIcon } from "../ui/Icons";
 import { useAppStore } from "../../state/appStore";
 import { getTextStats } from "../../utils/textStats";
+import { normalizeUserFacingError } from "../../utils/userFacingError";
 import { EditChapterRangeDialog } from "../dialogs/EditChapterRangeDialog";
 import { ExportDialog } from "../dialogs/ExportDialog";
+import { showToast } from "../ui/GenerationProgressToast";
 
 type MenuKey = "file" | "edit" | "view" | null;
 
@@ -295,11 +297,16 @@ export const TitlebarMenuBar: React.FC = () => {
                             setIsRangeDialogOpen(false);
                         })
                         .catch((error) => {
-                            alert(
-                                "Edit failed: " +
-                                    ((error as Error)?.message ??
-                                        "Unknown error"),
-                            );
+                            showToast({
+                                variant: "error",
+                                title: "Chapter edit failed",
+                                description: normalizeUserFacingError(
+                                    error,
+                                    "Unable to edit selected chapters right now.",
+                                    "analysis",
+                                ),
+                                durationMs: 6000,
+                            });
                         })
                         .finally(() => {
                             setIsApplyingEdits(false);
@@ -355,7 +362,7 @@ export const TitlebarMenuBar: React.FC = () => {
                 projectTitle={activeProjectName}
                 chapterCount={chapters.length}
                 wordCount={manuscriptWordCount}
-                onExport={async ({ filename, author, destinationPath }) => {
+                onExport={async ({ author, destinationPath }) => {
                     await exportManuscript({
                         projectId,
                         format: "epub",

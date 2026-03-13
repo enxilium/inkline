@@ -15,6 +15,11 @@ import { SearchableSelect, type SelectOption } from "../ui/SearchableSelect";
 import { TagsInput } from "../ui/Tags";
 import { RichTextAreaInput } from "../ui/RichTextAreaInput";
 import { TraitsInput } from "../ui/TraitsInput";
+import { showToast } from "../ui/GenerationProgressToast";
+import {
+    normalizeUserFacingError,
+    type UserErrorContext,
+} from "../../utils/userFacingError";
 
 export type CharacterEditorValues = {
     name: string;
@@ -51,7 +56,7 @@ export type CharacterEditorProps = {
 };
 
 const defaultValues = (
-    character: WorkspaceCharacter
+    character: WorkspaceCharacter,
 ): CharacterEditorValues => ({
     name: character.name ?? "",
     race: character.race ?? "",
@@ -84,9 +89,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     onNavigateToDocument,
 }) => {
     const [values, setValues] = React.useState<CharacterEditorValues>(() =>
-        defaultValues(character)
+        defaultValues(character),
     );
-    const [isSaving, setSaving] = React.useState(false);
+    const [, setSaving] = React.useState(false);
     const [assetBusy, setAssetBusy] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
@@ -95,6 +100,12 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     const songInputRef = React.useRef<HTMLInputElement>(null);
     const playlistInputRef = React.useRef<HTMLInputElement>(null);
     const isUserChange = React.useRef(false);
+
+    const toFriendlyError = React.useCallback(
+        (error: unknown, fallback: string, context?: UserErrorContext) =>
+            normalizeUserFacingError(error, fallback, context),
+        [],
+    );
 
     React.useEffect(() => {
         isUserChange.current = false;
@@ -134,7 +145,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                 id: loc.id,
                 label: loc.name || "Untitled location",
             })),
-        [locations]
+        [locations],
     );
 
     const organizationOptions: SelectOption[] = React.useMemo(
@@ -143,12 +154,12 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                 id: org.id,
                 label: org.name || "Untitled organization",
             })),
-        [organizations]
+        [organizations],
     );
 
     const handleChange = (
         field: keyof CharacterEditorValues,
-        value: string | string[] | { title: string; description: string }[]
+        value: string | string[] | { title: string; description: string }[],
     ) => {
         isUserChange.current = true;
         setValues((prev) => ({
@@ -164,9 +175,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         try {
             await onSubmit(values);
         } catch (submitError) {
-            setError(
-                (submitError as Error)?.message ?? "Failed to save character."
-            );
+            setError(toFriendlyError(submitError, "Failed to save character."));
         } finally {
             setSaving(false);
         }
@@ -207,7 +216,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     };
 
     const handleFileChange = async (
-        event: React.ChangeEvent<HTMLInputElement>
+        event: React.ChangeEvent<HTMLInputElement>,
     ) => {
         const file = event.target.files?.[0];
         if (!file) {
@@ -220,7 +229,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
             await onImportPortrait(file);
         } catch (importError) {
             setError(
-                (importError as Error)?.message ?? "Failed to import portrait."
+                toFriendlyError(importError, "Failed to import portrait."),
             );
         } finally {
             setAssetBusy(false);
@@ -229,7 +238,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     };
 
     const handleSongChange = async (
-        event: React.ChangeEvent<HTMLInputElement>
+        event: React.ChangeEvent<HTMLInputElement>,
     ) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -239,9 +248,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         try {
             await onImportSong(file);
         } catch (importError) {
-            setError(
-                (importError as Error)?.message ?? "Failed to import song."
-            );
+            setError(toFriendlyError(importError, "Failed to import song."));
         } finally {
             setAssetBusy(false);
             event.target.value = "";
@@ -249,7 +256,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     };
 
     const handlePlaylistChange = async (
-        event: React.ChangeEvent<HTMLInputElement>
+        event: React.ChangeEvent<HTMLInputElement>,
     ) => {
         const file = event.target.files?.[0];
         if (!file) return;
@@ -260,7 +267,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
             await onImportPlaylist(file);
         } catch (importError) {
             setError(
-                (importError as Error)?.message ?? "Failed to import playlist."
+                toFriendlyError(importError, "Failed to import playlist."),
             );
         } finally {
             setAssetBusy(false);
@@ -274,10 +281,17 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         try {
             await onGeneratePortrait();
         } catch (generateError) {
-            setError(
-                (generateError as Error)?.message ??
-                    "Failed to generate portrait."
-            );
+            showToast({
+                id: "generation-image",
+                variant: "error",
+                title: "Image generation failed",
+                description: toFriendlyError(
+                    generateError,
+                    "Failed to generate portrait.",
+                    "generation-image",
+                ),
+                durationMs: 6000,
+            });
         } finally {
             setAssetBusy(false);
         }
@@ -285,14 +299,23 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
 
     const handleAssetAction = async (
         action: () => Promise<void>,
-        errorMessage: string
+        errorMessage: string,
+        context: UserErrorContext,
+        toastId: string,
+        toastTitle: string,
     ) => {
         setAssetBusy(true);
         setError(null);
         try {
             await action();
         } catch (err) {
-            setError((err as Error)?.message ?? errorMessage);
+            showToast({
+                id: toastId,
+                variant: "error",
+                title: toastTitle,
+                description: toFriendlyError(err, errorMessage, context),
+                durationMs: 6000,
+            });
         } finally {
             setAssetBusy(false);
         }
@@ -313,7 +336,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
             return;
         }
         setCurrentImageIndex(
-            (prev) => (prev - 1 + gallerySources.length) % gallerySources.length
+            (prev) =>
+                (prev - 1 + gallerySources.length) % gallerySources.length,
         );
     };
 
@@ -464,9 +488,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                         type="button"
                                         className="gallery-nav-btn"
                                         onClick={showPreviousImage}
-                                        disabled={
-                                            !canCycleGallery
-                                        }
+                                        disabled={!canCycleGallery}
                                     >
                                         <ChevronLeftIcon size={14} />
                                     </button>
@@ -479,9 +501,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                         type="button"
                                         className="gallery-nav-btn"
                                         onClick={showNextImage}
-                                        disabled={
-                                            !canCycleGallery
-                                        }
+                                        disabled={!canCycleGallery}
                                     >
                                         <ChevronRightIcon size={14} />
                                     </button>
@@ -513,7 +533,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                         <div className="entity-summary">
                             <span className="summary-label">Audio Assets</span>
                             <div className="audio-asset-row">
-                                <span className="audio-asset-label">Soundtrack</span>
+                                <span className="audio-asset-label">
+                                    Soundtrack
+                                </span>
                                 {songUrl && (
                                     <audio
                                         controls
@@ -531,7 +553,10 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                             onClick: () =>
                                                 handleAssetAction(
                                                     onGenerateSong,
-                                                    "Song generation failed"
+                                                    "Song generation failed",
+                                                    "generation-audio",
+                                                    "generation-audio",
+                                                    "Audio generation failed",
                                                 ),
                                             disabled: assetBusy,
                                         },
@@ -551,7 +576,9 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                 />
                             </div>
                             <div className="audio-asset-row">
-                                <span className="audio-asset-label">Playlist</span>
+                                <span className="audio-asset-label">
+                                    Playlist
+                                </span>
                                 <ActionDropdown
                                     disabled={assetBusy}
                                     options={[
@@ -562,7 +589,10 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                             onClick: () =>
                                                 handleAssetAction(
                                                     onGeneratePlaylist,
-                                                    "Playlist generation failed"
+                                                    "Playlist generation failed",
+                                                    "generation-playlist",
+                                                    "generation-playlist",
+                                                    "Playlist generation failed",
                                                 ),
                                             disabled: assetBusy,
                                         },
@@ -592,7 +622,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                 onChange={(locationId) =>
                                     handleChange(
                                         "currentLocationId",
-                                        locationId
+                                        locationId,
                                     )
                                 }
                                 placeholder="Search locations..."
@@ -609,7 +639,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                                 onChange={(locationId) =>
                                     handleChange(
                                         "backgroundLocationId",
-                                        locationId
+                                        locationId,
                                     )
                                 }
                                 placeholder="Search locations..."

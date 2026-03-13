@@ -32,7 +32,7 @@ type FileSystemChapter = {
     projectId: string;
     title: string;
     order: number;
-    content: any;
+    content: Record<string, unknown>;
     createdAt: string;
     updatedAt: string;
 };
@@ -41,7 +41,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
     private getFilePath(
         userId: string,
         projectId: string,
-        chapterId: string
+        chapterId: string,
     ): string {
         return path.join(
             "users",
@@ -49,7 +49,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
             "projects",
             projectId,
             "chapters",
-            `${chapterId}.json`
+            `${chapterId}.json`,
         );
     }
 
@@ -64,7 +64,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
             // This implies the project must exist locally first.
             // Which is true.
             console.warn(
-                `Cannot create chapter ${chapter.id}: Project ${projectId} not found locally.`
+                `Cannot create chapter ${chapter.id}: Project ${projectId} not found locally.`,
             );
             return;
         }
@@ -80,7 +80,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
         };
         await fileSystemService.writeJson(
             this.getFilePath(ownerId, projectId, chapter.id),
-            dto
+            dto,
         );
     }
 
@@ -88,7 +88,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
         const location = await this.findFileLocation(id);
         if (location) {
             const dto = await fileSystemService.readJson<FileSystemChapter>(
-                location.path
+                location.path,
             );
             if (dto) return this.mapToEntity(dto);
         }
@@ -106,7 +106,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
         for (const file of files) {
             if (file.endsWith(".json")) {
                 const dto = await fileSystemService.readJson<FileSystemChapter>(
-                    path.join(dirPath, file)
+                    path.join(dirPath, file),
                 );
                 if (dto) chapters.push(this.mapToEntity(dto));
             }
@@ -117,7 +117,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
     async updateContent(
         chapterId: string,
         content: string,
-        updatedAt?: Date
+        updatedAt?: Date,
     ): Promise<void> {
         const chapter = await this.findById(chapterId);
         if (chapter) {
@@ -159,7 +159,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
     }
 
     private async findOwnerIdByProjectId(
-        projectId: string
+        projectId: string,
     ): Promise<string | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
@@ -167,7 +167,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
                 "users",
                 user,
                 "projects",
-                `${projectId}.json`
+                `${projectId}.json`,
             );
             if (await fileSystemService.exists(projectPath)) {
                 return user;
@@ -177,7 +177,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
     }
 
     private async findFileLocation(
-        chapterId: string
+        chapterId: string,
     ): Promise<{ userId: string; projectId: string; path: string } | null> {
         // This is expensive. We iterate all users -> all projects -> all chapters?
         // Or we can iterate all users -> all projects -> check if chapter file exists?
@@ -210,7 +210,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
                     const chapterPath = this.getFilePath(
                         user,
                         projectId,
-                        chapterId
+                        chapterId,
                     );
                     if (await fileSystemService.exists(chapterPath)) {
                         return { userId: user, projectId, path: chapterPath };
@@ -229,7 +229,7 @@ export class FileSystemChapterRepository implements IChapterRepository {
             JSON.stringify(dto.content),
             null,
             new Date(dto.createdAt),
-            new Date(dto.updatedAt)
+            new Date(dto.updatedAt),
         );
     }
 }

@@ -772,9 +772,12 @@ const CommentCard: React.FC<CommentCardProps> = ({
                                 size="sm"
                                 onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!entry.replacementText) {
+                                        return;
+                                    }
                                     onAcceptReplacement(
                                         entry.id,
-                                        entry.replacementText!,
+                                        entry.replacementText,
                                     );
                                 }}
                             >

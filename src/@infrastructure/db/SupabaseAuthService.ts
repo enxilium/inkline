@@ -4,6 +4,38 @@ import { UserPreferences } from "../../@core/domain/entities/user/UserPreference
 import { SupabaseService } from "./SupabaseService";
 
 export class SupabaseAuthService implements IAuthService {
+    private mapAuthErrorMessage(errorMessage: string, action: string): string {
+        const normalized = errorMessage.toLowerCase();
+
+        if (
+            normalized.includes("invalid login credentials") ||
+            normalized.includes("invalid password")
+        ) {
+            return "We couldn't sign you in. Check your email and password, or reset your password.";
+        }
+
+        if (
+            normalized.includes("already registered") ||
+            normalized.includes("already in use")
+        ) {
+            return "That email is already registered. Sign in instead, or reset your password.";
+        }
+
+        if (normalized.includes("at least 6")) {
+            return "Choose a stronger password with at least 6 characters.";
+        }
+
+        if (normalized.includes("network") || normalized.includes("timeout")) {
+            return "Connection issue detected. Please check your internet and try again.";
+        }
+
+        if (action === "reset-password") {
+            return "Unable to send reset instructions right now. Please verify the email and try again.";
+        }
+
+        return errorMessage;
+    }
+
     async login(email: string, password: string): Promise<User> {
         const client = SupabaseService.getClient();
         const { data, error } = await client.auth.signInWithPassword({
@@ -11,7 +43,9 @@ export class SupabaseAuthService implements IAuthService {
             password,
         });
 
-        if (error) throw new Error(error.message);
+        if (error) {
+            throw new Error(this.mapAuthErrorMessage(error.message, "login"));
+        }
         if (!data.user) throw new Error("Login failed: No user returned.");
 
         return this.mapSupabaseUserToDomainUser(data.user);
@@ -24,7 +58,11 @@ export class SupabaseAuthService implements IAuthService {
             password,
         });
 
-        if (error) throw new Error(error.message);
+        if (error) {
+            throw new Error(
+                this.mapAuthErrorMessage(error.message, "register"),
+            );
+        }
         if (!data.user)
             throw new Error("Registration failed: No user returned.");
 
@@ -52,7 +90,11 @@ export class SupabaseAuthService implements IAuthService {
     async resetPassword(email: string): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client.auth.resetPasswordForEmail(email);
-        if (error) throw new Error(error.message);
+        if (error) {
+            throw new Error(
+                this.mapAuthErrorMessage(error.message, "reset-password"),
+            );
+        }
     }
 
     async updateEmail(newEmail: string): Promise<User> {
@@ -61,7 +103,11 @@ export class SupabaseAuthService implements IAuthService {
             email: newEmail,
         });
 
-        if (error) throw new Error(error.message);
+        if (error) {
+            throw new Error(
+                this.mapAuthErrorMessage(error.message, "update-email"),
+            );
+        }
         if (!data.user)
             throw new Error("Email update failed: No user returned.");
 
@@ -74,7 +120,11 @@ export class SupabaseAuthService implements IAuthService {
             password: newPassword,
         });
 
-        if (error) throw new Error(error.message);
+        if (error) {
+            throw new Error(
+                this.mapAuthErrorMessage(error.message, "update-password"),
+            );
+        }
     }
 
     async deleteAccount(): Promise<void> {

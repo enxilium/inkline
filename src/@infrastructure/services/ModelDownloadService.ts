@@ -7,6 +7,9 @@ import * as https from "https";
 import * as http from "http";
 import { spawn } from "child_process";
 import { EventEmitter } from "events";
+import { createTerminalLogger } from "./TerminalLogger";
+
+const logger = createTerminalLogger("ModelDownloadService");
 
 /**
  * Resolve the path to the bundled 7za.exe binary.
@@ -325,10 +328,7 @@ export class ModelDownloadService extends EventEmitter {
                 });
             }
         } catch (err) {
-            console.warn(
-                "[ModelDownloadService] Error reorganizing extracted files:",
-                err,
-            );
+            logger.warn("Error reorganizing extracted files", err);
         }
 
         // Clean up the archive
@@ -362,12 +362,8 @@ export class ModelDownloadService extends EventEmitter {
             try {
                 await fsPromises.access(srcPath);
                 await fsPromises.copyFile(srcPath, destPath);
-                console.log(`[ModelDownloadService] Copied workflow: ${file}`);
             } catch (err) {
-                console.warn(
-                    `[ModelDownloadService] Could not copy workflow ${file}:`,
-                    err,
-                );
+                logger.warn(`Could not copy workflow ${file}`, err);
             }
         }
     }
@@ -686,7 +682,7 @@ export class ModelDownloadService extends EventEmitter {
         ]);
 
         // Step 1: Download and extract Java JRE
-        console.log("[ModelDownloadService] Downloading Java JRE...");
+        logger.info("Downloading Java JRE");
 
         await this.downloadFile(
             JAVA_JRE_URL,
@@ -751,9 +747,7 @@ export class ModelDownloadService extends EventEmitter {
         await fsPromises.unlink(jreZipPath).catch(() => {});
 
         // Step 2: Download and extract LanguageTool
-        console.log(
-            "[ModelDownloadService] Downloading LanguageTool server...",
-        );
+        logger.info("Downloading LanguageTool server");
 
         await this.downloadFile(
             LANGUAGETOOL_SERVER_URL,
@@ -822,9 +816,7 @@ export class ModelDownloadService extends EventEmitter {
             status: "completed",
         });
 
-        console.log(
-            "[ModelDownloadService] LanguageTool installation complete.",
-        );
+        logger.success("LanguageTool installation complete");
     }
 
     /**
@@ -918,13 +910,10 @@ export class ModelDownloadService extends EventEmitter {
                         recursive: true,
                         force: true,
                     });
-                    console.log(`[ModelDownloadService] Deleted: ${dirPath}`);
+                    logger.info(`Deleted ${dirPath}`);
                 }
             } catch (err) {
-                console.warn(
-                    `[ModelDownloadService] Failed to delete ${dirPath}:`,
-                    err,
-                );
+                logger.warn(`Failed to delete ${dirPath}`, err);
             }
         }
 
@@ -951,15 +940,10 @@ export class ModelDownloadService extends EventEmitter {
                 .catch((): null => null);
             if (stats) {
                 await fsPromises.unlink(modelPath);
-                console.log(
-                    `[ModelDownloadService] Deleted model: ${modelPath}`,
-                );
+                logger.info(`Deleted model ${modelPath}`);
             }
         } catch (err) {
-            console.warn(
-                `[ModelDownloadService] Failed to delete model ${modelPath}:`,
-                err,
-            );
+            logger.warn(`Failed to delete model ${modelPath}`, err);
         }
     }
 
@@ -1001,9 +985,7 @@ export class ModelDownloadService extends EventEmitter {
             return;
         }
 
-        console.log(
-            `[ModelDownloadService] Cleaning up partial ${downloadType} download...`,
-        );
+        logger.info(`Cleaning up partial ${downloadType} download`);
 
         for (const filePath of paths) {
             try {
@@ -1016,21 +998,14 @@ export class ModelDownloadService extends EventEmitter {
                             recursive: true,
                             force: true,
                         });
-                        console.log(
-                            `[ModelDownloadService] Removed directory: ${filePath}`,
-                        );
+                        logger.info(`Removed directory ${filePath}`);
                     } else {
                         await fsPromises.unlink(filePath);
-                        console.log(
-                            `[ModelDownloadService] Removed file: ${filePath}`,
-                        );
+                        logger.info(`Removed file ${filePath}`);
                     }
                 }
             } catch (err) {
-                console.warn(
-                    `[ModelDownloadService] Failed to clean up ${filePath}:`,
-                    err,
-                );
+                logger.warn(`Failed to clean up ${filePath}`, err);
             }
         }
 

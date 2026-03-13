@@ -40,6 +40,7 @@ export const TextAreaInput: React.FC<TextAreaInputProps> = ({
     availableDocuments = [],
     onReferenceClick,
 }) => {
+    void onReferenceClick;
     const [showRefSuggestions, setShowRefSuggestions] = React.useState(false);
     const [refQuery, setRefQuery] = React.useState("");
     const [cursorPosition, setCursorPosition] = React.useState<{
@@ -87,7 +88,6 @@ export const TextAreaInput: React.FC<TextAreaInputProps> = ({
                     // Calculate position for dropdown (approximation)
                     if (textareaRef.current) {
                         const textarea = textareaRef.current;
-                        const rect = textarea.getBoundingClientRect();
                         const lineHeight = parseInt(
                             getComputedStyle(textarea).lineHeight || "20",
                         );
