@@ -28,6 +28,13 @@ const COLORS: Record<LogLevel, string> = {
 
 const RESET = "\u001b[0m";
 
+const nativeConsole = {
+    debug: console.debug.bind(console),
+    info: console.info.bind(console),
+    warn: console.warn.bind(console),
+    error: console.error.bind(console),
+};
+
 const levelToConsoleMethod: Record<
     Exclude<LogLevel, "success">,
     "debug" | "info" | "warn" | "error"
@@ -59,12 +66,12 @@ const emit = (
 
     const prefix = formatPrefix(scope, level);
     if (level === "success") {
-        console.info(`${prefix} ${message}`, ...args);
+        nativeConsole.info(`${prefix} ${message}`, ...args);
         return;
     }
 
     const method = levelToConsoleMethod[level];
-    console[method](`${prefix} ${message}`, ...args);
+    nativeConsole[method](`${prefix} ${message}`, ...args);
 };
 
 export const createTerminalLogger = (scope: string): TerminalLogger => ({
@@ -84,3 +91,32 @@ export const createTerminalLogger = (scope: string): TerminalLogger => ({
         emit(scope, "error", message, args);
     },
 });
+
+const CONSOLE_ERROR_PATCH_FLAG = "__inkline_console_error_patched__";
+
+export const installTerminalErrorRedirection = (
+    scope = "Console",
+): void => {
+    const globalState = globalThis as Record<string, unknown>;
+    if (globalState[CONSOLE_ERROR_PATCH_FLAG]) {
+        return;
+    }
+
+    const logger = createTerminalLogger(scope);
+    globalState[CONSOLE_ERROR_PATCH_FLAG] = true;
+
+    console.error = (...args: unknown[]): void => {
+        if (args.length === 0) {
+            logger.error("Unknown error");
+            return;
+        }
+
+        const [first, ...rest] = args;
+        if (typeof first === "string") {
+            logger.error(first, ...rest);
+            return;
+        }
+
+        logger.error("Unhandled error", first, ...rest);
+    };
+};
