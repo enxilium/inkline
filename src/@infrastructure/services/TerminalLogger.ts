@@ -94,9 +94,7 @@ export const createTerminalLogger = (scope: string): TerminalLogger => ({
 
 const CONSOLE_ERROR_PATCH_FLAG = "__inkline_console_error_patched__";
 
-export const installTerminalErrorRedirection = (
-    scope = "Console",
-): void => {
+export const installTerminalErrorRedirection = (scope = "Console"): void => {
     const globalState = globalThis as Record<string, unknown>;
     if (globalState[CONSOLE_ERROR_PATCH_FLAG]) {
         return;
