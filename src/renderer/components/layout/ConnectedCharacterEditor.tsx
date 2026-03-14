@@ -33,10 +33,12 @@ export const ConnectedCharacterEditor: React.FC<
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
         setActiveDocument,
+        consumePendingTitleFocus,
     } = useAppStore();
 
     const [autosaveStatus, setAutosaveStatus] =
         React.useState<AutosaveStatus>("idle");
+    const [focusTitleOnMount, setFocusTitleOnMount] = React.useState(false);
 
     const isActiveEditor =
         activeDocument?.kind === "character" &&
@@ -47,6 +49,18 @@ export const ConnectedCharacterEditor: React.FC<
             setGlobalAutosaveStatus(autosaveStatus);
         }
     }, [isActiveEditor, autosaveStatus, setGlobalAutosaveStatus]);
+
+    React.useEffect(() => {
+        if (!isActiveEditor) {
+            return;
+        }
+
+        if (
+            consumePendingTitleFocus({ kind: "character", id: characterId })
+        ) {
+            setFocusTitleOnMount(true);
+        }
+    }, [characterId, consumePendingTitleFocus, isActiveEditor]);
 
     const character = React.useMemo(
         () => characters.find((c) => c.id === characterId),
@@ -304,6 +318,7 @@ export const ConnectedCharacterEditor: React.FC<
             onGeneratePlaylist={handleGeneratePlaylist}
             onImportPlaylist={handleImportPlaylist}
             onNavigateToDocument={handleNavigateToDocument}
+            focusTitleOnMount={focusTitleOnMount}
         />
     );
 };

@@ -38,6 +38,7 @@ export type OrganizationEditorProps = {
     onImportSong: (file: File) => Promise<void>;
     onGeneratePlaylist: () => Promise<void>;
     onImportPlaylist: (file: File) => Promise<void>;
+    focusTitleOnMount?: boolean;
 };
 
 const defaultValues = (
@@ -68,6 +69,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     onImportSong,
     onGeneratePlaylist,
     onImportPlaylist,
+    focusTitleOnMount = false,
 }) => {
     const [values, setValues] = React.useState<OrganizationEditorValues>(() =>
         defaultValues(organization),
@@ -80,6 +82,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const songInputRef = React.useRef<HTMLInputElement>(null);
     const playlistInputRef = React.useRef<HTMLInputElement>(null);
+    const titleInputRef = React.useRef<HTMLInputElement>(null);
     const isUserChange = React.useRef(false);
 
     const toFriendlyError = React.useCallback(
@@ -93,6 +96,17 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
         setValues(defaultValues(organization));
         setError(null);
     }, [organization]);
+
+    React.useEffect(() => {
+        if (!focusTitleOnMount) {
+            return;
+        }
+
+        requestAnimationFrame(() => {
+            titleInputRef.current?.focus();
+            titleInputRef.current?.select();
+        });
+    }, [focusTitleOnMount]);
 
     React.useEffect(() => {
         if (!gallerySources.length) {
@@ -318,6 +332,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                     <div className="entity-header-title">
                         <p className="panel-label">Organization</p>
                         <input
+                            ref={titleInputRef}
                             type="text"
                             className="entity-name-input"
                             value={values.name}

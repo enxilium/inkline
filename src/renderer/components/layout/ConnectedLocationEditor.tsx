@@ -33,10 +33,12 @@ export const ConnectedLocationEditor: React.FC<
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
         setActiveDocument,
+        consumePendingTitleFocus,
     } = useAppStore();
 
     const [autosaveStatus, setAutosaveStatus] =
         React.useState<AutosaveStatus>("idle");
+    const [focusTitleOnMount, setFocusTitleOnMount] = React.useState(false);
 
     const isActiveEditor =
         activeDocument?.kind === "location" && activeDocument.id === locationId;
@@ -46,6 +48,16 @@ export const ConnectedLocationEditor: React.FC<
             setGlobalAutosaveStatus(autosaveStatus);
         }
     }, [isActiveEditor, autosaveStatus, setGlobalAutosaveStatus]);
+
+    React.useEffect(() => {
+        if (!isActiveEditor) {
+            return;
+        }
+
+        if (consumePendingTitleFocus({ kind: "location", id: locationId })) {
+            setFocusTitleOnMount(true);
+        }
+    }, [consumePendingTitleFocus, isActiveEditor, locationId]);
 
     const location = React.useMemo(
         () => locations.find((l) => l.id === locationId),
@@ -292,6 +304,7 @@ export const ConnectedLocationEditor: React.FC<
             onGeneratePlaylist={handleGeneratePlaylist}
             onImportPlaylist={handleImportPlaylist}
             onNavigateToDocument={handleNavigateToDocument}
+            focusTitleOnMount={focusTitleOnMount}
         />
     );
 };
