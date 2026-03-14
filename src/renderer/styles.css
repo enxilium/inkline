@@ -1630,11 +1630,12 @@ html {
 }
 
 .project-grid {
-    display: flex;
-    flex-wrap: wrap;
-    column-gap: 1.25rem;
+    display: grid;
+    column-gap: 0;
     row-gap: 1.75rem;
     margin-top: 1rem;
+    grid-template-columns: repeat(auto-fill, 200px);
+    justify-content: space-between;
 }
 
 .import-progress-bar {

@@ -392,6 +392,8 @@ type AppStore = {
     setDraggedDocument: (
         doc: { id: string; kind: string; title: string } | null,
     ) => void;
+    pendingTitleFocusDocument: WorkspaceDocumentRef | null;
+    consumePendingTitleFocus: (selection: WorkspaceDocumentRef) => boolean;
     renamingDocument: { id: string; kind: string } | null;
     setRenamingDocument: (doc: { id: string; kind: string } | null) => void;
     closeProject: () => void;
@@ -495,6 +497,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         | "pendingEditsByChapterId"
         | "pendingEditsById"
         | "archivedEditsById"
+        | "pendingTitleFocusDocument"
     > => ({
         projectId: "",
         activeProjectName: "",
@@ -518,6 +521,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         pendingEditsByChapterId: {},
         pendingEditsById: {},
         archivedEditsById: {},
+        pendingTitleFocusDocument: null,
     });
 
     const applyUnauthenticatedState = () => {
@@ -1525,6 +1529,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     characters: nextCharacters,
                     activeDocument: nextTab,
                     openTabs: nextTabs,
+                    pendingTitleFocusDocument: nextTab,
                 };
             });
 
@@ -1598,6 +1603,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     locations: nextLocations,
                     activeDocument: nextTab,
                     openTabs: nextTabs,
+                    pendingTitleFocusDocument: nextTab,
                 };
             });
 
@@ -1670,6 +1676,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     organizations: nextOrganizations,
                     activeDocument: nextTab,
                     openTabs: nextTabs,
+                    pendingTitleFocusDocument: nextTab,
                 };
             });
 
@@ -2209,6 +2216,19 @@ export const useAppStore = create<AppStore>((set, get) => {
             set({ currentSelection: selection }),
         setDraggedDocument: (doc) => {
             set({ draggedDocument: doc });
+        },
+        pendingTitleFocusDocument: null,
+        consumePendingTitleFocus: (selection) => {
+            const pending = get().pendingTitleFocusDocument;
+            if (
+                pending &&
+                pending.kind === selection.kind &&
+                pending.id === selection.id
+            ) {
+                set({ pendingTitleFocusDocument: null });
+                return true;
+            }
+            return false;
         },
         renamingDocument: null,
         setRenamingDocument: (doc) => set({ renamingDocument: doc }),

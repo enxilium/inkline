@@ -53,6 +53,7 @@ export type CharacterEditorProps = {
     onImportPlaylist: (file: File) => Promise<void>;
     /** Navigate to a referenced document */
     onNavigateToDocument?: (ref: DocumentRef) => void;
+    focusTitleOnMount?: boolean;
 };
 
 const defaultValues = (
@@ -87,6 +88,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     onGeneratePlaylist,
     onImportPlaylist,
     onNavigateToDocument,
+    focusTitleOnMount = false,
 }) => {
     const [values, setValues] = React.useState<CharacterEditorValues>(() =>
         defaultValues(character),
@@ -99,6 +101,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const songInputRef = React.useRef<HTMLInputElement>(null);
     const playlistInputRef = React.useRef<HTMLInputElement>(null);
+    const titleInputRef = React.useRef<HTMLInputElement>(null);
     const isUserChange = React.useRef(false);
 
     const toFriendlyError = React.useCallback(
@@ -112,6 +115,17 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
         setValues(defaultValues(character));
         setError(null);
     }, [character]);
+
+    React.useEffect(() => {
+        if (!focusTitleOnMount) {
+            return;
+        }
+
+        requestAnimationFrame(() => {
+            titleInputRef.current?.focus();
+            titleInputRef.current?.select();
+        });
+    }, [focusTitleOnMount]);
 
     React.useEffect(() => {
         if (!gallerySources.length) {
@@ -348,6 +362,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                     <div className="entity-header-title">
                         <p className="panel-label">Character</p>
                         <input
+                            ref={titleInputRef}
                             type="text"
                             className="entity-name-input"
                             value={values.name}

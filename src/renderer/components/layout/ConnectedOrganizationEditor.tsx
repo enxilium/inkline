@@ -33,10 +33,12 @@ export const ConnectedOrganizationEditor: React.FC<
         setActiveDocument,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
+        consumePendingTitleFocus,
     } = useAppStore();
 
     const [autosaveStatus, setAutosaveStatus] =
         React.useState<AutosaveStatus>("idle");
+    const [focusTitleOnMount, setFocusTitleOnMount] = React.useState(false);
 
     const isActiveEditor =
         activeDocument?.kind === "organization" &&
@@ -47,6 +49,21 @@ export const ConnectedOrganizationEditor: React.FC<
             setGlobalAutosaveStatus(autosaveStatus);
         }
     }, [isActiveEditor, autosaveStatus, setGlobalAutosaveStatus]);
+
+    React.useEffect(() => {
+        if (!isActiveEditor) {
+            return;
+        }
+
+        if (
+            consumePendingTitleFocus({
+                kind: "organization",
+                id: organizationId,
+            })
+        ) {
+            setFocusTitleOnMount(true);
+        }
+    }, [consumePendingTitleFocus, isActiveEditor, organizationId]);
 
     const organization = React.useMemo(
         () => organizations.find((o) => o.id === organizationId),
@@ -292,6 +309,7 @@ export const ConnectedOrganizationEditor: React.FC<
             onImportSong={handleImportSong}
             onGeneratePlaylist={handleGeneratePlaylist}
             onImportPlaylist={handleImportPlaylist}
+            focusTitleOnMount={focusTitleOnMount}
         />
     );
 };

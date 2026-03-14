@@ -37,6 +37,7 @@ export type LocationEditorProps = {
     onImportPlaylist: (file: File) => Promise<void>;
     /** Navigate to a referenced document */
     onNavigateToDocument?: (ref: DocumentRef) => void;
+    focusTitleOnMount?: boolean;
 };
 
 const defaultValues = (location: WorkspaceLocation): LocationEditorValues => ({
@@ -61,6 +62,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     onGeneratePlaylist,
     onImportPlaylist,
     onNavigateToDocument,
+    focusTitleOnMount = false,
 }) => {
     const [values, setValues] = React.useState<LocationEditorValues>(() =>
         defaultValues(location),
@@ -73,6 +75,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const songInputRef = React.useRef<HTMLInputElement>(null);
     const playlistInputRef = React.useRef<HTMLInputElement>(null);
+    const titleInputRef = React.useRef<HTMLInputElement>(null);
     const isUserChange = React.useRef(false);
 
     const toFriendlyError = React.useCallback(
@@ -86,6 +89,17 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
         setValues(defaultValues(location));
         setError(null);
     }, [location]);
+
+    React.useEffect(() => {
+        if (!focusTitleOnMount) {
+            return;
+        }
+
+        requestAnimationFrame(() => {
+            titleInputRef.current?.focus();
+            titleInputRef.current?.select();
+        });
+    }, [focusTitleOnMount]);
 
     React.useEffect(() => {
         if (!gallerySources.length) {
@@ -301,6 +315,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                     <div className="entity-header-title">
                         <p className="panel-label">Location</p>
                         <input
+                            ref={titleInputRef}
                             type="text"
                             className="entity-name-input"
                             value={values.name}
