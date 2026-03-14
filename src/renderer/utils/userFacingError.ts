@@ -186,7 +186,7 @@ export const normalizeUserFacingError = (
     fallback: string,
     context?: UserErrorContext,
 ): string => {
-    const rawMessage = getErrorMessage(error);
+    const rawMessage = getErrorMessage(error).replace(/^Error invoking remote method '[^']+':\s*/, "");
     const normalizedMessage = rawMessage.toLowerCase();
 
     const contextMessage = mapByContext(normalizedMessage, context);

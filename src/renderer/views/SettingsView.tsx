@@ -150,7 +150,7 @@ export const SettingsView: React.FC = () => {
                     });
                 }
             })
-            .catch(() => undefined);
+            .catch((): void => {});
     }, []);
 
     // Listen for download progress events (from settings toggles OR startup prompt)
@@ -207,7 +207,7 @@ export const SettingsView: React.FC = () => {
                             setFeatureConfig(c);
                             setTogglingFeature(null);
                         })
-                        .catch(() => undefined);
+                        .catch((): void => {});
                 }
             },
         );
@@ -275,7 +275,7 @@ export const SettingsView: React.FC = () => {
                 window.featureApi
                     .getConfig()
                     .then((c) => setFeatureConfig(c))
-                    .catch(() => undefined);
+                    .catch((): void => {});
             }
         },
         [featureConfig, togglingFeature],

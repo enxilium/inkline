@@ -9,6 +9,41 @@ import { ConflictResolutionDialog } from "../components/dialogs/ConflictResoluti
 import TimelineView from "./TimelineView";
 import type { WorkspaceDocumentKind } from "../types";
 
+type ContextMenuEntityKind =
+    | "chapter"
+    | "scrapNote"
+    | "character"
+    | "location"
+    | "organization";
+
+type ContextMenuEntityData = {
+    kind: ContextMenuEntityKind;
+    id: string;
+};
+
+const isContextMenuEntityData = (
+    value: unknown,
+): value is ContextMenuEntityData => {
+    if (!value || typeof value !== "object") {
+        return false;
+    }
+
+    const candidate = value as { kind?: unknown; id?: unknown };
+    const allowedKinds: ContextMenuEntityKind[] = [
+        "chapter",
+        "scrapNote",
+        "character",
+        "location",
+        "organization",
+    ];
+
+    return (
+        typeof candidate.id === "string" &&
+        typeof candidate.kind === "string" &&
+        allowedKinds.includes(candidate.kind as ContextMenuEntityKind)
+    );
+};
+
 export const WorkspaceView: React.FC = () => {
     const { isBinderOpen, isChatOpen, workspaceViewMode } = useAppStore();
     const activeDocument = useAppStore((state) => state.activeDocument);
@@ -28,6 +63,10 @@ export const WorkspaceView: React.FC = () => {
             if (command === "close-project") {
                 closeProject();
             } else if (command === "delete") {
+                if (!isContextMenuEntityData(data)) {
+                    return;
+                }
+
                 if (
                     confirm(
                         `Are you sure you want to delete this ${data.kind}?`,
@@ -46,6 +85,10 @@ export const WorkspaceView: React.FC = () => {
                     }
                 }
             } else if (command === "rename") {
+                if (!isContextMenuEntityData(data)) {
+                    return;
+                }
+
                 setRenamingDocument({ kind: data.kind, id: data.id });
             }
         });

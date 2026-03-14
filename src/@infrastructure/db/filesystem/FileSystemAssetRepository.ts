@@ -1,7 +1,10 @@
 import { IAssetRepository } from "../../../@core/domain/repositories/IAssetRepository";
 import { Image } from "../../../@core/domain/entities/story/world/Image";
 import { BGM } from "../../../@core/domain/entities/story/world/BGM";
-import { Playlist } from "../../../@core/domain/entities/story/world/Playlist";
+import {
+    Playlist,
+    type PlaylistTrack,
+} from "../../../@core/domain/entities/story/world/Playlist";
 import { fileSystemService } from "../../storage/FileSystemService";
 import * as path from "path";
 
@@ -18,6 +21,33 @@ type FileSystemAsset = {
     updatedAt: string;
     // Playlist specific
     tracks?: unknown[];
+};
+
+const toStringMetadata = (value: unknown, fallback: string): string =>
+    typeof value === "string" ? value : fallback;
+
+const toPlaylistTracks = (value: unknown): PlaylistTrack[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value.filter((track): track is PlaylistTrack => {
+        if (!track || typeof track !== "object") {
+            return false;
+        }
+
+        const candidate = track as Partial<PlaylistTrack>;
+
+        return (
+            typeof candidate.id === "string" &&
+            typeof candidate.title === "string" &&
+            typeof candidate.artist === "string" &&
+            (candidate.album === undefined ||
+                typeof candidate.album === "string") &&
+            typeof candidate.url === "string" &&
+            typeof candidate.durationSeconds === "number"
+        );
+    });
 };
 
 export class FileSystemAssetRepository implements IAssetRepository {
@@ -338,8 +368,8 @@ export class FileSystemAssetRepository implements IAssetRepository {
         const metadata = dto.metadata || {};
         return new BGM(
             dto.id,
-            metadata.title || "Unknown Title",
-            metadata.artist || "Unknown Artist",
+            toStringMetadata(metadata.title, "Unknown Title"),
+            toStringMetadata(metadata.artist, "Unknown Artist"),
             dto.url,
             dto.storagePath,
             new Date(dto.createdAt),
@@ -351,9 +381,9 @@ export class FileSystemAssetRepository implements IAssetRepository {
         const metadata = dto.metadata || {};
         return new Playlist(
             dto.id,
-            metadata.name || "Unknown Playlist",
-            metadata.description || "",
-            metadata.tracks || [],
+            toStringMetadata(metadata.name, "Unknown Playlist"),
+            toStringMetadata(metadata.description, ""),
+            toPlaylistTracks(dto.tracks ?? metadata.tracks),
             dto.url,
             dto.storagePath,
             new Date(dto.createdAt),
