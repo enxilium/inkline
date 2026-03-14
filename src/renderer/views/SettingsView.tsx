@@ -902,6 +902,7 @@ export const SettingsView: React.FC = () => {
                                             <Button
                                                 onClick={handleUpdateEmail}
                                                 variant="primary"
+                                                style={{ width: "150px" }}
                                                 disabled={
                                                     !user || isSubmittingAccount
                                                 }
@@ -931,6 +932,7 @@ export const SettingsView: React.FC = () => {
                                             <Button
                                                 onClick={handleUpdatePassword}
                                                 variant="primary"
+                                                style={{ width: "150px" }}
                                                 disabled={
                                                     !user || isSubmittingAccount
                                                 }

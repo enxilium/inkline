@@ -42,7 +42,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({
                     <DialogTitle>{title}</DialogTitle>
                     <DialogDescription>{description}</DialogDescription>
                 </DialogHeader>
-                <DialogFooter>
+                <DialogFooter style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
                     <Button variant="ghost" onClick={() => onOpenChange(false)}>
                         {cancelLabel}
                     </Button>
