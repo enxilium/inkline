@@ -141,6 +141,8 @@ export const Titlebar: React.FC = () => {
                             src={strokeLogo}
                             alt="Stroke logo"
                             className="titlebar-logo-image"
+                            draggable={false}
+                            onDragStart={(event) => event.preventDefault()}
                         />
                     </button>
                     {stage === "workspace" ? <TitlebarMenuBar /> : null}
@@ -344,6 +346,15 @@ export const Titlebar: React.FC = () => {
                                     )}
                                 </button>
                             )}
+                            <button
+                                type="button"
+                                className="titlebar-action-icon"
+                                aria-label="Settings"
+                                onClick={openSettings}
+                                title="Settings"
+                            >
+                                <SettingsIcon size={16} />
+                            </button>
                         </div>
                     ) : stage === "projectSelect" ? (
                         <div className="titlebar-actions titlebar-no-drag">

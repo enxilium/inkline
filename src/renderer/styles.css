@@ -9,7 +9,7 @@
     --titlebar-height: 36px;
     --titlebar-content-padding-left: 10px;
     /* Leave room for native window controls (Windows/Linux). */
-    --titlebar-content-padding-right: 140px;
+    --titlebar-content-padding-right: 0px;
     /*
      * The titlebar has asymmetric "safe" padding because native window controls
      * (min/max/close) live outside the DOM when using Electron titleBarOverlay.

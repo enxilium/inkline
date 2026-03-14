@@ -247,7 +247,7 @@ const App: React.FC = () => {
             // report 0 inset even when native window controls are present.
             // Keep a sane minimum so those controls never overlap our buttons.
             const minLeft = 10;
-            const minRight = 140;
+            const minRight = 0;
             root.style.setProperty(
                 "--titlebar-content-padding-left",
                 `${Math.max(leftInset + gutter, minLeft)}px`,
