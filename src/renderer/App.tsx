@@ -411,7 +411,7 @@ const App: React.FC = () => {
                 );
             case "auth":
                 return (
-                    <div style={{ padding: "10vh" }}>
+                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
                         <AuthView
                             mode={authMode}
                             form={authForm}

@@ -1,4 +1,6 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
+import lottie from "lottie-web";
+import lineAnimationData from "../../../assets/line-loop.json";
 
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
@@ -39,6 +41,28 @@ export const AuthView: React.FC<AuthViewProps> = ({
     onForgotPassword,
     onResetPassword,
 }) => {
+    const lottieContainerRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (!lottieContainerRef.current) return;
+
+        const anim = lottie.loadAnimation({
+            container: lottieContainerRef.current,
+            renderer: "svg",
+            loop: false,
+            autoplay: false,
+            animationData: lineAnimationData,
+        });
+
+        anim.addEventListener("DOMLoaded", () => {
+            if (anim.totalFrames > 0) {
+                anim.playSegments([0, anim.totalFrames / 2], true);
+            }
+        });
+
+        return () => anim.destroy();
+    }, []);
+
     if (mode === "resetPassword") {
         return (
             <section className="gateway-panel auth-card">
@@ -69,6 +93,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                     </div>
                 ) : (
                     <>
+                        <div ref={lottieContainerRef} style={{ width: "100%", height: "20px", marginBottom: "1rem" }} />
                         <form className="auth-form" onSubmit={onResetPassword}>
                             <div className="auth-form-inputs">
                                 <div className="input-field">
@@ -116,6 +141,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
     return (
         <section className="gateway-panel auth-card">
+            <div ref={lottieContainerRef} style={{ width: "100%", height: "30px", marginBottom: "1rem" }} />
             <p className="panel-label">Welcome</p>
             <h2>
                 {mode === "login"
@@ -155,18 +181,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
                     </div>
                 </div>
                 {mode === "login" ? (
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        style={{
-                            alignSelf: "flex-start",
-                            padding: 0,
-                            fontSize: "0.85rem",
-                        }}
+                    <div
+                        className="auth-forgot-password"
                         onClick={onForgotPassword}
                     >
                         Forgot password?
-                    </Button>
+                    </div>
                 ) : null}
                 {error ? (
                     <span className="card-hint is-error">{error}</span>
@@ -189,7 +209,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
             <Button
                 type="button"
                 variant="ghost"
-                style={{ width: "100%" }}
+                style={{ width: "100%", border: "0px" }}
                 onClick={onToggleMode}
             >
                 {mode === "login"
