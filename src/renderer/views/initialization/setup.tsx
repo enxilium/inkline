@@ -12,6 +12,7 @@ import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import InfoIcon from "@mui/icons-material/Info";
 import AutoAwesomeIcon from "@mui/icons-material/AutoAwesome";
+import { normalizeUserFacingError } from "../../utils/userFacingError";
 
 // Types for IPC communication
 interface DownloadProgress {
@@ -31,10 +32,34 @@ interface SetupConfig {
     };
 }
 
-interface PlatformInfo {
-    platform: string;
-    isWindows: boolean;
-}
+type SetupApi = {
+    checkPlatform: () => Promise<{ platform: string; isWindows: boolean }>;
+    checkComfyUIStatus: () => Promise<{ installed: boolean }>;
+    checkLanguageToolStatus: () => Promise<{ installed: boolean }>;
+    startDownloads: (request: {
+        comfyui: boolean;
+        image: boolean;
+        audio: boolean;
+        languagetool: boolean;
+    }) => Promise<void>;
+    cancelDownloads: (
+        types: Array<"comfyui" | "image" | "audio">,
+    ) => Promise<void>;
+    completeSetup: (config: SetupConfig) => Promise<void>;
+    closeWindow: () => void;
+};
+
+type SetupEvents = {
+    onDownloadProgress?: (
+        listener: (progress: DownloadProgress) => void,
+    ) => (() => void) | void;
+};
+
+const setupApi = (): SetupApi =>
+    (window as unknown as { setupApi: SetupApi }).setupApi;
+
+const setupEvents = (): SetupEvents =>
+    (window as unknown as { setupEvents?: SetupEvents }).setupEvents ?? {};
 
 type SetupStep =
     | "welcome"
@@ -43,12 +68,6 @@ type SetupStep =
     | "finalizing"
     | "complete";
 
-// Single accent color now - no selection needed
-const ACCENT_COLOR = "#2ef6ad";
-const ACCENT_TRANSPARENT = "#2ef6ad11";
-const ACCENT_TRANSPARENT2 = "#2ef6ad44";
-const ACCENT_LIGHT = "#b4ffeb";
-
 // Helper to format bytes
 const formatBytes = (bytes: number): string => {
     if (bytes === 0) return "0 B";
@@ -56,6 +75,16 @@ const formatBytes = (bytes: number): string => {
     const sizes = ["B", "KB", "MB", "GB"];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+};
+
+const getSetupFriendlyError = (
+    error: unknown,
+    fallback: string,
+    status?: DownloadProgress["status"],
+): string => {
+    const context =
+        status === "extracting" ? "setup-extraction" : "setup-download";
+    return normalizeUserFacingError(error, fallback, context);
 };
 
 // Step Components
@@ -363,9 +392,7 @@ const DownloadsStep: React.FC<{
     useEffect(() => {
         const checkStatus = async () => {
             try {
-                const comfyStatus = await (
-                    window as any
-                ).setupApi.checkComfyUIStatus();
+                const comfyStatus = await setupApi().checkComfyUIStatus();
                 setComfyUIInstalled(comfyStatus.installed);
             } catch {
                 setComfyUIInstalled(false);
@@ -376,7 +403,7 @@ const DownloadsStep: React.FC<{
 
     useEffect(() => {
         // Listen for download progress updates
-        const unsubscribe = (window as any).setupEvents?.onDownloadProgress(
+        const unsubscribe = setupEvents().onDownloadProgress?.(
             (progress: DownloadProgress) => {
                 if (progress.downloadType === "comfyui") {
                     setComfyProgress(progress);
@@ -432,7 +459,7 @@ const DownloadsStep: React.FC<{
                 });
             }
 
-            await (window as any).setupApi.startDownloads({
+            await setupApi().startDownloads({
                 comfyui: needsLocalAI && !comfyUIInstalled,
                 image: needsImageDownload,
                 audio: needsAudioDownload,
@@ -440,6 +467,38 @@ const DownloadsStep: React.FC<{
             });
         } catch (error) {
             console.error("Download error:", error);
+            const message = getSetupFriendlyError(
+                error,
+                "Download failed. Check your connection and retry.",
+            );
+
+            setComfyProgress((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          status: "error",
+                          error: message,
+                      }
+                    : prev,
+            );
+            setImageProgress((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          status: "error",
+                          error: message,
+                      }
+                    : prev,
+            );
+            setAudioProgress((prev) =>
+                prev
+                    ? {
+                          ...prev,
+                          status: "error",
+                          error: message,
+                      }
+                    : prev,
+            );
         } finally {
             setIsDownloading(false);
         }
@@ -448,11 +507,7 @@ const DownloadsStep: React.FC<{
     const cancelDownloads = async () => {
         try {
             // Only cancel AI downloads, not LanguageTool (which downloads in background)
-            await (window as any).setupApi.cancelDownloads([
-                "comfyui",
-                "image",
-                "audio",
-            ]);
+            await setupApi().cancelDownloads(["comfyui", "image", "audio"]);
             // Reset progress states to show cancellation
             setComfyProgress(null);
             setImageProgress(null);
@@ -524,7 +579,11 @@ const DownloadsStep: React.FC<{
                                         marginRight: 4,
                                     }}
                                 />
-                                {progress.error || "Error"}
+                                {getSetupFriendlyError(
+                                    progress.error,
+                                    "Download failed.",
+                                    progress.status,
+                                )}
                             </>
                         )}
                     </span>
@@ -602,7 +661,8 @@ const DownloadsStep: React.FC<{
             </div>
 
             {comfyProgress?.status === "error" &&
-                comfyProgress.error?.includes("7-Zip") && (
+                (comfyProgress.error?.toLowerCase().includes("7-zip") ||
+                    comfyProgress.error?.toLowerCase().includes("7za")) && (
                     <div style={styles.errorNote}>
                         <InfoIcon
                             style={{
@@ -740,7 +800,7 @@ const FinalizingStep: React.FC<{
         let isSubscribed = true;
 
         // Set up progress listener FIRST (before any async checks)
-        const unsubscribe = (window as any).setupEvents?.onDownloadProgress(
+        const unsubscribe = setupEvents().onDownloadProgress?.(
             (progress: DownloadProgress) => {
                 if (!isSubscribed) return;
                 if (progress.downloadType === "languagetool") {
@@ -748,7 +808,13 @@ const FinalizingStep: React.FC<{
                     if (progress.status === "completed") {
                         setStatus("complete");
                     } else if (progress.status === "error") {
-                        setError(progress.error || "Download failed");
+                        setError(
+                            getSetupFriendlyError(
+                                progress.error,
+                                "Download failed.",
+                                progress.status,
+                            ),
+                        );
                         setStatus("error");
                     }
                 }
@@ -759,8 +825,8 @@ const FinalizingStep: React.FC<{
         const checkStatus = async () => {
             try {
                 const [platformInfo, ltStatus] = await Promise.all([
-                    (window as any).setupApi.checkPlatform(),
-                    (window as any).setupApi.checkLanguageToolStatus(),
+                    setupApi().checkPlatform(),
+                    setupApi().checkLanguageToolStatus(),
                 ]);
 
                 if (!isSubscribed) return;
@@ -773,7 +839,12 @@ const FinalizingStep: React.FC<{
             } catch (err) {
                 if (!isSubscribed) return;
                 console.error("Finalization check error:", err);
-                setError(err instanceof Error ? err.message : "Unknown error");
+                setError(
+                    getSetupFriendlyError(
+                        err,
+                        "Setup could not complete. You can continue and retry later.",
+                    ),
+                );
                 setStatus("error");
             }
         };
@@ -1060,8 +1131,8 @@ const SetupWizard: React.FC = () => {
         const initializeWizard = async () => {
             try {
                 const [platformInfo, ltStatus] = await Promise.all([
-                    (window as any).setupApi.checkPlatform(),
-                    (window as any).setupApi.checkLanguageToolStatus(),
+                    setupApi().checkPlatform(),
+                    setupApi().checkLanguageToolStatus(),
                 ]);
 
                 if (!isSubscribed) return;
@@ -1070,14 +1141,14 @@ const SetupWizard: React.FC = () => {
                 // Start LanguageTool download in background if needed (Windows only)
                 if (platformInfo.isWindows && !ltStatus.installed) {
                     // Fire and forget - don't await, let it download in background
-                    (window as any).setupApi
+                    setupApi()
                         .startDownloads({
                             comfyui: false,
                             image: false,
                             audio: false,
                             languagetool: true,
                         })
-                        .catch((err: Error) => {
+                        .catch((err: unknown) => {
                             console.error(
                                 "Background LanguageTool download failed:",
                                 err,
@@ -1110,7 +1181,7 @@ const SetupWizard: React.FC = () => {
 
     const handleComplete = async () => {
         try {
-            await (window as any).setupApi.completeSetup(config);
+            await setupApi().completeSetup(config);
         } catch (error) {
             console.error("Failed to complete setup:", error);
         }
@@ -1143,7 +1214,7 @@ const SetupWizard: React.FC = () => {
         <div style={styles.container}>
             {/* Close button */}
             <button
-                onClick={() => (window as any).setupApi.closeWindow()}
+                onClick={() => setupApi().closeWindow()}
                 style={styles.closeButton}
                 onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = "#e81123";

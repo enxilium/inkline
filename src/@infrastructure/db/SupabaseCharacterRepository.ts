@@ -29,12 +29,23 @@ const parseStringArray = (value: string[] | null | undefined): string[] =>
         ? value.map((entry) => entry ?? "").filter(Boolean)
         : [];
 
-const parsePowers = (value: any): { title: string; description: string }[] => {
+const parsePowers = (
+    value: unknown,
+): { title: string; description: string }[] => {
     if (!Array.isArray(value)) return [];
-    return value.map((entry: any) => ({
-        title: typeof entry?.title === "string" ? entry.title : "",
+    return value.map((entry) => ({
+        title:
+            typeof entry === "object" &&
+            entry !== null &&
+            typeof (entry as { title?: unknown }).title === "string"
+                ? ((entry as { title: string }).title as string)
+                : "",
         description:
-            typeof entry?.description === "string" ? entry.description : "",
+            typeof entry === "object" &&
+            entry !== null &&
+            typeof (entry as { description?: unknown }).description === "string"
+                ? ((entry as { description: string }).description as string)
+                : "",
     }));
 };
 
@@ -57,7 +68,7 @@ const mapRowToCharacter = (row: CharacterRow): Character =>
         row.playlist_id,
         parseStringArray(row.gallery_image_ids),
         new Date(row.created_at),
-        new Date(row.updated_at)
+        new Date(row.updated_at),
     );
 
 export class SupabaseCharacterRepository implements ICharacterRepository {
@@ -158,7 +169,7 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
     }
 
     async getCharacterProfiles(
-        projectId: string
+        projectId: string,
     ): Promise<{ name: string; description: string }[]> {
         const client = SupabaseService.getClient();
         const { data, error } = await client

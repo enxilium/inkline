@@ -1,7 +1,10 @@
 import { IAssetRepository } from "../../../@core/domain/repositories/IAssetRepository";
 import { Image } from "../../../@core/domain/entities/story/world/Image";
 import { BGM } from "../../../@core/domain/entities/story/world/BGM";
-import { Playlist } from "../../../@core/domain/entities/story/world/Playlist";
+import {
+    Playlist,
+    type PlaylistTrack,
+} from "../../../@core/domain/entities/story/world/Playlist";
 import { fileSystemService } from "../../storage/FileSystemService";
 import * as path from "path";
 
@@ -13,18 +16,45 @@ type FileSystemAsset = {
     type: AssetType;
     url: string;
     storagePath: string;
-    metadata: any;
+    metadata: Record<string, unknown>;
     createdAt: string;
     updatedAt: string;
     // Playlist specific
-    tracks?: any[];
+    tracks?: unknown[];
+};
+
+const toStringMetadata = (value: unknown, fallback: string): string =>
+    typeof value === "string" ? value : fallback;
+
+const toPlaylistTracks = (value: unknown): PlaylistTrack[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    return value.filter((track): track is PlaylistTrack => {
+        if (!track || typeof track !== "object") {
+            return false;
+        }
+
+        const candidate = track as Partial<PlaylistTrack>;
+
+        return (
+            typeof candidate.id === "string" &&
+            typeof candidate.title === "string" &&
+            typeof candidate.artist === "string" &&
+            (candidate.album === undefined ||
+                typeof candidate.album === "string") &&
+            typeof candidate.url === "string" &&
+            typeof candidate.durationSeconds === "number"
+        );
+    });
 };
 
 export class FileSystemAssetRepository implements IAssetRepository {
     private getFilePath(
         userId: string,
         projectId: string,
-        assetId: string
+        assetId: string,
     ): string {
         return path.join(
             "users",
@@ -32,7 +62,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
             "projects",
             projectId,
             "assets",
-            `${assetId}.json`
+            `${assetId}.json`,
         );
     }
 
@@ -58,7 +88,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         };
         await fileSystemService.writeJson(
             this.getFilePath(ownerId, projectId, image.id),
-            dto
+            dto,
         );
     }
 
@@ -66,7 +96,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         const loc = await this.findFileLocation(id);
         if (loc) {
             const dto = await fileSystemService.readJson<FileSystemAsset>(
-                loc.path
+                loc.path,
             );
             if (dto && dto.type === "image") return this.mapToImage(dto);
         }
@@ -82,7 +112,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         for (const file of files) {
             if (file.endsWith(".json")) {
                 const dto = await fileSystemService.readJson<FileSystemAsset>(
-                    path.join(dirPath, file)
+                    path.join(dirPath, file),
                 );
                 if (dto && dto.type === "image")
                     images.push(this.mapToImage(dto));
@@ -112,7 +142,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         const files = await fileSystemService.listFiles(dirPath);
         for (const file of files) {
             const dto = await fileSystemService.readJson<FileSystemAsset>(
-                path.join(dirPath, file)
+                path.join(dirPath, file),
             );
             if (dto && dto.type === "image") {
                 await fileSystemService.deleteFile(path.join(dirPath, file));
@@ -138,7 +168,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         };
         await fileSystemService.writeJson(
             this.getFilePath(ownerId, projectId, bgm.id),
-            dto
+            dto,
         );
     }
 
@@ -146,7 +176,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         const loc = await this.findFileLocation(id);
         if (loc) {
             const dto = await fileSystemService.readJson<FileSystemAsset>(
-                loc.path
+                loc.path,
             );
             if (dto && dto.type === "bgm") return this.mapToBGM(dto);
         }
@@ -162,7 +192,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         for (const file of files) {
             if (file.endsWith(".json")) {
                 const dto = await fileSystemService.readJson<FileSystemAsset>(
-                    path.join(dirPath, file)
+                    path.join(dirPath, file),
                 );
                 if (dto && dto.type === "bgm") bgms.push(this.mapToBGM(dto));
             }
@@ -191,7 +221,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         const files = await fileSystemService.listFiles(dirPath);
         for (const file of files) {
             const dto = await fileSystemService.readJson<FileSystemAsset>(
-                path.join(dirPath, file)
+                path.join(dirPath, file),
             );
             if (dto && dto.type === "bgm") {
                 await fileSystemService.deleteFile(path.join(dirPath, file));
@@ -218,7 +248,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         };
         await fileSystemService.writeJson(
             this.getFilePath(ownerId, projectId, playlist.id),
-            dto
+            dto,
         );
     }
 
@@ -226,7 +256,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         const loc = await this.findFileLocation(id);
         if (loc) {
             const dto = await fileSystemService.readJson<FileSystemAsset>(
-                loc.path
+                loc.path,
             );
             if (dto && dto.type === "playlist") return this.mapToPlaylist(dto);
         }
@@ -242,7 +272,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         for (const file of files) {
             if (file.endsWith(".json")) {
                 const dto = await fileSystemService.readJson<FileSystemAsset>(
-                    path.join(dirPath, file)
+                    path.join(dirPath, file),
                 );
                 if (dto && dto.type === "playlist")
                     playlists.push(this.mapToPlaylist(dto));
@@ -272,7 +302,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
         const files = await fileSystemService.listFiles(dirPath);
         for (const file of files) {
             const dto = await fileSystemService.readJson<FileSystemAsset>(
-                path.join(dirPath, file)
+                path.join(dirPath, file),
             );
             if (dto && dto.type === "playlist") {
                 await fileSystemService.deleteFile(path.join(dirPath, file));
@@ -283,7 +313,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
     // --- Helpers ---
 
     private async findOwnerIdByProjectId(
-        projectId: string
+        projectId: string,
     ): Promise<string | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
@@ -291,7 +321,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
                 "users",
                 user,
                 "projects",
-                `${projectId}.json`
+                `${projectId}.json`,
             );
             if (await fileSystemService.exists(projectPath)) {
                 return user;
@@ -301,7 +331,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
     }
 
     private async findFileLocation(
-        assetId: string
+        assetId: string,
     ): Promise<{ userId: string; projectId: string; path: string } | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
@@ -313,7 +343,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
                     const assetPath = this.getFilePath(
                         user,
                         projectId,
-                        assetId
+                        assetId,
                     );
                     if (await fileSystemService.exists(assetPath)) {
                         return { userId: user, projectId, path: assetPath };
@@ -330,7 +360,7 @@ export class FileSystemAssetRepository implements IAssetRepository {
             dto.url,
             dto.storagePath,
             new Date(dto.createdAt),
-            new Date(dto.updatedAt)
+            new Date(dto.updatedAt),
         );
     }
 
@@ -338,12 +368,12 @@ export class FileSystemAssetRepository implements IAssetRepository {
         const metadata = dto.metadata || {};
         return new BGM(
             dto.id,
-            metadata.title || "Unknown Title",
-            metadata.artist || "Unknown Artist",
+            toStringMetadata(metadata.title, "Unknown Title"),
+            toStringMetadata(metadata.artist, "Unknown Artist"),
             dto.url,
             dto.storagePath,
             new Date(dto.createdAt),
-            new Date(dto.updatedAt)
+            new Date(dto.updatedAt),
         );
     }
 
@@ -351,13 +381,13 @@ export class FileSystemAssetRepository implements IAssetRepository {
         const metadata = dto.metadata || {};
         return new Playlist(
             dto.id,
-            metadata.name || "Unknown Playlist",
-            metadata.description || "",
-            metadata.tracks || [],
+            toStringMetadata(metadata.name, "Unknown Playlist"),
+            toStringMetadata(metadata.description, ""),
+            toPlaylistTracks(dto.tracks ?? metadata.tracks),
             dto.url,
             dto.storagePath,
             new Date(dto.createdAt),
-            new Date(dto.updatedAt)
+            new Date(dto.updatedAt),
         );
     }
 }

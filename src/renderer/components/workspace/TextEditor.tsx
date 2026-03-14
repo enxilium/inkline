@@ -68,6 +68,8 @@ const fontOptions = [
     { label: "IBM Plex Mono", value: "'IBM Plex Mono', monospace" },
 ];
 
+const noop = (): void => {};
+
 export const TextEditor: React.FC<TextEditorProps> = ({
     editor,
     children,
@@ -165,7 +167,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         if (!editor) return;
 
         const removeListener = window.ui.onContextMenuCommand(
-            (payload: { command: string; data: any }) => {
+            (payload: { command: string; data: unknown }) => {
                 if (payload.command !== "add-comment") return;
                 if (!didTriggerContextMenuRef.current) return;
                 didTriggerContextMenuRef.current = false;
@@ -738,15 +740,13 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                             chapterLevelAIComments={chapterLevelAIComments}
                             userChapterComments={userChapterComments}
                             onAddUserChapterComment={
-                                onAddUserChapterComment ?? (() => {})
+                                onAddUserChapterComment ?? noop
                             }
                             onRemoveUserChapterComment={
-                                onRemoveUserChapterComment ?? (() => {})
+                                onRemoveUserChapterComment ?? noop
                             }
-                            onDismissAIEdit={onDismissAIEdit ?? (() => {})}
-                            onAcceptReplacement={
-                                onAcceptReplacement ?? (() => {})
-                            }
+                            onDismissAIEdit={onDismissAIEdit ?? noop}
+                            onAcceptReplacement={onAcceptReplacement ?? noop}
                             activeCommentId={activeCommentId}
                         />
                     ) : null}

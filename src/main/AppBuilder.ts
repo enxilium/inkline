@@ -1,12 +1,9 @@
-import { ipcMain, IpcMainInvokeEvent, BrowserWindow } from "electron";
+import { ipcMain, IpcMainInvokeEvent } from "electron";
 import {
     controllerChannels,
     type ControllerInstanceMap,
 } from "../@interface-adapters/controllers/contracts";
-import {
-    Controller,
-    IpcController,
-} from "../@interface-adapters/controllers/Controller";
+import { IpcController } from "../@interface-adapters/controllers/Controller";
 import { AnalyzeText } from "../@core/application/use-cases/analysis/AnalyzeText";
 import { EditChapters } from "../@core/application/use-cases/analysis/EditChapters";
 import { GeneralChat } from "../@core/application/use-cases/analysis/GeneralChat";
@@ -283,7 +280,9 @@ const invokeController = <
     args: unknown[],
 ): ReturnType<TController["handle"]> => {
     if ("handleWithEvent" in controller) {
-        return (controller as any).handleWithEvent(
+        return (
+            controller as IpcController<unknown[], unknown>
+        ).handleWithEvent(
             event,
             ...(args as Parameters<TController["handle"]>),
         ) as ReturnType<TController["handle"]>;

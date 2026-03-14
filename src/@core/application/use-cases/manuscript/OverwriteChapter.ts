@@ -12,7 +12,7 @@ export class OverwriteChapter {
     constructor(private readonly chapterRepository: IChapterRepository) {}
 
     async execute(request: OverwriteChapterRequest): Promise<void> {
-        const { id, title, content, order, projectId } = request;
+        const { id, title, content, order } = request;
 
         const chapter = await this.chapterRepository.findById(id);
         if (!chapter) {

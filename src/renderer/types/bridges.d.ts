@@ -9,9 +9,9 @@ export type ContextMenuType =
     | "binder_default";
 
 export interface UiApi {
-    showContextMenu: (type: ContextMenuType, data?: any) => void;
+    showContextMenu: (type: ContextMenuType, data?: unknown) => void;
     onContextMenuCommand: (
-        listener: (payload: { command: string; data: any }) => void,
+        listener: (payload: { command: string; data: unknown }) => void,
     ) => () => IpcRenderer;
 }
 

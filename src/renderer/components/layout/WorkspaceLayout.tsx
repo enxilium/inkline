@@ -110,7 +110,7 @@ export const WorkspaceLayout: React.FC = () => {
 
                         if (newName && tabNode.getName() !== newName) {
                             model.doAction(
-                                Actions.renameTab(tabNode.getId(), newName)
+                                Actions.renameTab(tabNode.getId(), newName),
                             );
                         }
                     }
@@ -205,8 +205,8 @@ export const WorkspaceLayout: React.FC = () => {
                     },
                     targetNodeId,
                     location,
-                    -1
-                )
+                    -1,
+                ),
             );
         }
     }, [
@@ -239,7 +239,7 @@ export const WorkspaceLayout: React.FC = () => {
         }
     };
 
-    const onExternalDrag = (e: React.DragEvent) => {
+    const onExternalDrag = () => {
         const draggedDoc = useAppStore.getState().draggedDocument;
         if (draggedDoc) {
             const nodeId = `${draggedDoc.kind}:${draggedDoc.id}`;

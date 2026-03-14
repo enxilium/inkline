@@ -1,5 +1,4 @@
 import { IChatConversationRepository } from "../../../domain/repositories/IChatConversationRepository";
-import { ChatMessage } from "../../../domain/entities/story/chat/ChatMessage";
 
 export interface LoadChatMessagesRequest {
     conversationId: string;
@@ -16,14 +15,14 @@ export interface LoadChatMessagesResponse {
 
 export class LoadChatMessages {
     constructor(
-        private readonly chatConversationRepository: IChatConversationRepository
+        private readonly chatConversationRepository: IChatConversationRepository,
     ) {}
 
     async execute(
-        request: LoadChatMessagesRequest
+        request: LoadChatMessagesRequest,
     ): Promise<LoadChatMessagesResponse> {
         const messages = await this.chatConversationRepository.getMessages(
-            request.conversationId
+            request.conversationId,
         );
 
         return {

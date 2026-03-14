@@ -12,11 +12,14 @@ import * as fs from "fs";
 import * as path from "path";
 import portfinder from "portfinder";
 import { EventEmitter } from "events";
+import { createTerminalLogger } from "./TerminalLogger";
 import type {
     GrammarCheckRequest,
     ILanguageToolService,
     LanguageToolResponse,
 } from "../../@core/domain/services/ILanguageToolService";
+
+const logger = createTerminalLogger("LanguageToolService");
 
 export class LanguageToolService
     extends EventEmitter
@@ -67,7 +70,7 @@ export class LanguageToolService
     isInstalled(): boolean {
         const serverJar = path.join(
             this.getServerPath(),
-            "languagetool-server.jar"
+            "languagetool-server.jar",
         );
         const javaPath = this.getJavaPath();
 
@@ -80,8 +83,8 @@ export class LanguageToolService
     private async initializeServer(): Promise<void> {
         // Only run on Windows for now (like ComfyUI)
         if (process.platform !== "win32") {
-            console.warn(
-                "[LanguageToolService] Local LanguageTool server is only supported on Windows. Using public API."
+            logger.warn(
+                "Local LanguageTool server is only supported on Windows. Using public API.",
             );
             this.apiUrl = LanguageToolService.PUBLIC_API_URL;
             return;
@@ -89,8 +92,8 @@ export class LanguageToolService
 
         // Check if installed
         if (!this.isInstalled()) {
-            console.warn(
-                "[LanguageToolService] LanguageTool or Java not installed. Using public API until setup is completed."
+            logger.warn(
+                "LanguageTool or Java not installed. Using public API until setup is completed.",
             );
             this.apiUrl = LanguageToolService.PUBLIC_API_URL;
             return;
@@ -101,11 +104,11 @@ export class LanguageToolService
             const javaPath = this.getJavaPath();
             const serverJar = path.join(
                 this.basePath,
-                "languagetool-server.jar"
+                "languagetool-server.jar",
             );
             const serverProperties = path.join(
                 this.basePath,
-                "server.properties"
+                "server.properties",
             );
 
             // Find available port in the designated range
@@ -114,16 +117,14 @@ export class LanguageToolService
                 Math.floor(
                     Math.random() *
                         (LanguageToolService.PORT_RANGE_END -
-                            LanguageToolService.PORT_RANGE_START)
+                            LanguageToolService.PORT_RANGE_START),
                 );
             this.port = await portfinder.getPortPromise({
                 port: startPort,
                 stopPort: LanguageToolService.PORT_RANGE_END + 10, // Allow some overflow
             });
 
-            console.log(
-                `[LanguageToolService] Starting LanguageTool on port ${this.port}...`
-            );
+            logger.info(`Starting LanguageTool on port ${this.port}`);
 
             // Build command arguments - use -jar to run the server JAR directly
             const args = ["-jar", serverJar, "--port", this.port.toString()];
@@ -133,9 +134,6 @@ export class LanguageToolService
                 args.push("--config", serverProperties);
             }
 
-            // Allow requests from any origin (for Electron)
-            args.push("--allow-origin", "*");
-
             // Start server process
             this.serverProcess = spawn(javaPath, args, {
                 cwd: this.basePath,
@@ -143,30 +141,34 @@ export class LanguageToolService
                 windowsHide: true,
             });
 
-            // Log output for debugging
-            this.serverProcess.stdout?.on("data", (data) => {
-                console.log(`[LanguageToolService] ${data.toString().trim()}`);
-            });
-
             this.serverProcess.stderr?.on("data", (data) => {
-                console.error(
-                    `[LanguageToolService] Error: ${data.toString().trim()}`
-                );
+                const lines = data
+                    .toString()
+                    .split(/\r?\n/)
+                    .map((line: string) => line.trim())
+                    .filter(Boolean);
+
+                for (const line of lines) {
+                    if (/\b(error|exception|severe)\b/i.test(line)) {
+                        logger.error(line);
+                    } else if (/\bwarn\b/i.test(line)) {
+                        logger.warn(line);
+                    }
+                }
             });
 
             this.serverProcess.on("error", (err) => {
-                console.error(
-                    "[LanguageToolService] Failed to start server:",
-                    err
-                );
+                logger.error("Failed to start server", err);
                 // Fall back to public API
                 this.apiUrl = LanguageToolService.PUBLIC_API_URL;
             });
 
             this.serverProcess.on("exit", (code) => {
-                console.log(
-                    `[LanguageToolService] Server exited with code ${code}`
-                );
+                if (code === 0 || code === null) {
+                    logger.info(`Server exited with code ${code}`);
+                } else {
+                    logger.warn(`Server exited with code ${code}`);
+                }
                 this.serverProcess = null;
             });
 
@@ -174,12 +176,9 @@ export class LanguageToolService
             await this.waitForServer(this.port);
 
             this.apiUrl = `http://127.0.0.1:${this.port}/v2/check`;
-            console.log(`[LanguageToolService] Server ready at ${this.apiUrl}`);
+            logger.success(`Server ready at ${this.apiUrl}`);
         } catch (error) {
-            console.error(
-                "[LanguageToolService] Initialization failed:",
-                error
-            );
+            logger.error("Initialization failed", error);
             // Fall back to public API
             this.apiUrl = LanguageToolService.PUBLIC_API_URL;
         }
@@ -192,7 +191,7 @@ export class LanguageToolService
         for (let i = 0; i < retries; i++) {
             try {
                 const response = await fetch(
-                    `http://127.0.0.1:${port}/v2/languages`
+                    `http://127.0.0.1:${port}/v2/languages`,
                 );
                 if (response.ok) {
                     return;
@@ -224,7 +223,7 @@ export class LanguageToolService
      * Makes HTTP request from main process to avoid CORS issues.
      */
     async checkGrammar(
-        request: GrammarCheckRequest
+        request: GrammarCheckRequest,
     ): Promise<LanguageToolResponse> {
         const url = this.getApiUrl();
 
@@ -245,20 +244,18 @@ export class LanguageToolService
 
             if (!response.ok) {
                 throw new Error(
-                    `LanguageTool API error: ${response.status} ${response.statusText}`
+                    `LanguageTool API error: ${response.status} ${response.statusText}`,
                 );
             }
 
             const data = (await response.json()) as LanguageToolResponse;
             return data;
         } catch (error) {
-            console.error("[LanguageToolService] Grammar check failed:", error);
+            logger.error("Grammar check failed", error);
 
             // If local server failed, try public API as fallback
             if (this.isUsingLocalServer()) {
-                console.log(
-                    "[LanguageToolService] Falling back to public API..."
-                );
+                logger.warn("Falling back to public API");
                 try {
                     const body = new URLSearchParams({
                         text: request.text,
@@ -275,21 +272,18 @@ export class LanguageToolService
                                 Accept: "application/json",
                             },
                             body: body.toString(),
-                        }
+                        },
                     );
 
                     if (!response.ok) {
                         throw new Error(
-                            `LanguageTool API error: ${response.status}`
+                            `LanguageTool API error: ${response.status}`,
                         );
                     }
 
                     return (await response.json()) as LanguageToolResponse;
                 } catch (fallbackError) {
-                    console.error(
-                        "[LanguageToolService] Fallback also failed:",
-                        fallbackError
-                    );
+                    logger.error("Fallback also failed", fallbackError);
                 }
             }
 
@@ -326,7 +320,7 @@ export class LanguageToolService
      */
     async shutdown(): Promise<void> {
         if (this.serverProcess) {
-            console.log("[LanguageToolService] Shutting down server...");
+            logger.info("Shutting down server");
             this.serverProcess.kill("SIGTERM");
 
             // Wait for process to exit
@@ -345,7 +339,7 @@ export class LanguageToolService
             });
 
             this.serverProcess = null;
-            console.log("[LanguageToolService] Server shutdown complete.");
+            logger.success("Server shutdown complete");
         }
     }
 

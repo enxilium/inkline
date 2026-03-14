@@ -8,11 +8,6 @@ import { IProjectRepository } from "../../../domain/repositories/IProjectReposit
 import { IUserRepository } from "../../../domain/repositories/IUserRepository";
 import { IScrapNoteRepository } from "../../../domain/repositories/IScrapNoteRepository";
 import { IStorageService } from "../../../domain/services/IStorageService";
-import { DeleteChapter } from "../manuscript/DeleteChapter";
-import { DeleteScrapNote } from "../manuscript/DeleteScrapNote";
-import { DeleteCharacter } from "../world/DeleteCharacter";
-import { DeleteLocation } from "../world/DeleteLocation";
-import { DeleteOrganization } from "../world/DeleteOrganization";
 
 export interface DeleteProjectRequest {
     projectId: string;
@@ -30,7 +25,7 @@ export class DeleteProject {
         private readonly assetRepository: IAssetRepository,
         private readonly storageService: IStorageService,
         private readonly chatConversationRepository: IChatConversationRepository,
-        private readonly userRepository: IUserRepository
+        private readonly userRepository: IUserRepository,
     ) {}
 
     async execute(request: DeleteProjectRequest): Promise<void> {
@@ -101,10 +96,10 @@ export class DeleteProject {
         // Delete files from storage
         await Promise.all([
             ...images.map((image) =>
-                this.storageService.deleteFile(image.storagePath || image.url)
+                this.storageService.deleteFile(image.storagePath || image.url),
             ),
             ...bgms.map((track) =>
-                this.storageService.deleteFile(track.storagePath || track.url)
+                this.storageService.deleteFile(track.storagePath || track.url),
             ),
             ...playlists.map((playlist) => {
                 const target = playlist.storagePath || playlist.url;

@@ -1,5 +1,5 @@
 import * as React from "react";
-import { PlusIcon, ChevronDownIcon } from "./Icons";
+import { PlusIcon } from "./Icons";
 
 export interface ActionDropdownOption {
     label: string;

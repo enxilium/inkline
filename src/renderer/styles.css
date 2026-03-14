@@ -3238,25 +3238,57 @@ input.toolbar-color:focus {
 }
 
 /* ============================================================
- * GENERATION PROGRESS TOAST
+ * APP TOASTS
  * ============================================================ */
 
-.generation-progress-toast {
+.app-toast-container {
     position: fixed;
     bottom: 2rem;
     right: 2rem;
+    z-index: var(--z-toast);
+    display: flex;
+    flex-direction: column;
+    gap: 0.7rem;
+}
+
+.app-toast {
     background: var(--surface-strong);
     border: 1px solid var(--stroke);
     padding: 1rem;
     border-radius: var(--radius);
     box-shadow: var(--shadow);
-    z-index: var(--z-toast);
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    min-width: 240px;
+    min-width: 260px;
+    max-width: min(360px, calc(100vw - 2rem));
     backdrop-filter: blur(10px);
     animation: slideIn var(--duration-slow) var(--ease-out);
+}
+
+.app-toast--error {
+    border-color: color-mix(in srgb, #e74c3c 55%, var(--stroke) 45%);
+}
+
+.app-toast--success {
+    border-color: color-mix(in srgb, #2ef6ad 55%, var(--stroke) 45%);
+}
+
+.app-toast--info {
+    border-color: color-mix(in srgb, #4aa3ff 45%, var(--stroke) 55%);
+}
+
+.app-toast-title {
+    font-size: var(--text-sm2);
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: 0.01em;
+}
+
+.app-toast-description {
+    font-size: var(--text-sm);
+    color: var(--text-subtle);
+    line-height: 1.35;
 }
 
 @keyframes slideIn {
@@ -3270,16 +3302,15 @@ input.toolbar-color:focus {
     }
 }
 
-.generation-progress-bar {
+.app-toast-progress-bar {
     height: 6px;
     background: var(--overlay-10);
     border-radius: 3px;
     overflow: hidden;
 }
 
-.generation-progress-fill {
+.app-toast-progress-fill {
     height: 100%;
-    background: var(--accent);
     transition: width var(--duration-slow) var(--ease-default);
 }
 

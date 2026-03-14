@@ -85,11 +85,6 @@ export class SupabaseDeletionLogRepository {
         }
 
         const removedCount = data?.length ?? 0;
-        if (removedCount > 0) {
-            console.log(
-                `[SupabaseDeletionLogRepository] Cleaned up ${removedCount} entries older than ${olderThanDays} days`
-            );
-        }
 
         return removedCount;
     }

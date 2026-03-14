@@ -363,12 +363,13 @@ function convertChildren(
                 const color = $el.css("color");
                 const fontFamily = $el.css("font-family");
                 if (color || fontFamily) {
+                    const attrs: { color?: string; fontFamily?: string } = {};
+                    if (color) attrs.color = color;
+                    if (fontFamily) attrs.fontFamily = fontFamily;
                     const mark: TiptapMark = {
                         type: "textStyle",
-                        attrs: {},
+                        attrs,
                     };
-                    if (color) mark.attrs!.color = color;
-                    if (fontFamily) mark.attrs!.fontFamily = fontFamily;
                     applyMarkToTextNodes(children, mark);
                 }
                 nodes.push(...children);

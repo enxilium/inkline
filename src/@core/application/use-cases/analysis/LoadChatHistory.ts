@@ -1,5 +1,4 @@
 import { IChatConversationRepository } from "../../../domain/repositories/IChatConversationRepository";
-import { ChatConversation } from "../../../domain/entities/story/chat/ChatConversation";
 
 export interface LoadChatHistoryRequest {
     projectId: string;
@@ -15,15 +14,15 @@ export interface LoadChatHistoryResponse {
 
 export class LoadChatHistory {
     constructor(
-        private readonly chatConversationRepository: IChatConversationRepository
+        private readonly chatConversationRepository: IChatConversationRepository,
     ) {}
 
     async execute(
-        request: LoadChatHistoryRequest
+        request: LoadChatHistoryRequest,
     ): Promise<LoadChatHistoryResponse> {
         const conversations =
             await this.chatConversationRepository.getConversationsByProjectId(
-                request.projectId
+                request.projectId,
             );
 
         return {

@@ -5,6 +5,7 @@ import { Label } from "../components/ui/Label";
 import { ConfirmationDialog } from "../components/dialogs/ConfirmationDialog";
 import { showDownloadToast } from "../components/ui/DownloadToast";
 import { useAppStore } from "../state/appStore";
+import { normalizeUserFacingError } from "../utils/userFacingError";
 import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import sparkleIcon from "../../../assets/icons/sparkle.png";
 import inkyIcon from "../../../assets/icons/inky.png";
@@ -24,15 +25,6 @@ interface FeatureDownloadProgress {
 
 type ThemeMode = "dark" | "light";
 
-/** Helper to format bytes into a human-readable string. */
-const formatBytes = (bytes: number): string => {
-    if (bytes === 0) return "0 B";
-    const k = 1024;
-    const sizes = ["B", "KB", "MB", "GB"];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
-};
-
 export const SettingsView: React.FC = () => {
     const user = useAppStore((state) => state.user);
     const currentUserId = useAppStore((state) => state.currentUserId);
@@ -43,9 +35,7 @@ export const SettingsView: React.FC = () => {
     );
     const deleteAccount = useAppStore((state) => state.deleteAccount);
     const logout = useAppStore((state) => state.logout);
-    const closeSettings = useAppStore((state) => state.closeSettings);
     const returnToProjects = useAppStore((state) => state.returnToProjects);
-    const previousStage = useAppStore((state) => state.previousStage);
 
     const [activeSection, setActiveSection] =
         useState<SettingsSection>("account");
@@ -160,7 +150,7 @@ export const SettingsView: React.FC = () => {
                     });
                 }
             })
-            .catch(() => {});
+            .catch((): void => {});
     }, []);
 
     // Listen for download progress events (from settings toggles OR startup prompt)
@@ -217,7 +207,7 @@ export const SettingsView: React.FC = () => {
                             setFeatureConfig(c);
                             setTogglingFeature(null);
                         })
-                        .catch(() => {});
+                        .catch((): void => {});
                 }
             },
         );
@@ -285,7 +275,7 @@ export const SettingsView: React.FC = () => {
                 window.featureApi
                     .getConfig()
                     .then((c) => setFeatureConfig(c))
-                    .catch(() => {});
+                    .catch((): void => {});
             }
         },
         [featureConfig, togglingFeature],
@@ -425,7 +415,13 @@ export const SettingsView: React.FC = () => {
             setGeminiApiKey("");
             setModelStatus("Saved.");
         } catch (error) {
-            setModelStatus((error as Error)?.message ?? "Failed to save.");
+            setModelStatus(
+                normalizeUserFacingError(
+                    error,
+                    "Failed to save.",
+                    "settings-model",
+                ),
+            );
         }
     };
 
@@ -443,7 +439,11 @@ export const SettingsView: React.FC = () => {
             );
         } catch (error) {
             setAccountStatus(
-                (error as Error)?.message ?? "Failed to update email.",
+                normalizeUserFacingError(
+                    error,
+                    "Failed to update email.",
+                    "settings-account",
+                ),
             );
         } finally {
             setIsSubmittingAccount(false);
@@ -463,7 +463,11 @@ export const SettingsView: React.FC = () => {
             setAccountStatus("Password updated.");
         } catch (error) {
             setAccountStatus(
-                (error as Error)?.message ?? "Failed to update password.",
+                normalizeUserFacingError(
+                    error,
+                    "Failed to update password.",
+                    "settings-account",
+                ),
             );
         } finally {
             setIsSubmittingAccount(false);
@@ -477,7 +481,11 @@ export const SettingsView: React.FC = () => {
             await deleteAccount();
         } catch (error) {
             setAccountStatus(
-                (error as Error)?.message ?? "Failed to delete account.",
+                normalizeUserFacingError(
+                    error,
+                    "Failed to delete account.",
+                    "settings-account",
+                ),
             );
         } finally {
             setIsDeletingAccount(false);

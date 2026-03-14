@@ -43,11 +43,11 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
     private static SESSION_FILENAME = "user-session.json";
     private static LOCAL_PREFS_FILENAME = "local-preferences.json";
 
-    private operationQueue: Promise<any> = Promise.resolve();
+    private operationQueue: Promise<unknown> = Promise.resolve();
 
     private enqueue<T>(operation: () => Promise<T>): Promise<T> {
         const nextPromise = this.operationQueue.then(operation);
-        this.operationQueue = nextPromise.catch(() => {});
+        this.operationQueue = nextPromise.catch((): void => {});
         return nextPromise;
     }
 

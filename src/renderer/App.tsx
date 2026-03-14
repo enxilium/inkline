@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 
 import { Titlebar } from "./components/layout/Titlebar";
 import { GenerationProgressToast } from "./components/ui/GenerationProgressToast";
-import { DownloadToast } from "./components/ui/DownloadToast";
 import { FeaturePromptDialog } from "./components/ui/FeaturePromptDialog";
 import { useAppStore } from "./state/appStore";
 import type { ProjectSummary } from "./types";
@@ -60,7 +59,6 @@ const App: React.FC = () => {
         deleteProject,
         renameProject,
         openProject,
-        returnToProjects,
         importAsset,
         importProject,
         isImporting,
@@ -474,7 +472,6 @@ const App: React.FC = () => {
 
             <div className="app-shell">{renderStage()}</div>
             <GenerationProgressToast />
-            <DownloadToast />
             {/* Show once per launch after user has signed in */}
             {(stage === "projectSelect" ||
                 stage === "workspace" ||

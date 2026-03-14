@@ -18,7 +18,7 @@ export class DeleteLocation {
         private readonly characterRepository: ICharacterRepository,
         private readonly organizationRepository: IOrganizationRepository,
         private readonly assetRepository: IAssetRepository,
-        private readonly storageService: IStorageService
+        private readonly storageService: IStorageService,
     ) {}
 
     async execute(request: DeleteLocationRequest): Promise<void> {
@@ -42,7 +42,7 @@ export class DeleteLocation {
         // 1. Detach from Project (Parent)
         if (project.locationIds.includes(locationId)) {
             project.locationIds = project.locationIds.filter(
-                (id) => id !== locationId
+                (id) => id !== locationId,
             );
             project.updatedAt = new Date();
             await this.projectRepository.update(project);
@@ -56,7 +56,7 @@ export class DeleteLocation {
             .filter(
                 (character) =>
                     character.currentLocationId === locationId ||
-                    character.backgroundLocationId === locationId
+                    character.backgroundLocationId === locationId,
             )
             .map((character) => {
                 if (character.currentLocationId === locationId) {
@@ -75,7 +75,7 @@ export class DeleteLocation {
             await this.organizationRepository.findByLocationId(locationId);
         const organizationUpdates = organizations.map((organization) => {
             organization.locationIds = organization.locationIds.filter(
-                (id) => id !== locationId
+                (id) => id !== locationId,
             );
             organization.updatedAt = new Date();
             return this.organizationRepository.update(organization);
@@ -83,27 +83,21 @@ export class DeleteLocation {
         await Promise.all(organizationUpdates);
 
         // 4. Delete Assets (Children)
-        await this.deleteLocationAssets(projectId, location);
+        await this.deleteLocationAssets(location);
 
         // 5. Delete Location (Self)
         await this.locationRepository.delete(locationId);
     }
 
-    private async deleteLocationAssets(
-        projectId: string,
-        location: Location
-    ): Promise<void> {
+    private async deleteLocationAssets(location: Location): Promise<void> {
         await Promise.all([
-            this.deleteGalleryImages(location.galleryImageIds, projectId),
-            this.deleteBgmAsset(location.bgmId, projectId),
-            this.deletePlaylistAsset(location.playlistId, projectId),
+            this.deleteGalleryImages(location.galleryImageIds),
+            this.deleteBgmAsset(location.bgmId),
+            this.deletePlaylistAsset(location.playlistId),
         ]);
     }
 
-    private async deleteGalleryImages(
-        imageIds: string[],
-        projectId: string
-    ): Promise<void> {
+    private async deleteGalleryImages(imageIds: string[]): Promise<void> {
         const deletions = imageIds.map(async (imageId) => {
             const image = await this.assetRepository.findImageById(imageId);
             if (!image) {
@@ -112,17 +106,14 @@ export class DeleteLocation {
 
             await this.assetRepository.deleteImage(imageId);
             await this.storageService.deleteFile(
-                image.storagePath || image.url
+                image.storagePath || image.url,
             );
         });
 
         await Promise.all(deletions);
     }
 
-    private async deleteBgmAsset(
-        bgmId: string | null,
-        projectId: string
-    ): Promise<void> {
+    private async deleteBgmAsset(bgmId: string | null): Promise<void> {
         if (!bgmId) {
             return;
         }
@@ -138,7 +129,6 @@ export class DeleteLocation {
 
     private async deletePlaylistAsset(
         playlistId: string | null,
-        projectId: string
     ): Promise<void> {
         if (!playlistId) {
             return;

@@ -1,69 +1,17 @@
-import React, { useEffect, useState, useCallback } from "react";
-import CheckIcon from "@mui/icons-material/Check";
-import CloseIcon from "@mui/icons-material/Close";
+import React from "react";
+import { showToast } from "./GenerationProgressToast";
 
-interface DownloadToastItem {
-    id: number;
-    message: string;
-    variant: "success" | "error";
-}
-
-let nextId = 0;
-const listeners: Set<(item: DownloadToastItem) => void> = new Set();
-
-/**
- * Push a toast notification from anywhere in the renderer.
- * The `DownloadToast` component must be mounted to display it.
- */
 export const showDownloadToast = (
     message: string,
     variant: "success" | "error" = "success",
 ) => {
-    const item: DownloadToastItem = { id: nextId++, message, variant };
-    for (const listener of listeners) {
-        listener(item);
-    }
+    showToast({
+        variant,
+        title: variant === "success" ? "Download complete" : "Download failed",
+        description: message,
+        durationMs: 4000,
+    });
 };
 
-export const DownloadToast: React.FC = () => {
-    const [toasts, setToasts] = useState<DownloadToastItem[]>([]);
-
-    const addToast = useCallback((item: DownloadToastItem) => {
-        setToasts((prev) => [...prev, item]);
-        // Auto-dismiss after 4 seconds
-        setTimeout(() => {
-            setToasts((prev) => prev.filter((t) => t.id !== item.id));
-        }, 4000);
-    }, []);
-
-    useEffect(() => {
-        listeners.add(addToast);
-        return () => {
-            listeners.delete(addToast);
-        };
-    }, [addToast]);
-
-    if (toasts.length === 0) return null;
-
-    return (
-        <div className="download-toast-container">
-            {toasts.map((toast) => (
-                <div
-                    key={toast.id}
-                    className={`download-toast download-toast--${toast.variant}`}
-                >
-                    <span className="download-toast-icon">
-                        {toast.variant === "success" ? (
-                            <CheckIcon style={{ fontSize: 14 }} />
-                        ) : (
-                            <CloseIcon style={{ fontSize: 14 }} />
-                        )}
-                    </span>
-                    <span className="download-toast-message">
-                        {toast.message}
-                    </span>
-                </div>
-            ))}
-        </div>
-    );
-};
+// Backward-compatible no-op component while callers migrate to the generic toast surface.
+export const DownloadToast: React.FC = () => null;

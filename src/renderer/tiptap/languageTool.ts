@@ -193,7 +193,7 @@ const CONTEXT_LENGTH = 20;
 const getContextSignature = (
     text: string,
     offset: number,
-    length: number
+    length: number,
 ): { before: string; after: string } => {
     const beforeStart = Math.max(0, offset - CONTEXT_LENGTH);
     const afterEnd = Math.min(text.length, offset + length + CONTEXT_LENGTH);
@@ -205,12 +205,12 @@ const getContextSignature = (
 
 // Plugin key - each plugin instance is uniquely identified
 export const languageToolPluginKey = new PluginKey<LanguageToolPluginState>(
-    "languagetoolPlugin"
+    "languagetoolPlugin",
 );
 
 // Helper to get plugin state from editor
 export const getLanguageToolState = (
-    editor: Editor
+    editor: Editor,
 ): LanguageToolPluginState | undefined => {
     return languageToolPluginKey.getState(editor.state);
 };
@@ -230,7 +230,7 @@ const gimmeDecoration = (from: number, to: number, match: Match) => {
             // Store all data in DOM attribute - survives hot reload
             "data-match": JSON.stringify({ match, matchId }),
         },
-        { matchId } // Store matchId in spec for filtering
+        { matchId }, // Store matchId in spec for filtering
     );
 };
 
@@ -244,8 +244,8 @@ const createProofreader = (
     updateStorage: (
         match?: Match,
         matchRange?: { from: number; to: number },
-        matchId?: string
-    ) => void
+        matchId?: string,
+    ) => void,
 ) => {
     let textNodesWithPosition: TextNodesWithPosition[] = [];
     let delegatedListenerAttached = false;
@@ -253,27 +253,17 @@ const createProofreader = (
     const setupDelegatedListener = () => {
         if (delegatedListenerAttached) return;
         delegatedListenerAttached = true;
-        console.log(
-            "[LanguageTool] Setting up delegated listener on",
-            view.dom
-        );
 
         const handleEvent = (e: Event) => {
             const target = e.target as HTMLElement;
-            console.log("[LanguageTool] handleEvent triggered", e.type, target);
 
             // Find the closest .lt element (decoration)
             const ltElement = target.closest(".lt") as HTMLElement | null;
             if (!ltElement) {
-                console.log("[LanguageTool] No .lt element found");
                 return;
             }
 
             const matchString = ltElement.getAttribute("data-match");
-            console.log(
-                "[LanguageTool] matchString:",
-                matchString?.substring(0, 100)
-            );
             if (!matchString) return;
 
             try {
@@ -281,28 +271,15 @@ const createProofreader = (
                     match: Match;
                     matchId: string;
                 };
-                console.log("[LanguageTool] Parsed match, matchId:", matchId);
 
                 // Get current positions from actual decoration
                 const state = getPluginState();
-                console.log(
-                    "[LanguageTool] Plugin state:",
-                    state ? "found" : "null"
-                );
                 if (!state) return;
 
                 // Find decoration to get current from/to positions
                 const allDecorations = state.decorationSet.find();
-                console.log(
-                    "[LanguageTool] All decorations count:",
-                    allDecorations.length
-                );
                 const decoration = allDecorations.find(
-                    (d) => d.spec?.matchId === matchId
-                );
-                console.log(
-                    "[LanguageTool] Found decoration:",
-                    decoration ? "yes" : "no"
+                    (d) => d.spec?.matchId === matchId,
                 );
 
                 // Get positions from decoration if found, otherwise compute from DOM
@@ -315,25 +292,17 @@ const createProofreader = (
                 } else {
                     // Fallback: compute position from DOM element
                     const pos = view.posAtDOM(ltElement, 0);
-                    console.log("[LanguageTool] Fallback pos:", pos);
                     if (pos === undefined || pos === null) return;
                     from = pos;
                     to = pos + (ltElement.textContent?.length ?? 0);
                 }
 
-                console.log(
-                    "[LanguageTool] Calling updateStorage with from:",
-                    from,
-                    "to:",
-                    to
-                );
                 // Update storage to trigger React re-render
                 updateStorage(match, { from, to }, matchId);
-                console.log("[LanguageTool] updateStorage called successfully");
             } catch (error) {
                 console.error(
                     "[LanguageTool] Error handling decoration event:",
-                    error
+                    error,
                 );
             }
         };
@@ -351,7 +320,7 @@ const createProofreader = (
     const getMatchAndSetDecorations = async (
         doc: PMNode,
         text: string,
-        originalFrom: number
+        originalFrom: number,
     ) => {
         const state = getPluginState();
         if (!state) return;
@@ -393,12 +362,12 @@ const createProofreader = (
                     // Check if this suggestion was previously ignored
                     const content = text.substring(
                         match.offset,
-                        match.offset + match.length
+                        match.offset + match.length,
                     );
                     const context = getContextSignature(
                         text,
                         match.offset,
-                        match.length
+                        match.length,
                     );
 
                     // Look for a matching ignored suggestion
@@ -414,12 +383,12 @@ const createProofreader = (
                     const isIgnored = storedIgnores.some(
                         (stored) =>
                             stored.contextBefore === context.before &&
-                            stored.contextAfter === context.after
+                            stored.contextAfter === context.after,
                     );
 
                     if (!isIgnored) {
                         decorations.push(
-                            gimmeDecoration(docFrom, docTo, match)
+                            gimmeDecoration(docFrom, docTo, match),
                         );
                     }
                 } else {
@@ -432,7 +401,7 @@ const createProofreader = (
 
             const decorationsToRemove = currentState.decorationSet.find(
                 originalFrom,
-                originalFrom + text.length
+                originalFrom + text.length,
             );
 
             let newDecorationSet =
@@ -442,7 +411,7 @@ const createProofreader = (
             // Dispatch transaction to update decorations
             const tr = view.state.tr.setMeta(
                 LanguageToolHelpingWords.LanguageToolTransactionName,
-                newDecorationSet
+                newDecorationSet,
             );
             view.dispatch(tr);
 
@@ -454,7 +423,7 @@ const createProofreader = (
 
     const debouncedGetMatchAndSetDecorations = debounce(
         getMatchAndSetDecorations,
-        300
+        300,
     );
 
     let lastOriginalFrom = 0;
@@ -545,20 +514,20 @@ const createProofreader = (
         // Set loading state
         const loadingTr = view.state.tr.setMeta(
             LanguageToolHelpingWords.LoadingTransactionName,
-            true
+            true,
         );
         view.dispatch(loadingTr);
 
         const requests = chunksOf500Words
             .filter((c) => c.text.trim())
             .map(({ text, from }) =>
-                getMatchAndSetDecorations(doc, text, from)
+                getMatchAndSetDecorations(doc, text, from),
             );
 
         Promise.all(requests).then(() => {
             const doneTr = view.state.tr.setMeta(
                 LanguageToolHelpingWords.LoadingTransactionName,
-                false
+                false,
             );
             view.dispatch(doneTr);
 
@@ -569,7 +538,7 @@ const createProofreader = (
 
     const debouncedProofreadAndDecorate = debounce(
         proofreadAndDecorateWholeDoc,
-        500
+        500,
     );
 
     return {
@@ -609,7 +578,7 @@ export const LanguageTool = Extension.create<
                 () =>
                 ({ editor, tr }) => {
                     const pluginState = languageToolPluginKey.getState(
-                        editor.state
+                        editor.state,
                     );
                     if (pluginState && editor.view) {
                         const proofreader = createProofreader(
@@ -620,7 +589,7 @@ export const LanguageTool = Extension.create<
                                 this.storage.match = match;
                                 this.storage.matchRange = matchRange;
                                 this.storage.currentMatchId = matchId;
-                            }
+                            },
                         );
                         proofreader.proofreadAndDecorateWholeDoc(tr.doc);
                     }
@@ -630,17 +599,9 @@ export const LanguageTool = Extension.create<
             ignoreLanguageToolSuggestion:
                 () =>
                 ({ editor }) => {
-                    console.log(
-                        "[LanguageTool] ignoreLanguageToolSuggestion called"
-                    );
-                    console.log(
-                        "[LanguageTool] documentId:",
-                        this.options.documentId
-                    );
-
                     if (this.options.documentId === undefined) {
                         console.error(
-                            "[LanguageTool] documentId is undefined! Cannot ignore."
+                            "[LanguageTool] documentId is undefined! Cannot ignore.",
                         );
                         // Don't throw - just return false so it doesn't crash
                         return false;
@@ -648,23 +609,13 @@ export const LanguageTool = Extension.create<
 
                     const { doc } = editor.state;
                     const pluginState = languageToolPluginKey.getState(
-                        editor.state
-                    );
-                    console.log(
-                        "[LanguageTool] Plugin state exists:",
-                        !!pluginState
+                        editor.state,
                     );
 
                     // Get the match and range from storage
                     const currentMatch = this.storage.match;
                     const currentMatchRange = this.storage.matchRange;
                     const currentMatchId = this.storage.currentMatchId;
-
-                    console.log("[LanguageTool] Storage state:", {
-                        hasMatch: !!currentMatch,
-                        matchRange: currentMatchRange,
-                        matchId: currentMatchId,
-                    });
 
                     if (!currentMatch || !currentMatchRange) {
                         console.warn("[LanguageTool] No match found to ignore");
@@ -677,21 +628,6 @@ export const LanguageTool = Extension.create<
                     if (pluginState) {
                         // Get all decorations and filter out the one we want to ignore
                         const allDecorations = pluginState.decorationSet.find();
-                        console.log(
-                            "[LanguageTool] All decorations count:",
-                            allDecorations.length
-                        );
-                        console.log(
-                            "[LanguageTool] Looking for matchId:",
-                            currentMatchId
-                        );
-
-                        // Log all decoration matchIds for debugging
-                        allDecorations.forEach((d, i) => {
-                            console.log(
-                                `[LanguageTool] Decoration ${i}: matchId=${d.spec?.matchId}, from=${d.from}, to=${d.to}`
-                            );
-                        });
 
                         const filteredDecorations = allDecorations.filter(
                             (decoration) => {
@@ -703,9 +639,6 @@ export const LanguageTool = Extension.create<
                                     const keep =
                                         decoration.spec.matchId !==
                                         currentMatchId;
-                                    console.log(
-                                        `[LanguageTool] Comparing ${decoration.spec.matchId} !== ${currentMatchId}: keep=${keep}`
-                                    );
                                     return keep;
                                 }
                                 // Fallback to position matching
@@ -713,36 +646,23 @@ export const LanguageTool = Extension.create<
                                     decoration.from === from &&
                                     decoration.to === to
                                 );
-                                console.log(
-                                    `[LanguageTool] Position fallback: from=${decoration.from}/${from}, to=${decoration.to}/${to}: keep=${keep}`
-                                );
                                 return keep;
-                            }
-                        );
-
-                        console.log(
-                            "[LanguageTool] Filtered decorations count:",
-                            filteredDecorations.length
+                            },
                         );
 
                         // Create a new decoration set without the ignored decoration
                         const newDecorationSet = DecorationSet.create(
                             doc,
-                            filteredDecorations
-                        );
-
-                        console.log(
-                            "[LanguageTool] Dispatching transaction with new decoration set"
+                            filteredDecorations,
                         );
                         const tr = editor.state.tr.setMeta(
                             LanguageToolHelpingWords.LanguageToolTransactionName,
-                            newDecorationSet
+                            newDecorationSet,
                         );
                         editor.view.dispatch(tr);
-                        console.log("[LanguageTool] Transaction dispatched");
                     } else {
                         console.warn(
-                            "[LanguageTool] No plugin state, cannot remove decoration"
+                            "[LanguageTool] No plugin state, cannot remove decoration",
                         );
                     }
 
@@ -756,7 +676,7 @@ export const LanguageTool = Extension.create<
                     const context = getContextSignature(
                         fullText,
                         textOffset,
-                        to - from
+                        to - from,
                     );
 
                     // Store the ignore with context for modification detection
@@ -784,7 +704,7 @@ export const LanguageTool = Extension.create<
                     this.storage.currentMatchId = undefined;
 
                     const pluginState = languageToolPluginKey.getState(
-                        editor.state
+                        editor.state,
                     );
                     if (pluginState) {
                         pluginState.match = undefined;
@@ -794,11 +714,11 @@ export const LanguageTool = Extension.create<
                     const tr = editor.state.tr
                         .setMeta(
                             LanguageToolHelpingWords.MatchRangeUpdatedTransactionName,
-                            true
+                            true,
                         )
                         .setMeta(
                             LanguageToolHelpingWords.MatchUpdatedTransactionName,
-                            true
+                            true,
                         );
                     editor.view.dispatch(tr);
 
@@ -811,7 +731,7 @@ export const LanguageTool = Extension.create<
                     this.storage.active = !this.storage.active;
 
                     const pluginState = languageToolPluginKey.getState(
-                        editor.state
+                        editor.state,
                     );
                     if (pluginState) {
                         pluginState.active = this.storage.active;
@@ -853,7 +773,7 @@ export const LanguageTool = Extension.create<
                         tr,
                         pluginState,
                         oldState,
-                        newState
+                        newState,
                     ): LanguageToolPluginState => {
                         // Handle deactivation
                         if (!extensionStorage.active) {
@@ -866,7 +786,7 @@ export const LanguageTool = Extension.create<
 
                         // Handle loading state
                         const loading = tr.getMeta(
-                            LanguageToolHelpingWords.LoadingTransactionName
+                            LanguageToolHelpingWords.LoadingTransactionName,
                         );
                         if (loading !== undefined) {
                             extensionStorage.loading = loading;
@@ -875,10 +795,10 @@ export const LanguageTool = Extension.create<
 
                         // Handle match updates - sync from plugin state to storage
                         const matchUpdated = tr.getMeta(
-                            LanguageToolHelpingWords.MatchUpdatedTransactionName
+                            LanguageToolHelpingWords.MatchUpdatedTransactionName,
                         );
                         const matchRangeUpdated = tr.getMeta(
-                            LanguageToolHelpingWords.MatchRangeUpdatedTransactionName
+                            LanguageToolHelpingWords.MatchRangeUpdatedTransactionName,
                         );
 
                         if (matchUpdated) {
@@ -891,7 +811,7 @@ export const LanguageTool = Extension.create<
 
                         // Handle new decorations from API response
                         const newDecorations = tr.getMeta(
-                            LanguageToolHelpingWords.LanguageToolTransactionName
+                            LanguageToolHelpingWords.LanguageToolTransactionName,
                         );
                         if (newDecorations instanceof DecorationSet) {
                             return {
@@ -906,7 +826,7 @@ export const LanguageTool = Extension.create<
                                 ...pluginState,
                                 decorationSet: pluginState.decorationSet.map(
                                     tr.mapping,
-                                    newState.doc
+                                    newState.doc,
                                 ),
                             };
                         }
@@ -939,10 +859,10 @@ export const LanguageTool = Extension.create<
                                     extensionStorage.match = match;
                                     extensionStorage.matchRange = matchRange;
                                     extensionStorage.currentMatchId = matchId;
-                                }
+                                },
                             );
                             proofreader.debouncedProofreadAndDecorate(
-                                view.state.doc
+                                view.state.doc,
                             );
                         }, 100);
                         return false;
@@ -961,7 +881,7 @@ export const LanguageTool = Extension.create<
                             extensionStorage.matchRange = matchRange;
                             extensionStorage.currentMatchId = matchId;
                             // No need to dispatch transaction - React polls storage
-                        }
+                        },
                     );
 
                     // Set up event listeners immediately
@@ -972,9 +892,9 @@ export const LanguageTool = Extension.create<
                         setTimeout(
                             () =>
                                 proofreader.proofreadAndDecorateWholeDoc(
-                                    view.state.doc
+                                    view.state.doc,
                                 ),
-                            100
+                            100,
                         );
                     }
 
@@ -993,7 +913,7 @@ export const LanguageTool = Extension.create<
 
                                 if (!pluginState?.proofReadInitially) {
                                     proofreader.debouncedProofreadAndDecorate(
-                                        view.state.doc
+                                        view.state.doc,
                                     );
                                 } else {
                                     // Only check changed nodes
@@ -1022,7 +942,7 @@ export const LanguageTool = Extension.create<
                                         proofreader.onNodeChanged(
                                             changedNodeWithPos.node,
                                             changedNodeWithPos.node.textContent,
-                                            changedNodeWithPos.pos + 1
+                                            changedNodeWithPos.pos + 1,
                                         );
                                     }
                                 }
