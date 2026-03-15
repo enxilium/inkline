@@ -56,7 +56,9 @@ function get7zaPath(): string {
         );
     }
 
-    throw new Error(`Unsupported platform for archive extraction: ${process.platform}`);
+    throw new Error(
+        `Unsupported platform for archive extraction: ${process.platform}`,
+    );
 }
 
 function getJavaExecutableName(): string {
@@ -91,7 +93,9 @@ function getLanguageToolJavaArchive(): JavaArchiveInfo {
         };
     }
 
-    throw new Error(`Unsupported platform for LanguageTool Java runtime: ${process.platform}`);
+    throw new Error(
+        `Unsupported platform for LanguageTool Java runtime: ${process.platform}`,
+    );
 }
 
 /**
@@ -742,7 +746,10 @@ export class ModelDownloadService extends EventEmitter {
         await fsPromises.mkdir(this.serverBasePath, { recursive: true });
 
         // Track paths for cleanup on cancel
-        const jreArchivePath = path.join(this.serverBasePath, javaArchive.filename);
+        const jreArchivePath = path.join(
+            this.serverBasePath,
+            javaArchive.filename,
+        );
         const ltZipPath = path.join(this.serverBasePath, "languagetool.zip");
         this.cleanupPaths.set("languagetool", [
             jreArchivePath,

@@ -126,7 +126,7 @@ export interface ILanguageToolService {
 
     /**
      * Check if the service is using a local server
-      * @returns true when the local server endpoint is available
+     * @returns true when the local server endpoint is available
      */
     isUsingLocalServer(): boolean;
 

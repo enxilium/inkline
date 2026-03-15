@@ -25,10 +25,7 @@ const config: ForgeConfig = {
         executableName: "inkline",
         // Workflow files are bundled separately (server/ComfyUI downloaded at runtime)
         // 7za is shipped alongside the asar for archive extraction at runtime
-        extraResource: [
-            "./assets/workflows",
-            get7zaResourcePath(),
-        ],
+        extraResource: ["./assets/workflows", get7zaResourcePath()],
         icon: "./assets/app-icon",
     },
     rebuildConfig: {},
