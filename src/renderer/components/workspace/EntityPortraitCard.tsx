@@ -73,7 +73,9 @@ export const EntityPortraitCard: React.FC<EntityPortraitCardProps> = ({
         if (!canCycleGallery) {
             return;
         }
-        setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
+        setCurrentImageIndex(
+            (prev) => (prev - 1 + images.length) % images.length,
+        );
     };
 
     const handleFileChange = async (
@@ -93,7 +95,11 @@ export const EntityPortraitCard: React.FC<EntityPortraitCardProps> = ({
 
     return (
         <div className="portrait-card">
-            <div className={"portrait-frame" + (currentImage ? " has-image" : "")}>
+            <div
+                className={
+                    "portrait-frame" + (currentImage ? " has-image" : "")
+                }
+            >
                 {!currentImage ? (
                     <span className="portrait-placeholder">{placeholder}</span>
                 ) : (
