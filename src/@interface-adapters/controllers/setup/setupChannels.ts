@@ -24,6 +24,14 @@ export const FEATURE_CHANNELS = {
 
 export type FeatureKind = "imageGeneration" | "audioGeneration";
 
+export interface StartupIntegrityStatus {
+    state: "idle" | "running" | "completed" | "error";
+    startedAt?: string;
+    completedAt?: string;
+    repairedTargets: string[];
+    errors: string[];
+}
+
 export interface FeatureConfig {
     features: {
         aiChat: boolean;
@@ -36,6 +44,7 @@ export interface FeatureConfig {
     };
     comfyuiInstalled: boolean;
     isWindows: boolean;
+    startupIntegrity: StartupIntegrityStatus;
 }
 
 export interface SetupConfig {
@@ -57,6 +66,7 @@ export interface DownloadProgress {
     percentage: number;
     status: "pending" | "downloading" | "extracting" | "completed" | "error";
     error?: string;
+    source?: "setup" | "feature-toggle" | "startup-integrity";
 }
 
 export interface DownloadRequest {

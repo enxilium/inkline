@@ -65,6 +65,21 @@ function getJavaExecutableName(): string {
     return process.platform === "win32" ? "java.exe" : "java";
 }
 
+function getEmbeddedJavaCandidatePaths(serverBasePath: string): string[] {
+    const javaExec = getJavaExecutableName();
+    return [
+        path.join(serverBasePath, "java_embeded", "bin", javaExec),
+        path.join(
+            serverBasePath,
+            "java_embeded",
+            "Contents",
+            "Home",
+            "bin",
+            javaExec,
+        ),
+    ];
+}
+
 type JavaArchiveInfo = {
     url: string;
     filename: string;
@@ -170,6 +185,7 @@ export interface DownloadProgress {
     percentage: number;
     status: "pending" | "downloading" | "extracting" | "completed" | "error";
     error?: string;
+    source?: "setup" | "feature-toggle" | "startup-integrity";
 }
 
 export interface ModelInfo {
@@ -202,8 +218,13 @@ export const MODELS: Record<string, ModelInfo> = {
     },
 };
 
+const WORKFLOW_FILE_BY_MODEL: Record<"image" | "audio", string> = {
+    image: "txt2image.json",
+    audio: "txt2audio.json",
+};
+
 // Workflow files that should be preserved/restored after extraction
-const WORKFLOW_FILES = ["txt2audio.json", "txt2image.json"];
+const WORKFLOW_FILES = Object.values(WORKFLOW_FILE_BY_MODEL);
 
 export class ModelDownloadService extends EventEmitter {
     private serverBasePath: string;
@@ -224,6 +245,15 @@ export class ModelDownloadService extends EventEmitter {
         );
     }
 
+    private refreshBasePaths(): void {
+        this.serverBasePath = this.getServerPath();
+        this.modelsBasePath = path.join(
+            this.serverBasePath,
+            "ComfyUI",
+            "models",
+        );
+    }
+
     private getServerPath(): string {
         if (app.isPackaged) {
             return path.join(process.resourcesPath, "server");
@@ -235,6 +265,7 @@ export class ModelDownloadService extends EventEmitter {
      * Check if ComfyUI server is already installed
      */
     async isComfyUIInstalled(): Promise<boolean> {
+        this.refreshBasePaths();
         const pythonPath = path.join(
             this.serverBasePath,
             "python_embeded",
@@ -255,12 +286,8 @@ export class ModelDownloadService extends EventEmitter {
      * Check if LanguageTool server is already installed (both Java and LanguageTool)
      */
     async isLanguageToolInstalled(): Promise<boolean> {
-        const javaPath = path.join(
-            this.serverBasePath,
-            "java_embeded",
-            "bin",
-            getJavaExecutableName(),
-        );
+        this.refreshBasePaths();
+        const javaPaths = getEmbeddedJavaCandidatePaths(this.serverBasePath);
         const serverJar = path.join(
             this.serverBasePath,
             "language",
@@ -268,7 +295,21 @@ export class ModelDownloadService extends EventEmitter {
         );
 
         try {
-            await fsPromises.access(javaPath);
+            let hasJava = false;
+            for (const candidate of javaPaths) {
+                try {
+                    await fsPromises.access(candidate);
+                    hasJava = true;
+                    break;
+                } catch {
+                    // Try next candidate
+                }
+            }
+
+            if (!hasJava) {
+                return false;
+            }
+
             await fsPromises.access(serverJar);
             return true;
         } catch {
@@ -280,6 +321,7 @@ export class ModelDownloadService extends EventEmitter {
      * Check if a model is already downloaded
      */
     async isModelDownloaded(modelType: "image" | "audio"): Promise<boolean> {
+        this.refreshBasePaths();
         const model = MODELS[modelType];
         const modelPath = path.join(
             this.modelsBasePath,
@@ -312,6 +354,7 @@ export class ModelDownloadService extends EventEmitter {
     async downloadComfyUI(
         onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
+        this.refreshBasePaths();
         // Check if already installed
         const installed = await this.isComfyUIInstalled();
         if (installed) {
@@ -439,6 +482,52 @@ export class ModelDownloadService extends EventEmitter {
                 logger.warn(`Could not copy workflow ${file}`, err);
             }
         }
+    }
+
+    async isWorkflowInstalled(modelType: "image" | "audio"): Promise<boolean> {
+        this.refreshBasePaths();
+        const workflowFile = WORKFLOW_FILE_BY_MODEL[modelType];
+        const workflowPath = path.join(this.serverBasePath, workflowFile);
+
+        try {
+            await fsPromises.access(workflowPath);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    async ensureWorkflowsInstalled(
+        modelTypes: ("image" | "audio")[],
+    ): Promise<("image" | "audio")[]> {
+        this.refreshBasePaths();
+        const restored: ("image" | "audio")[] = [];
+        const bundledPath = this.getBundledWorkflowsPath();
+        const uniqueModelTypes = Array.from(new Set(modelTypes));
+
+        for (const modelType of uniqueModelTypes) {
+            const workflowFile = WORKFLOW_FILE_BY_MODEL[modelType];
+            const srcPath = path.join(bundledPath, workflowFile);
+            const destPath = path.join(this.serverBasePath, workflowFile);
+
+            const exists = await this.isWorkflowInstalled(modelType);
+            if (exists) {
+                continue;
+            }
+
+            try {
+                await fsPromises.access(srcPath);
+                await fsPromises.copyFile(srcPath, destPath);
+                restored.push(modelType);
+            } catch (err) {
+                logger.warn(
+                    `Could not restore workflow ${workflowFile}`,
+                    err,
+                );
+            }
+        }
+
+        return restored;
     }
 
     /**
@@ -684,6 +773,7 @@ export class ModelDownloadService extends EventEmitter {
         modelType: "image" | "audio",
         onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
+        this.refreshBasePaths();
         const model = MODELS[modelType];
         const modelDir = path.join(this.modelsBasePath, model.subfolder);
         const modelPath = path.join(modelDir, model.filename);
@@ -727,6 +817,7 @@ export class ModelDownloadService extends EventEmitter {
     async downloadLanguageTool(
         onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
+        this.refreshBasePaths();
         const javaArchive = getLanguageToolJavaArchive();
 
         // Check if already installed
@@ -853,12 +944,11 @@ export class ModelDownloadService extends EventEmitter {
             await fsPromises.rename(jreExtractedDir, javaEmbededPath);
 
             if (process.platform !== "win32") {
-                const javaExecPath = path.join(
-                    javaEmbededPath,
-                    "bin",
-                    getJavaExecutableName(),
-                );
-                await fsPromises.chmod(javaExecPath, 0o755).catch(() => {});
+                for (const javaExecPath of getEmbeddedJavaCandidatePaths(
+                    this.serverBasePath,
+                )) {
+                    await fsPromises.chmod(javaExecPath, 0o755).catch(() => {});
+                }
             }
         }
 
@@ -1028,6 +1118,7 @@ export class ModelDownloadService extends EventEmitter {
      * Delete ComfyUI installation (python_embeded, ComfyUI folder, workflow files)
      */
     async deleteComfyUI(): Promise<void> {
+        this.refreshBasePaths();
         // Directories created by the ComfyUI portable archive
         const comfyDirs = ["python_embeded", "ComfyUI", "advanced", "update"];
 
@@ -1068,6 +1159,7 @@ export class ModelDownloadService extends EventEmitter {
      * Delete a specific model file
      */
     async deleteModel(modelType: "image" | "audio"): Promise<void> {
+        this.refreshBasePaths();
         const model = MODELS[modelType];
         const modelPath = path.join(
             this.modelsBasePath,

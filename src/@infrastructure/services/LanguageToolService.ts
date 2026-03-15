@@ -35,6 +35,29 @@ export class LanguageToolService
     private static readonly PORT_RANGE_START = 8091;
     private static readonly PORT_RANGE_END = 8099;
 
+    private getJavaExecutableName(): string {
+        return process.platform === "win32" ? "java.exe" : "java";
+    }
+
+    private getJavaCandidatePaths(): string[] {
+        const basePath = app.isPackaged
+            ? path.join(process.resourcesPath, "server")
+            : path.join(app.getAppPath(), "server");
+        const javaExec = this.getJavaExecutableName();
+
+        return [
+            path.join(basePath, "java_embeded", "bin", javaExec),
+            path.join(
+                basePath,
+                "java_embeded",
+                "Contents",
+                "Home",
+                "bin",
+                javaExec,
+            ),
+        ];
+    }
+
     constructor() {
         super();
         this.serverReady = this.initializeServer();
@@ -53,12 +76,38 @@ export class LanguageToolService
     /**
      * Get the path to the embedded Java runtime
      */
-    private getJavaPath(): string {
-        const basePath = app.isPackaged
-            ? path.join(process.resourcesPath, "server")
-            : path.join(app.getAppPath(), "server");
-        const javaExec = process.platform === "win32" ? "java.exe" : "java";
-        return path.join(basePath, "java_embeded", "bin", javaExec);
+    private getJavaPath(): string | null {
+        const candidates = this.getJavaCandidatePaths();
+        for (const candidate of candidates) {
+            if (fs.existsSync(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private ensureJavaExecutable(javaPath: string): void {
+        if (process.platform === "win32") {
+            return;
+        }
+
+        try {
+            fs.accessSync(javaPath, fs.constants.X_OK);
+            return;
+        } catch {
+            // Continue to chmod fallback.
+        }
+
+        try {
+            fs.chmodSync(javaPath, 0o755);
+        } catch (error) {
+            logger.warn("Failed to set execute permission on embedded Java", {
+                javaPath,
+                error,
+            });
+        }
+
+        fs.accessSync(javaPath, fs.constants.X_OK);
     }
 
     /**
@@ -71,7 +120,7 @@ export class LanguageToolService
         );
         const javaPath = this.getJavaPath();
 
-        return fs.existsSync(serverJar) && fs.existsSync(javaPath);
+        return javaPath !== null && fs.existsSync(serverJar);
     }
 
     /**
@@ -89,6 +138,11 @@ export class LanguageToolService
         try {
             this.basePath = this.getServerPath();
             const javaPath = this.getJavaPath();
+            if (!javaPath) {
+                logger.warn("Embedded Java executable not found.");
+                return;
+            }
+            this.ensureJavaExecutable(javaPath);
             const serverJar = path.join(
                 this.basePath,
                 "languagetool-server.jar",
