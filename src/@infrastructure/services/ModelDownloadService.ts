@@ -16,18 +16,100 @@ const logger = createTerminalLogger("ModelDownloadService");
  * In packaged builds it's shipped via extraResource; in dev it lives in node_modules.
  */
 function get7zaPath(): string {
+    const isWindows = process.platform === "win32";
+    const archiveToolName = isWindows ? "7za.exe" : "7za";
+
     if (app.isPackaged) {
-        return path.join(process.resourcesPath, "7za.exe");
+        return path.join(process.resourcesPath, archiveToolName);
     }
-    return path.join(
-        __dirname,
-        "..",
-        "..",
-        "node_modules",
-        "7zip-bin",
-        "win",
-        "x64",
-        "7za.exe",
+
+    if (isWindows) {
+        return path.join(
+            app.getAppPath(),
+            "node_modules",
+            "7zip-bin",
+            "win",
+            "x64",
+            "7za.exe",
+        );
+    }
+
+    if (process.platform === "darwin") {
+        return path.join(
+            app.getAppPath(),
+            "node_modules",
+            "7zip-bin",
+            "mac",
+            "arm64",
+            "7za",
+        );
+    }
+
+    if (process.platform === "linux") {
+        return path.join(
+            app.getAppPath(),
+            "node_modules",
+            "7zip-bin",
+            "linux",
+            "x64",
+            "7za",
+        );
+    }
+
+    throw new Error(
+        `Unsupported platform for archive extraction: ${process.platform}`,
+    );
+}
+
+function getJavaExecutableName(): string {
+    return process.platform === "win32" ? "java.exe" : "java";
+}
+
+function getEmbeddedJavaCandidatePaths(serverBasePath: string): string[] {
+    const javaExec = getJavaExecutableName();
+    return [
+        path.join(serverBasePath, "java_embeded", "bin", javaExec),
+        path.join(
+            serverBasePath,
+            "java_embeded",
+            "Contents",
+            "Home",
+            "bin",
+            javaExec,
+        ),
+    ];
+}
+
+type JavaArchiveInfo = {
+    url: string;
+    filename: string;
+};
+
+function getLanguageToolJavaArchive(): JavaArchiveInfo {
+    // Product decision: macOS always uses arm64 build, Linux uses x64 build.
+    if (process.platform === "darwin") {
+        return {
+            url: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jre_aarch64_mac_hotspot_21.0.5_11.tar.gz",
+            filename: "java_jre.tar.gz",
+        };
+    }
+
+    if (process.platform === "linux") {
+        return {
+            url: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jre_x64_linux_hotspot_21.0.5_11.tar.gz",
+            filename: "java_jre.tar.gz",
+        };
+    }
+
+    if (process.platform === "win32") {
+        return {
+            url: "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jre_x64_windows_hotspot_21.0.5_11.zip",
+            filename: "java_jre.zip",
+        };
+    }
+
+    throw new Error(
+        `Unsupported platform for LanguageTool Java runtime: ${process.platform}`,
     );
 }
 
@@ -45,6 +127,14 @@ function unpack(
     onProgress?: (percentage: number) => void,
 ): { promise: Promise<string>; process: ReturnType<typeof spawn> } {
     const bin = get7zaPath();
+    if (process.platform !== "win32") {
+        // Packaged resources can lose execute bits depending on archive tooling.
+        try {
+            fs.chmodSync(bin, 0o755);
+        } catch {
+            // Best-effort; spawn will throw a clear error if execution still fails.
+        }
+    }
     const args = ["x", archivePath, `-o${destPath}`, "-y", "-bsp1"];
     const proc = spawn(bin, args, { stdio: ["ignore", "pipe", "pipe"] });
 
@@ -95,6 +185,7 @@ export interface DownloadProgress {
     percentage: number;
     status: "pending" | "downloading" | "extracting" | "completed" | "error";
     error?: string;
+    source?: "setup" | "feature-toggle" | "startup-integrity";
 }
 
 export interface ModelInfo {
@@ -111,8 +202,6 @@ const COMFYUI_DOWNLOAD_URL =
 // LanguageTool download URLs
 const LANGUAGETOOL_SERVER_URL =
     "https://internal1.languagetool.org/snapshots/LanguageTool-latest-snapshot.zip";
-const JAVA_JRE_URL =
-    "https://github.com/adoptium/temurin21-binaries/releases/download/jdk-21.0.5%2B11/OpenJDK21U-jre_x64_windows_hotspot_21.0.5_11.zip";
 
 export const MODELS: Record<string, ModelInfo> = {
     image: {
@@ -129,8 +218,13 @@ export const MODELS: Record<string, ModelInfo> = {
     },
 };
 
+const WORKFLOW_FILE_BY_MODEL: Record<"image" | "audio", string> = {
+    image: "txt2image.json",
+    audio: "txt2audio.json",
+};
+
 // Workflow files that should be preserved/restored after extraction
-const WORKFLOW_FILES = ["txt2audio.json", "txt2image.json"];
+const WORKFLOW_FILES = Object.values(WORKFLOW_FILE_BY_MODEL);
 
 export class ModelDownloadService extends EventEmitter {
     private serverBasePath: string;
@@ -151,6 +245,15 @@ export class ModelDownloadService extends EventEmitter {
         );
     }
 
+    private refreshBasePaths(): void {
+        this.serverBasePath = this.getServerPath();
+        this.modelsBasePath = path.join(
+            this.serverBasePath,
+            "ComfyUI",
+            "models",
+        );
+    }
+
     private getServerPath(): string {
         if (app.isPackaged) {
             return path.join(process.resourcesPath, "server");
@@ -162,6 +265,7 @@ export class ModelDownloadService extends EventEmitter {
      * Check if ComfyUI server is already installed
      */
     async isComfyUIInstalled(): Promise<boolean> {
+        this.refreshBasePaths();
         const pythonPath = path.join(
             this.serverBasePath,
             "python_embeded",
@@ -182,12 +286,8 @@ export class ModelDownloadService extends EventEmitter {
      * Check if LanguageTool server is already installed (both Java and LanguageTool)
      */
     async isLanguageToolInstalled(): Promise<boolean> {
-        const javaPath = path.join(
-            this.serverBasePath,
-            "java_embeded",
-            "bin",
-            "java.exe",
-        );
+        this.refreshBasePaths();
+        const javaPaths = getEmbeddedJavaCandidatePaths(this.serverBasePath);
         const serverJar = path.join(
             this.serverBasePath,
             "language",
@@ -195,7 +295,21 @@ export class ModelDownloadService extends EventEmitter {
         );
 
         try {
-            await fsPromises.access(javaPath);
+            let hasJava = false;
+            for (const candidate of javaPaths) {
+                try {
+                    await fsPromises.access(candidate);
+                    hasJava = true;
+                    break;
+                } catch {
+                    // Try next candidate
+                }
+            }
+
+            if (!hasJava) {
+                return false;
+            }
+
             await fsPromises.access(serverJar);
             return true;
         } catch {
@@ -207,6 +321,7 @@ export class ModelDownloadService extends EventEmitter {
      * Check if a model is already downloaded
      */
     async isModelDownloaded(modelType: "image" | "audio"): Promise<boolean> {
+        this.refreshBasePaths();
         const model = MODELS[modelType];
         const modelPath = path.join(
             this.modelsBasePath,
@@ -239,6 +354,7 @@ export class ModelDownloadService extends EventEmitter {
     async downloadComfyUI(
         onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
+        this.refreshBasePaths();
         // Check if already installed
         const installed = await this.isComfyUIInstalled();
         if (installed) {
@@ -366,6 +482,52 @@ export class ModelDownloadService extends EventEmitter {
                 logger.warn(`Could not copy workflow ${file}`, err);
             }
         }
+    }
+
+    async isWorkflowInstalled(modelType: "image" | "audio"): Promise<boolean> {
+        this.refreshBasePaths();
+        const workflowFile = WORKFLOW_FILE_BY_MODEL[modelType];
+        const workflowPath = path.join(this.serverBasePath, workflowFile);
+
+        try {
+            await fsPromises.access(workflowPath);
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    async ensureWorkflowsInstalled(
+        modelTypes: ("image" | "audio")[],
+    ): Promise<("image" | "audio")[]> {
+        this.refreshBasePaths();
+        const restored: ("image" | "audio")[] = [];
+        const bundledPath = this.getBundledWorkflowsPath();
+        const uniqueModelTypes = Array.from(new Set(modelTypes));
+
+        for (const modelType of uniqueModelTypes) {
+            const workflowFile = WORKFLOW_FILE_BY_MODEL[modelType];
+            const srcPath = path.join(bundledPath, workflowFile);
+            const destPath = path.join(this.serverBasePath, workflowFile);
+
+            const exists = await this.isWorkflowInstalled(modelType);
+            if (exists) {
+                continue;
+            }
+
+            try {
+                await fsPromises.access(srcPath);
+                await fsPromises.copyFile(srcPath, destPath);
+                restored.push(modelType);
+            } catch (err) {
+                logger.warn(
+                    `Could not restore workflow ${workflowFile}`,
+                    err,
+                );
+            }
+        }
+
+        return restored;
     }
 
     /**
@@ -611,6 +773,7 @@ export class ModelDownloadService extends EventEmitter {
         modelType: "image" | "audio",
         onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
+        this.refreshBasePaths();
         const model = MODELS[modelType];
         const modelDir = path.join(this.modelsBasePath, model.subfolder);
         const modelPath = path.join(modelDir, model.filename);
@@ -654,6 +817,9 @@ export class ModelDownloadService extends EventEmitter {
     async downloadLanguageTool(
         onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
+        this.refreshBasePaths();
+        const javaArchive = getLanguageToolJavaArchive();
+
         // Check if already installed
         const installed = await this.isLanguageToolInstalled();
         if (installed) {
@@ -671,11 +837,14 @@ export class ModelDownloadService extends EventEmitter {
         await fsPromises.mkdir(this.serverBasePath, { recursive: true });
 
         // Track paths for cleanup on cancel
-        const jreZipPath = path.join(this.serverBasePath, "java_jre.zip");
+        const jreArchivePath = path.join(
+            this.serverBasePath,
+            javaArchive.filename,
+        );
         const ltZipPath = path.join(this.serverBasePath, "languagetool.zip");
         this.cleanupPaths.set("languagetool", [
-            jreZipPath,
-            jreZipPath + ".download",
+            jreArchivePath,
+            jreArchivePath + ".download",
             ltZipPath,
             ltZipPath + ".download",
             // Extracted dirs will be added dynamically when found
@@ -685,8 +854,8 @@ export class ModelDownloadService extends EventEmitter {
         logger.info("Downloading Java JRE");
 
         await this.downloadFile(
-            JAVA_JRE_URL,
-            jreZipPath,
+            javaArchive.url,
+            jreArchivePath,
             "languagetool",
             (progress) => {
                 // Scale to 0-40% for JRE download
@@ -707,7 +876,7 @@ export class ModelDownloadService extends EventEmitter {
         });
 
         await this.extractZip(
-            jreZipPath,
+            jreArchivePath,
             this.serverBasePath,
             "languagetool",
             (p) => {
@@ -718,6 +887,38 @@ export class ModelDownloadService extends EventEmitter {
                 });
             },
         );
+
+        if (javaArchive.filename.endsWith(".tar.gz")) {
+            const intermediateTarPath = await this.findExtractedFile(
+                this.serverBasePath,
+                /\.tar$/,
+            );
+
+            if (!intermediateTarPath) {
+                throw new Error(
+                    "Could not locate extracted tar archive from Java tar.gz",
+                );
+            }
+
+            const currentPaths = this.cleanupPaths.get("languagetool") || [];
+            currentPaths.push(intermediateTarPath);
+            this.cleanupPaths.set("languagetool", currentPaths);
+
+            await this.extractZip(
+                intermediateTarPath,
+                this.serverBasePath,
+                "languagetool",
+                (p) => {
+                    // Scale second extraction pass to overall 45-50%
+                    onProgress({
+                        ...p,
+                        percentage: 45 + Math.round(p.percentage * 0.05),
+                    });
+                },
+            );
+
+            await fsPromises.unlink(intermediateTarPath).catch(() => {});
+        }
 
         // Rename extracted JRE folder to java_embeded
         // The Adoptium zip extracts to something like "jdk-21.0.5+11-jre"
@@ -741,10 +942,18 @@ export class ModelDownloadService extends EventEmitter {
                 force: true,
             });
             await fsPromises.rename(jreExtractedDir, javaEmbededPath);
+
+            if (process.platform !== "win32") {
+                for (const javaExecPath of getEmbeddedJavaCandidatePaths(
+                    this.serverBasePath,
+                )) {
+                    await fsPromises.chmod(javaExecPath, 0o755).catch(() => {});
+                }
+            }
         }
 
         // Clean up JRE zip
-        await fsPromises.unlink(jreZipPath).catch(() => {});
+        await fsPromises.unlink(jreArchivePath).catch(() => {});
 
         // Step 2: Download and extract LanguageTool
         logger.info("Downloading LanguageTool server");
@@ -842,6 +1051,28 @@ export class ModelDownloadService extends EventEmitter {
     }
 
     /**
+     * Find an extracted file matching a pattern.
+     */
+    private async findExtractedFile(
+        basePath: string,
+        pattern: RegExp,
+    ): Promise<string | null> {
+        try {
+            const entries = await fsPromises.readdir(basePath, {
+                withFileTypes: true,
+            });
+            for (const entry of entries) {
+                if (entry.isFile() && pattern.test(entry.name)) {
+                    return path.join(basePath, entry.name);
+                }
+            }
+        } catch {
+            // Ignore errors
+        }
+        return null;
+    }
+
+    /**
      * Extract a ZIP archive using the bundled 7za binary.
      */
     private async extractZip(
@@ -887,6 +1118,7 @@ export class ModelDownloadService extends EventEmitter {
      * Delete ComfyUI installation (python_embeded, ComfyUI folder, workflow files)
      */
     async deleteComfyUI(): Promise<void> {
+        this.refreshBasePaths();
         // Directories created by the ComfyUI portable archive
         const comfyDirs = ["python_embeded", "ComfyUI", "advanced", "update"];
 
@@ -927,6 +1159,7 @@ export class ModelDownloadService extends EventEmitter {
      * Delete a specific model file
      */
     async deleteModel(modelType: "image" | "audio"): Promise<void> {
+        this.refreshBasePaths();
         const model = MODELS[modelType];
         const modelPath = path.join(
             this.modelsBasePath,

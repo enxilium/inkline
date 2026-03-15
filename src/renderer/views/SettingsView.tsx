@@ -66,6 +66,13 @@ export const SettingsView: React.FC = () => {
         modelsDownloaded: { image: boolean; audio: boolean };
         comfyuiInstalled: boolean;
         isWindows: boolean;
+        startupIntegrity: {
+            state: "idle" | "running" | "completed" | "error";
+            startedAt?: string;
+            completedAt?: string;
+            repairedTargets: string[];
+            errors: string[];
+        };
     } | null>(null);
     const [imageProgress, setImageProgress] =
         useState<FeatureDownloadProgress | null>(null);
@@ -397,6 +404,34 @@ export const SettingsView: React.FC = () => {
         [],
     );
 
+    const startupIntegrityMessage = useMemo(() => {
+        if (!featureConfig) {
+            return null;
+        }
+
+        const status = featureConfig.startupIntegrity;
+        if (status.state === "running") {
+            return "Startup integrity check is running in the background.";
+        }
+
+        if (status.state === "error") {
+            const details =
+                status.errors.length > 0
+                    ? ` (${status.errors.join(", ")})`
+                    : "";
+            return `Startup integrity found issues. Auto-repair attempted${details}.`;
+        }
+
+        if (status.state === "completed") {
+            if (status.repairedTargets.length === 0) {
+                return "Startup integrity check completed. No repairs needed.";
+            }
+            return `Startup integrity repaired: ${status.repairedTargets.join(", ")}.`;
+        }
+
+        return "Startup integrity check is idle.";
+    }, [featureConfig]);
+
     const handleSaveGeminiKey = async () => {
         setModelStatus(null);
         try {
@@ -637,6 +672,12 @@ export const SettingsView: React.FC = () => {
                                     Enable or disable local AI generation.
                                     Downloads happen in the background.
                                 </p>
+
+                                {startupIntegrityMessage ? (
+                                    <p className="helper-text">
+                                        {startupIntegrityMessage}
+                                    </p>
+                                ) : null}
 
                                 {featureConfig && !featureConfig.isWindows && (
                                     <div className="feature-platform-warning">

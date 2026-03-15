@@ -33,6 +33,7 @@ import {
     FEATURE_CHANNELS,
 } from "../@interface-adapters/controllers/setup/setupChannels";
 import type { FeatureKind } from "../@interface-adapters/controllers/setup/setupChannels";
+import type { StartupIntegrityStatus } from "../@interface-adapters/controllers/setup/setupChannels";
 
 const logger = createTerminalLogger("Main");
 installTerminalErrorRedirection("Console");
@@ -157,6 +158,209 @@ const appBuilder = new AppBuilder(dependencies);
 
 let loadingWindow: BrowserWindow | null = null;
 let setupWindow: BrowserWindow | null = null;
+
+const EMPTY_STARTUP_INTEGRITY_STATUS: StartupIntegrityStatus = {
+    state: "idle",
+    repairedTargets: [],
+    errors: [],
+};
+
+let startupIntegrityStatus: StartupIntegrityStatus = {
+    ...EMPTY_STARTUP_INTEGRITY_STATUS,
+};
+let startupIntegrityStarted = false;
+
+const getStartupIntegrityStatus = (): StartupIntegrityStatus => ({
+    ...startupIntegrityStatus,
+    repairedTargets: [...startupIntegrityStatus.repairedTargets],
+    errors: [...startupIntegrityStatus.errors],
+});
+
+const broadcastFeatureDownloadProgress = (progress: DownloadProgress): void => {
+    const windows = BrowserWindow.getAllWindows();
+    for (const win of windows) {
+        if (win.isDestroyed()) {
+            continue;
+        }
+        win.webContents.send(FEATURE_CHANNELS.FEATURE_DOWNLOAD_PROGRESS, progress);
+    }
+};
+
+const runStartupIntegrityCheck = async (): Promise<void> => {
+    if (startupIntegrityStarted) {
+        return;
+    }
+
+    startupIntegrityStarted = true;
+    startupIntegrityStatus = {
+        state: "running",
+        startedAt: new Date().toISOString(),
+        repairedTargets: [],
+        errors: [],
+    };
+
+    const repairedTargets = new Set<string>();
+    const errors: string[] = [];
+
+    const toProgressSender = (
+        progress: DownloadProgress,
+        source: "setup" | "feature-toggle" | "startup-integrity",
+    ): DownloadProgress => ({
+        ...progress,
+        source,
+    });
+
+    const sendStartupProgress = (progress: DownloadProgress): void => {
+        broadcastFeatureDownloadProgress(
+            toProgressSender(progress, "startup-integrity"),
+        );
+    };
+
+    const checkModelIntegrity = async (
+        modelType: "image" | "audio",
+    ): Promise<void> => {
+        const downloaded = await modelDownloadService.isModelDownloaded(modelType);
+        await setupService.markModelDownloaded(modelType, downloaded);
+        if (downloaded) {
+            return;
+        }
+
+        await modelDownloadService.downloadModel(modelType, sendStartupProgress);
+        await setupService.markModelDownloaded(modelType, true);
+        repairedTargets.add(modelType);
+    };
+
+    const checkLanguageToolIntegrity = async (): Promise<void> => {
+        const installed = await modelDownloadService.isLanguageToolInstalled();
+        await setupService.markLanguageToolInstalled(installed);
+
+        if (!installed) {
+            await modelDownloadService.downloadLanguageTool(sendStartupProgress);
+            const installedAfterDownload =
+                await modelDownloadService.isLanguageToolInstalled();
+            await setupService.markLanguageToolInstalled(installedAfterDownload);
+
+            if (!installedAfterDownload) {
+                throw new Error(
+                    "LanguageTool files are still missing after download.",
+                );
+            }
+
+            repairedTargets.add("languagetool");
+        }
+
+        // LanguageTool service is initialized once during early startup and may
+        // still be unavailable even after files are repaired. Force a restart
+        // so grammar checks become available immediately.
+        await languageToolService.restart();
+
+        if (!languageToolService.isUsingLocalServer()) {
+            throw new Error(
+                "LanguageTool server did not become ready after restart.",
+            );
+        }
+    };
+
+    try {
+        const config = await setupService.getConfig();
+        const imageEnabled = config.features.imageGeneration;
+        const audioEnabled = config.features.audioGeneration;
+        const isWindows = process.platform === "win32";
+        const localAiEnabled = imageEnabled || audioEnabled;
+        const shouldCheckLocalAi = isWindows && localAiEnabled;
+
+        try {
+            await checkLanguageToolIntegrity();
+        } catch (error) {
+            logger.error("[StartupIntegrity] LanguageTool repair failed", error);
+            errors.push("LanguageTool");
+        }
+
+        if (!shouldCheckLocalAi) {
+            const [comfyInstalled, imageDownloaded, audioDownloaded] =
+                await Promise.all([
+                    modelDownloadService.isComfyUIInstalled(),
+                    modelDownloadService.isModelDownloaded("image"),
+                    modelDownloadService.isModelDownloaded("audio"),
+                ]);
+
+            await setupService.markComfyUIInstalled(comfyInstalled);
+            await setupService.markModelDownloaded("image", imageDownloaded);
+            await setupService.markModelDownloaded("audio", audioDownloaded);
+
+            startupIntegrityStatus = {
+                state: errors.length > 0 ? "error" : "completed",
+                startedAt: startupIntegrityStatus.startedAt,
+                completedAt: new Date().toISOString(),
+                repairedTargets: Array.from(repairedTargets),
+                errors,
+            };
+            return;
+        }
+
+        try {
+            const comfyInstalled = await modelDownloadService.isComfyUIInstalled();
+            await setupService.markComfyUIInstalled(comfyInstalled);
+
+            if (!comfyInstalled) {
+                await modelDownloadService.downloadComfyUI(sendStartupProgress);
+                await setupService.markComfyUIInstalled(true);
+                repairedTargets.add("comfyui");
+            }
+        } catch (error) {
+            logger.error("[StartupIntegrity] ComfyUI repair failed", error);
+            errors.push("ComfyUI");
+        }
+
+        if (imageEnabled) {
+            try {
+                await checkModelIntegrity("image");
+            } catch (error) {
+                logger.error("[StartupIntegrity] Image model repair failed", error);
+                errors.push("Image model");
+            }
+        }
+
+        if (audioEnabled) {
+            try {
+                await checkModelIntegrity("audio");
+            } catch (error) {
+                logger.error("[StartupIntegrity] Audio model repair failed", error);
+                errors.push("Audio model");
+            }
+        }
+
+        const enabledModels: ("image" | "audio")[] = [];
+        if (imageEnabled) {
+            enabledModels.push("image");
+        }
+        if (audioEnabled) {
+            enabledModels.push("audio");
+        }
+
+        if (enabledModels.length > 0) {
+            const restoredWorkflows =
+                await modelDownloadService.ensureWorkflowsInstalled(enabledModels);
+
+            for (const modelType of restoredWorkflows) {
+                repairedTargets.add(
+                    modelType === "image" ? "imageWorkflow" : "audioWorkflow",
+                );
+            }
+        }
+    } catch (error) {
+        logger.error("[StartupIntegrity] Integrity run failed", error);
+        errors.push("Startup integrity check");
+    }
+
+    startupIntegrityStatus = {
+        state: errors.length > 0 ? "error" : "completed",
+        startedAt: startupIntegrityStatus.startedAt,
+        completedAt: new Date().toISOString(),
+        repairedTargets: Array.from(repairedTargets),
+        errors,
+    };
+};
 
 const createLoadingWindow = (): void => {
     loadingWindow = new BrowserWindow({
@@ -283,7 +487,10 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
                 if (setupWindow && !setupWindow.isDestroyed()) {
                     setupWindow.webContents.send(
                         SETUP_CHANNELS.DOWNLOAD_PROGRESS,
-                        progress,
+                        {
+                            ...progress,
+                            source: "setup",
+                        },
                     );
                 }
             };
@@ -341,7 +548,7 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
                     await setupService.markLanguageToolInstalled(true);
                 } catch (err) {
                     logger.error("LanguageTool download failed", err);
-                    // Non-fatal - app can use public API fallback
+                    // Non-fatal - grammar checks remain unavailable until install succeeds
                 }
             }
         },
@@ -399,6 +606,7 @@ const setupFeatureIpcHandlers = (): void => {
             },
             comfyuiInstalled: comfyInstalled,
             isWindows: process.platform === "win32",
+            startupIntegrity: getStartupIntegrityStatus(),
         };
     });
 
@@ -413,7 +621,10 @@ const setupFeatureIpcHandlers = (): void => {
                 if (senderWindow && !senderWindow.isDestroyed()) {
                     senderWindow.webContents.send(
                         FEATURE_CHANNELS.FEATURE_DOWNLOAD_PROGRESS,
-                        progress,
+                        {
+                            ...progress,
+                            source: "feature-toggle",
+                        },
                     );
                 }
             };
@@ -669,12 +880,14 @@ const bootstrap = async (): Promise<void> => {
         }
     }
 
-    // Initialize LanguageTool server (will use public API fallback if not installed)
+    // Initialize LanguageTool local server
     try {
         await languageToolService.waitForReady();
-        logger.success(
-            `LanguageTool ready - using ${languageToolService.isUsingLocalServer() ? "local server" : "public API"}`,
-        );
+        if (languageToolService.isUsingLocalServer()) {
+            logger.success("LanguageTool ready - using local server");
+        } else {
+            logger.warn("LanguageTool local server unavailable");
+        }
     } catch (error) {
         logger.error("Failed to initialize LanguageTool service", error);
     }
@@ -685,6 +898,10 @@ const bootstrap = async (): Promise<void> => {
     }
 
     createWindow();
+
+    setTimeout(() => {
+        void runStartupIntegrityCheck();
+    }, 1200);
 };
 
 app.whenReady()
