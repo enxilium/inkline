@@ -43,6 +43,7 @@ https://github.com/user-attachments/assets/1a32900d-767d-4b53-afd5-9ca8c03a2fa8
 
 ![Special Editor Features](./docs/features-special-editor.png)
 ![Interface Features](./docs/features-minimal-interface.png)
+![Import Features](./docs/features-import.png)
 
 ---
 
