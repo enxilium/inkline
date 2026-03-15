@@ -232,6 +232,25 @@ export default function Home() {
                         description="A clean, purposeful interface that stays out of your way — until you need it."
                     />
                     <div className="grid gap-8 md:grid-cols-2">
+                        <FadeIn delay={150}>
+                            <div className="overflow-hidden rounded-2xl border border-border">
+                                <Image
+                                    src="/images/features-special-editor.png"
+                                    alt="Dedicated editors for characters, locations, and organizations"
+                                    width={1400}
+                                    height={900}
+                                    className="w-full"
+                                />
+                            </div>
+                            <h3 className="mt-4 text-lg font-semibold">
+                                Special Editors
+                            </h3>
+                            <p className="mt-1 text-sm text-muted">
+                                Keep track of characters, organizations, and
+                                locations with dedicated editors designed for
+                                storytelling.
+                            </p>
+                        </FadeIn>
                         <FadeIn>
                             <div className="overflow-hidden rounded-2xl border border-border">
                                 <Image
@@ -251,24 +270,46 @@ export default function Home() {
                                 distraction-free editor.
                             </p>
                         </FadeIn>
+                    </div>
+                </Container>
+            </section>
+
+            {/* One Click Import */}
+            <section className="py-16 md:py-24">
+                <Container>
+                    <SectionHeader
+                        label="Import"
+                        title="One-click import"
+                        description="Bring your existing work into Inkline in seconds. Import EPUBs created from tools like Google Docs and Microsoft Word with a single click."
+                    />
+                    <div className="grid gap-8 md:grid-cols-2 md:items-center">
                         <FadeIn delay={150}>
-                            <div className="overflow-hidden rounded-2xl border border-border">
+                            <div className="overflow-hidden rounded-2xl border border-border glow">
                                 <Image
-                                    src="/images/features-special-editor.png"
-                                    alt="Dedicated editors for characters, locations, and organizations"
-                                    width={1400}
-                                    height={900}
+                                    src="/images/features-import.png"
+                                    alt="One-click EPUB import from Google Docs and Microsoft Word"
+                                    width={1920}
+                                    height={1080}
                                     className="w-full"
                                 />
                             </div>
-                            <h3 className="mt-4 text-lg font-semibold">
-                                Special Editors
-                            </h3>
-                            <p className="mt-1 text-sm text-muted">
-                                Keep track of characters, organizations, and
-                                locations with dedicated editors designed for
-                                storytelling.
-                            </p>
+                        </FadeIn>
+                        <FadeIn>
+                            <div className="rounded-2xl p-6 md:p-8">
+                                <h3 className="text-2xl font-semibold">
+                                    Move from docs to drafts, instantly
+                                </h3>
+                                <p className="mt-3 text-muted">
+                                    Export your manuscript as EPUB from Google
+                                    Docs or Microsoft Word, then import it into
+                                    Inkline with one click.
+                                </p>
+                                <p className="mt-2 text-muted">
+                                    Your chapters come in ready for editing,
+                                    so you can keep writing without manual
+                                    copy-paste cleanup.
+                                </p>
+                            </div>
                         </FadeIn>
                     </div>
                 </Container>
