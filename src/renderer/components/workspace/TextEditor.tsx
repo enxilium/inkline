@@ -68,7 +68,7 @@ const fontOptions = [
     { label: "IBM Plex Mono", value: "'IBM Plex Mono', monospace" },
 ];
 
-const noop = (): void => {};
+const noop = (): void => {/* noop */};
 
 export const TextEditor: React.FC<TextEditorProps> = ({
     editor,

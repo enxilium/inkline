@@ -47,7 +47,7 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
 
     private enqueue<T>(operation: () => Promise<T>): Promise<T> {
         const nextPromise = this.operationQueue.then(operation);
-        this.operationQueue = nextPromise.catch((): void => {});
+        this.operationQueue = nextPromise.catch((): void => {/* noop */});
         return nextPromise;
     }
 

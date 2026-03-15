@@ -150,7 +150,7 @@ export const SettingsView: React.FC = () => {
                     });
                 }
             })
-            .catch((): void => {});
+            .catch((): void => { /* noop */ });
     }, []);
 
     // Listen for download progress events (from settings toggles OR startup prompt)
@@ -207,7 +207,7 @@ export const SettingsView: React.FC = () => {
                             setFeatureConfig(c);
                             setTogglingFeature(null);
                         })
-                        .catch((): void => {});
+                        .catch((): void => { /* noop */ });
                 }
             },
         );
@@ -275,7 +275,7 @@ export const SettingsView: React.FC = () => {
                 window.featureApi
                     .getConfig()
                     .then((c) => setFeatureConfig(c))
-                    .catch((): void => {});
+                    .catch((): void => { /* noop */ });
             }
         },
         [featureConfig, togglingFeature],
