@@ -2,7 +2,7 @@
  * ILanguageToolService
  *
  * Domain interface for grammar and spell checking.
- * Implementations may use local servers or public APIs.
+ * Implementations are expected to use a local LanguageTool server.
  */
 
 /**
@@ -126,7 +126,7 @@ export interface ILanguageToolService {
 
     /**
      * Check if the service is using a local server
-     * @returns true if using local server, false if using public API
+      * @returns true when the local server endpoint is available
      */
     isUsingLocalServer(): boolean;
 

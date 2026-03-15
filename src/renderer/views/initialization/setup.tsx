@@ -1138,8 +1138,8 @@ const SetupWizard: React.FC = () => {
                 if (!isSubscribed) return;
                 setIsWindows(platformInfo.isWindows);
 
-                // Start LanguageTool download in background if needed (Windows only)
-                if (platformInfo.isWindows && !ltStatus.installed) {
+                // Start LanguageTool download in background if needed.
+                if (!ltStatus.installed) {
                     // Fire and forget - don't await, let it download in background
                     setupApi()
                         .startDownloads({

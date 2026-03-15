@@ -2,8 +2,8 @@
  * LanguageToolService
  *
  * Manages a self-hosted LanguageTool server with embedded Java runtime.
- * Implements ILanguageToolService to provide grammar checking via local server
- * or public API fallback. All HTTP calls are made from the main process to avoid CORS.
+ * Implements ILanguageToolService to provide grammar checking via a local server.
+ * All HTTP calls are made from the main process to avoid CORS.
  */
 
 import { app } from "electron";
@@ -31,10 +31,6 @@ export class LanguageToolService
     private port: number | null = null;
     private apiUrl: string | null = null;
 
-    // Public API fallback URL
-    private static readonly PUBLIC_API_URL =
-        "https://api.languagetool.org/v2/check";
-
     // Port range for LanguageTool (separate from ComfyUI's 8188)
     private static readonly PORT_RANGE_START = 8091;
     private static readonly PORT_RANGE_END = 8099;
@@ -61,7 +57,8 @@ export class LanguageToolService
         const basePath = app.isPackaged
             ? path.join(process.resourcesPath, "server")
             : path.join(app.getAppPath(), "server");
-        return path.join(basePath, "java_embeded", "bin", "java.exe");
+        const javaExec = process.platform === "win32" ? "java.exe" : "java";
+        return path.join(basePath, "java_embeded", "bin", javaExec);
     }
 
     /**
@@ -81,21 +78,11 @@ export class LanguageToolService
      * Initialize and start the LanguageTool server
      */
     private async initializeServer(): Promise<void> {
-        // Only run on Windows for now (like ComfyUI)
-        if (process.platform !== "win32") {
-            logger.warn(
-                "Local LanguageTool server is only supported on Windows. Using public API.",
-            );
-            this.apiUrl = LanguageToolService.PUBLIC_API_URL;
-            return;
-        }
-
         // Check if installed
         if (!this.isInstalled()) {
             logger.warn(
-                "LanguageTool or Java not installed. Using public API until setup is completed.",
+                "LanguageTool or Java not installed. Local LanguageTool is unavailable until setup completes.",
             );
-            this.apiUrl = LanguageToolService.PUBLIC_API_URL;
             return;
         }
 
@@ -159,8 +146,6 @@ export class LanguageToolService
 
             this.serverProcess.on("error", (err) => {
                 logger.error("Failed to start server", err);
-                // Fall back to public API
-                this.apiUrl = LanguageToolService.PUBLIC_API_URL;
             });
 
             this.serverProcess.on("exit", (code) => {
@@ -179,8 +164,7 @@ export class LanguageToolService
             logger.success(`Server ready at ${this.apiUrl}`);
         } catch (error) {
             logger.error("Initialization failed", error);
-            // Fall back to public API
-            this.apiUrl = LanguageToolService.PUBLIC_API_URL;
+            this.apiUrl = null;
         }
     }
 
@@ -212,10 +196,13 @@ export class LanguageToolService
     }
 
     /**
-     * Get the API URL (local or public depending on availability)
+     * Get the API URL for the local server.
      */
     private getApiUrl(): string {
-        return this.apiUrl || LanguageToolService.PUBLIC_API_URL;
+        if (!this.apiUrl) {
+            throw new Error("LanguageTool local server is not available");
+        }
+        return this.apiUrl;
     }
 
     /**
@@ -225,9 +212,8 @@ export class LanguageToolService
     async checkGrammar(
         request: GrammarCheckRequest,
     ): Promise<LanguageToolResponse> {
-        const url = this.getApiUrl();
-
         try {
+            const url = this.getApiUrl();
             const body = new URLSearchParams({
                 text: request.text,
                 language: request.language,
@@ -253,40 +239,6 @@ export class LanguageToolService
         } catch (error) {
             logger.error("Grammar check failed", error);
 
-            // If local server failed, try public API as fallback
-            if (this.isUsingLocalServer()) {
-                logger.warn("Falling back to public API");
-                try {
-                    const body = new URLSearchParams({
-                        text: request.text,
-                        language: request.language,
-                    });
-
-                    const response = await fetch(
-                        LanguageToolService.PUBLIC_API_URL,
-                        {
-                            method: "POST",
-                            headers: {
-                                "Content-Type":
-                                    "application/x-www-form-urlencoded",
-                                Accept: "application/json",
-                            },
-                            body: body.toString(),
-                        },
-                    );
-
-                    if (!response.ok) {
-                        throw new Error(
-                            `LanguageTool API error: ${response.status}`,
-                        );
-                    }
-
-                    return (await response.json()) as LanguageToolResponse;
-                } catch (fallbackError) {
-                    logger.error("Fallback also failed", fallbackError);
-                }
-            }
-
             // Return empty response on failure
             return {
                 language: {
@@ -302,14 +254,11 @@ export class LanguageToolService
      * Check if using local server
      */
     isUsingLocalServer(): boolean {
-        return (
-            this.apiUrl !== null &&
-            this.apiUrl !== LanguageToolService.PUBLIC_API_URL
-        );
+        return this.apiUrl !== null;
     }
 
     /**
-     * Get server port (null if using public API)
+     * Get server port (null when server is unavailable)
      */
     getPort(): number | null {
         return this.port;

@@ -341,7 +341,7 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
                     await setupService.markLanguageToolInstalled(true);
                 } catch (err) {
                     logger.error("LanguageTool download failed", err);
-                    // Non-fatal - app can use public API fallback
+                    // Non-fatal - grammar checks remain unavailable until install succeeds
                 }
             }
         },
@@ -669,12 +669,14 @@ const bootstrap = async (): Promise<void> => {
         }
     }
 
-    // Initialize LanguageTool server (will use public API fallback if not installed)
+    // Initialize LanguageTool local server
     try {
         await languageToolService.waitForReady();
-        logger.success(
-            `LanguageTool ready - using ${languageToolService.isUsingLocalServer() ? "local server" : "public API"}`,
-        );
+        if (languageToolService.isUsingLocalServer()) {
+            logger.success("LanguageTool ready - using local server");
+        } else {
+            logger.warn("LanguageTool local server unavailable");
+        }
     } catch (error) {
         logger.error("Failed to initialize LanguageTool service", error);
     }

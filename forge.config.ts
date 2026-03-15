@@ -7,15 +7,27 @@ import { FuseV1Options, FuseVersion } from "@electron/fuses";
 import { mainConfig } from "./webpack.main.config";
 import { rendererConfig } from "./webpack.renderer.config";
 
+const get7zaResourcePath = (): string => {
+    if (process.platform === "darwin") {
+        return "./node_modules/7zip-bin/mac/arm64/7za";
+    }
+
+    if (process.platform === "linux") {
+        return "./node_modules/7zip-bin/linux/x64/7za";
+    }
+
+    return "./node_modules/7zip-bin/win/x64/7za.exe";
+};
+
 const config: ForgeConfig = {
     packagerConfig: {
         asar: true,
         executableName: "inkline",
         // Workflow files are bundled separately (server/ComfyUI downloaded at runtime)
-        // 7za.exe is shipped alongside the asar for archive extraction at runtime
+        // 7za is shipped alongside the asar for archive extraction at runtime
         extraResource: [
             "./assets/workflows",
-            "./node_modules/7zip-bin/win/x64/7za.exe",
+            get7zaResourcePath(),
         ],
         icon: "./assets/app-icon",
     },
@@ -50,7 +62,7 @@ const config: ForgeConfig = {
         new WebpackPlugin({
             mainConfig,
             devContentSecurityPolicy:
-                "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co https://api.languagetool.org http://127.0.0.1:* http://localhost:*;",
+                "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co; media-src 'self' data: blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co http://127.0.0.1:* http://localhost:*;",
             renderer: {
                 config: rendererConfig,
                 entryPoints: [
