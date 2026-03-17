@@ -6,7 +6,7 @@ development = ".env"
 
 [up]
 steps = [
-
+	"npm i"
 ]
 
 [down]
@@ -20,7 +20,9 @@ commands = [
 ]
 
 [tasks]
-publish = "npm run publish"
+	[tasks.publish]
+	command = "npm run publish"
+	description="Packages and publishes installer for current OS to GitHub."
 
 [open]
 repo = "https://github.com/enxilium/inkline"
