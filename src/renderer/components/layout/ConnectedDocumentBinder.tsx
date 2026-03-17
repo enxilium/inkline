@@ -16,6 +16,7 @@ export const ConnectedDocumentBinder: React.FC<{
             scrapNotes={store.scrapNotes}
             characters={store.characters}
             locations={store.locations}
+            rootLocationIds={store.workspaceProject?.locationIds ?? []}
             organizations={store.organizations}
             activeDocument={store.activeDocument}
             activeKind={activeKind}
@@ -36,6 +37,7 @@ export const ConnectedDocumentBinder: React.FC<{
             onReorderScrapNotes={store.reorderScrapNotes}
             onReorderCharacters={store.reorderCharacters}
             onReorderLocations={store.reorderLocations}
+            onMoveLocation={store.moveLocationInTree}
             onReorderOrganizations={store.reorderOrganizations}
             onToggleCollapse={store.toggleBinder}
             isBinderOpen={store.isBinderOpen}

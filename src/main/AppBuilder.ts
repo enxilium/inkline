@@ -30,6 +30,7 @@ import { SaveChapterContent } from "../@core/application/use-cases/logistics/Sav
 import { SaveCharacterInfo } from "../@core/application/use-cases/logistics/SaveCharacterInfo";
 import { SaveLocationInfo } from "../@core/application/use-cases/logistics/SaveLocationInfo";
 import { SaveManuscriptStructure } from "../@core/application/use-cases/logistics/SaveManuscriptStructure";
+import { ReorderLocationChildren } from "../@core/application/use-cases/logistics/ReorderLocationChildren";
 import { SaveOrganizationInfo } from "../@core/application/use-cases/logistics/SaveOrganizationInfo";
 import { SaveProjectSettings } from "../@core/application/use-cases/logistics/SaveProjectSettings";
 import { SaveUserSettings } from "../@core/application/use-cases/logistics/SaveUserSettings";
@@ -95,6 +96,7 @@ import { SaveChapterContentController } from "../@interface-adapters/controllers
 import { SaveCharacterInfoController } from "../@interface-adapters/controllers/logistics/SaveCharacterInfoController";
 import { SaveLocationInfoController } from "../@interface-adapters/controllers/logistics/SaveLocationInfoController";
 import { SaveManuscriptStructureController } from "../@interface-adapters/controllers/logistics/SaveManuscriptStructureController";
+import { ReorderLocationChildrenController } from "../@interface-adapters/controllers/logistics/ReorderLocationChildrenController";
 import { SaveOrganizationInfoController } from "../@interface-adapters/controllers/logistics/SaveOrganizationInfoController";
 import { SaveProjectSettingsController } from "../@interface-adapters/controllers/logistics/SaveProjectSettingsController";
 import { SaveUserSettingsController } from "../@interface-adapters/controllers/logistics/SaveUserSettingsController";
@@ -225,6 +227,7 @@ type UseCaseMap = {
         saveChapterContent: SaveChapterContent;
         saveCharacterInfo: SaveCharacterInfo;
         saveLocationInfo: SaveLocationInfo;
+        reorderLocationChildren: ReorderLocationChildren;
         saveManuscriptStructure: SaveManuscriptStructure;
         saveOrganizationInfo: SaveOrganizationInfo;
         saveProjectSettings: SaveProjectSettings;
@@ -484,7 +487,14 @@ export class AppBuilder {
                     repo.location,
                     repo.organization,
                 ),
-                saveLocationInfo: new SaveLocationInfo(repo.location),
+                saveLocationInfo: new SaveLocationInfo(
+                    repo.location,
+                    repo.project,
+                ),
+                reorderLocationChildren: new ReorderLocationChildren(
+                    repo.location,
+                    repo.project,
+                ),
                 saveManuscriptStructure: new SaveManuscriptStructure(
                     repo.project,
                     repo.chapter,
@@ -728,6 +738,9 @@ export class AppBuilder {
                 ),
                 saveLocationInfo: new SaveLocationInfoController(
                     useCases.logistics.saveLocationInfo,
+                ),
+                reorderLocationChildren: new ReorderLocationChildrenController(
+                    useCases.logistics.reorderLocationChildren,
                 ),
                 saveManuscriptStructure: new SaveManuscriptStructureController(
                     useCases.logistics.saveManuscriptStructure,

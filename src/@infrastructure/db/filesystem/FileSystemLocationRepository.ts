@@ -17,6 +17,7 @@ type FileSystemLocation = {
     bgmId: string | null;
     playlistId: string | null;
     galleryImageIds: string[];
+    sublocationIds: string[];
     characterIds: string[];
     organizationIds: string[];
 };
@@ -25,7 +26,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
     private getFilePath(
         userId: string,
         projectId: string,
-        locationId: string
+        locationId: string,
     ): string {
         return path.join(
             "users",
@@ -33,7 +34,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
             "projects",
             projectId,
             "locations",
-            `${locationId}.json`
+            `${locationId}.json`,
         );
     }
 
@@ -59,12 +60,13 @@ export class FileSystemLocationRepository implements ILocationRepository {
             bgmId: location.bgmId,
             playlistId: location.playlistId,
             galleryImageIds: location.galleryImageIds,
+            sublocationIds: location.sublocationIds,
             characterIds: location.characterIds,
             organizationIds: location.organizationIds,
         };
         await fileSystemService.writeJson(
             this.getFilePath(ownerId, projectId, location.id),
-            dto
+            dto,
         );
     }
 
@@ -72,7 +74,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
         const loc = await this.findFileLocation(id);
         if (loc) {
             const dto = await fileSystemService.readJson<FileSystemLocation>(
-                loc.path
+                loc.path,
             );
             if (dto) return this.mapToEntity(dto);
         }
@@ -91,7 +93,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
             if (file.endsWith(".json")) {
                 const dto =
                     await fileSystemService.readJson<FileSystemLocation>(
-                        path.join(dirPath, file)
+                        path.join(dirPath, file),
                     );
                 if (dto) locations.push(this.mapToEntity(dto));
             }
@@ -100,7 +102,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
     }
 
     async getLocationProfiles(
-        projectId: string
+        projectId: string,
     ): Promise<{ id: string; name: string; description: string }[]> {
         const locations = await this.findByProjectId(projectId);
         return locations.map((l) => ({
@@ -127,6 +129,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
                 bgmId: location.bgmId,
                 playlistId: location.playlistId,
                 galleryImageIds: location.galleryImageIds,
+                sublocationIds: location.sublocationIds,
                 characterIds: location.characterIds,
                 organizationIds: location.organizationIds,
             };
@@ -152,7 +155,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
     }
 
     private async findOwnerIdByProjectId(
-        projectId: string
+        projectId: string,
     ): Promise<string | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
@@ -160,7 +163,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
                 "users",
                 user,
                 "projects",
-                `${projectId}.json`
+                `${projectId}.json`,
             );
             if (await fileSystemService.exists(projectPath)) {
                 return user;
@@ -170,7 +173,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
     }
 
     private async findFileLocation(
-        locationId: string
+        locationId: string,
     ): Promise<{ userId: string; projectId: string; path: string } | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
@@ -182,7 +185,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
                     const locPath = this.getFilePath(
                         user,
                         projectId,
-                        locationId
+                        locationId,
                     );
                     if (await fileSystemService.exists(locPath)) {
                         return { userId: user, projectId, path: locPath };
@@ -207,8 +210,9 @@ export class FileSystemLocationRepository implements ILocationRepository {
             dto.bgmId,
             dto.playlistId,
             dto.galleryImageIds,
+            dto.sublocationIds ?? [],
             dto.characterIds,
-            dto.organizationIds
+            dto.organizationIds,
         );
     }
 }

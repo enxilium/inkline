@@ -5,6 +5,7 @@ import { ActionDropdown } from "../ui/ActionDropdown";
 import { ChevronLeftIcon, ChevronRightIcon } from "../ui/Icons";
 import { Label } from "../ui/Label";
 import { ListInput, type DocumentRef } from "../ui/ListInput";
+import { SearchableSelect } from "../ui/SearchableSelect";
 import { TagsInput } from "../ui/Tags";
 import { RichTextAreaInput } from "../ui/RichTextAreaInput";
 import { showToast } from "../ui/GenerationProgressToast";
@@ -15,6 +16,7 @@ import {
 
 export type LocationEditorValues = {
     name: string;
+    parentLocationId: string;
     description: string;
     culture: string;
     history: string;
@@ -24,6 +26,8 @@ export type LocationEditorValues = {
 
 export type LocationEditorProps = {
     location: WorkspaceLocation;
+    parentOptions: Array<{ id: string; label: string }>;
+    currentParentLocationId: string | null;
     gallerySources: string[];
     songUrl?: string;
     /** All documents available for slash-command references */
@@ -40,8 +44,12 @@ export type LocationEditorProps = {
     focusTitleOnMount?: boolean;
 };
 
-const defaultValues = (location: WorkspaceLocation): LocationEditorValues => ({
+const defaultValues = (
+    location: WorkspaceLocation,
+    currentParentLocationId: string | null,
+): LocationEditorValues => ({
     name: location.name ?? "",
+    parentLocationId: currentParentLocationId ?? "",
     description: location.description ?? "",
     culture: location.culture ?? "",
     history: location.history ?? "",
@@ -51,6 +59,8 @@ const defaultValues = (location: WorkspaceLocation): LocationEditorValues => ({
 
 export const LocationEditor: React.FC<LocationEditorProps> = ({
     location,
+    parentOptions,
+    currentParentLocationId,
     gallerySources,
     songUrl,
     availableDocuments = [],
@@ -65,7 +75,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     focusTitleOnMount = false,
 }) => {
     const [values, setValues] = React.useState<LocationEditorValues>(() =>
-        defaultValues(location),
+        defaultValues(location, currentParentLocationId),
     );
     const [, setSaving] = React.useState(false);
     const [assetBusy, setAssetBusy] = React.useState(false);
@@ -86,9 +96,9 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
 
     React.useEffect(() => {
         isUserChange.current = false;
-        setValues(defaultValues(location));
+        setValues(defaultValues(location, currentParentLocationId));
         setError(null);
-    }, [location]);
+    }, [currentParentLocationId, location]);
 
     React.useEffect(() => {
         if (!focusTitleOnMount) {
@@ -328,6 +338,18 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                 </div>
                 <div className="entity-editor-grid">
                     <div className="entity-column">
+                        <div className="entity-field">
+                            <Label>Parent location</Label>
+                            <SearchableSelect
+                                value={values.parentLocationId}
+                                options={parentOptions}
+                                onChange={(value) =>
+                                    handleChange("parentLocationId", value)
+                                }
+                                emptyLabel="Root location"
+                                placeholder="Search location..."
+                            />
+                        </div>
                         <div className="entity-field">
                             <Label htmlFor="location-description">
                                 Description

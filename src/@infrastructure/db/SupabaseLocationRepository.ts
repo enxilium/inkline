@@ -14,6 +14,7 @@ type LocationRow = {
     bgm_id: string | null;
     playlist_id: string | null;
     gallery_image_ids: string[] | null;
+    sublocation_ids: string[] | null;
     character_ids: string[] | null;
     organization_ids: string[] | null;
     created_at: string;
@@ -39,8 +40,9 @@ const mapRowToLocation = (row: LocationRow): Location =>
         row.bgm_id,
         row.playlist_id,
         parseStringArray(row.gallery_image_ids),
+        parseStringArray(row.sublocation_ids),
         parseStringArray(row.character_ids),
-        parseStringArray(row.organization_ids)
+        parseStringArray(row.organization_ids),
     );
 
 export class SupabaseLocationRepository implements ILocationRepository {
@@ -58,6 +60,7 @@ export class SupabaseLocationRepository implements ILocationRepository {
             bgm_id: location.bgmId,
             playlist_id: location.playlistId,
             gallery_image_ids: location.galleryImageIds,
+            sublocation_ids: location.sublocationIds,
             character_ids: location.characterIds,
             organization_ids: location.organizationIds,
             created_at: location.createdAt.toISOString(),
@@ -108,6 +111,7 @@ export class SupabaseLocationRepository implements ILocationRepository {
                 bgm_id: location.bgmId,
                 playlist_id: location.playlistId,
                 gallery_image_ids: location.galleryImageIds,
+                sublocation_ids: location.sublocationIds,
                 character_ids: location.characterIds,
                 organization_ids: location.organizationIds,
                 updated_at: location.updatedAt.toISOString(),
@@ -133,7 +137,7 @@ export class SupabaseLocationRepository implements ILocationRepository {
     }
 
     async getLocationProfiles(
-        projectId: string
+        projectId: string,
     ): Promise<{ name: string; description: string }[]> {
         const client = SupabaseService.getClient();
         const { data, error } = await client

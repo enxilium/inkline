@@ -14,6 +14,7 @@ import {
     BinderChapterIcon,
     BinderOrganizationIcon,
     BinderScrapNoteIcon,
+    ChevronDownIcon,
     ChevronLeftIcon,
     ChevronRightIcon,
     MapIcon,
@@ -28,6 +29,7 @@ export type DocumentBinderProps = {
     scrapNotes: WorkspaceScrapNote[];
     characters: WorkspaceCharacter[];
     locations: WorkspaceLocation[];
+    rootLocationIds?: string[];
     organizations: WorkspaceOrganization[];
     activeDocument: WorkspaceDocumentRef | null;
     onSelect: (selection: WorkspaceDocumentRef) => void;
@@ -45,6 +47,11 @@ export type DocumentBinderProps = {
     onReorderScrapNotes: (newOrder: string[]) => void;
     onReorderCharacters: (newOrder: string[]) => void;
     onReorderLocations: (newOrder: string[]) => void;
+    onMoveLocation: (params: {
+        locationId: string;
+        targetLocationId: string;
+        dropMode: "before" | "inside" | "after";
+    }) => void;
     onReorderOrganizations: (newOrder: string[]) => void;
     onToggleCollapse?: () => void;
     /** Used to choose the correct icon for the toggle button (collapse vs expand/pin-open). */
@@ -90,17 +97,31 @@ const DraggableBinderItem = ({
     onDragOver,
     onDrop,
     onDragEnd,
+    indentLevel = 0,
+    hasChildren = false,
+    isCollapsed = false,
+    onToggleCollapse,
+    disableDrag = false,
+    animateReveal = false,
+    animateCollapse = false,
 }: {
     item: BinderItem;
     isActive: boolean;
     isDragging?: boolean;
-    dropPosition?: "top" | "bottom" | "none";
+    dropPosition?: "top" | "middle" | "bottom" | "none";
     onSelect: () => void;
     onDelete: () => void;
     onDragStart: (e: React.DragEvent) => void;
     onDragOver: (e: React.DragEvent) => void;
     onDrop: (e: React.DragEvent) => void;
     onDragEnd: (e: React.DragEvent) => void;
+    indentLevel?: number;
+    hasChildren?: boolean;
+    isCollapsed?: boolean;
+    onToggleCollapse?: () => void;
+    disableDrag?: boolean;
+    animateReveal?: boolean;
+    animateCollapse?: boolean;
 }) => {
     const renameDocument = useAppStore((state) => state.renameDocument);
     const renamingDocument = useAppStore((state) => state.renamingDocument);
@@ -162,6 +183,10 @@ const DraggableBinderItem = ({
                     dropPosition === "bottom"
                         ? "2px solid var(--accent)"
                         : "2px solid transparent",
+                background:
+                    dropPosition === "middle"
+                        ? "var(--accent-transparent)"
+                        : "transparent",
             }}
         >
             {isRenaming ? (
@@ -196,7 +221,12 @@ const DraggableBinderItem = ({
             ) : (
                 <button
                     type="button"
-                    className={"binder-item" + (isActive ? " is-active" : "")}
+                    className={
+                        "binder-item" +
+                        (isActive ? " is-active" : "") +
+                        (animateReveal ? " binder-item-reveal" : "") +
+                        (animateCollapse ? " binder-item-collapse" : "")
+                    }
                     onClick={onSelect}
                     onContextMenu={(e) => {
                         e.preventDefault();
@@ -211,12 +241,49 @@ const DraggableBinderItem = ({
                         setIsRenaming(true);
                         setRenameValue(item.label);
                     }}
-                    draggable={true}
+                    draggable={!disableDrag}
                     onDragStart={onDragStart}
                     onDragEnd={onDragEnd}
                     data-kind={item.kind}
-                    style={{ flex: 1, textAlign: "left" }}
+                    style={{
+                        flex: 1,
+                        textAlign: "left",
+                        paddingLeft: `${8 + indentLevel * 16}px`,
+                    }}
                 >
+                    {hasChildren ? (
+                        <span
+                            role="button"
+                            aria-label={
+                                isCollapsed
+                                    ? "Expand location"
+                                    : "Collapse location"
+                            }
+                            onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onToggleCollapse?.();
+                            }}
+                            style={{
+                                display: "inline-flex",
+                                marginRight: "4px",
+                                width: "14px",
+                                alignItems: "center",
+                                justifyContent: "center",
+                            }}
+                        >
+                            {isCollapsed ? (
+                                <ChevronRightIcon size={12} />
+                            ) : (
+                                <ChevronDownIcon size={12} />
+                            )}
+                        </span>
+                    ) : (
+                        <span
+                            aria-hidden
+                            style={{ display: "inline-block", width: "14px" }}
+                        />
+                    )}
                     {item.prefix ? (
                         <span className="binder-item-prefix">
                             {item.prefix}
@@ -251,6 +318,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     scrapNotes,
     characters,
     locations,
+    rootLocationIds = [],
     organizations,
     activeDocument,
     onSelect,
@@ -268,6 +336,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     onReorderScrapNotes,
     onReorderCharacters,
     onReorderLocations,
+    onMoveLocation,
     onReorderOrganizations,
     onToggleCollapse,
     isBinderOpen,
@@ -290,6 +359,93 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     // Native Drag & Drop State
     const [draggedId, setDraggedId] = React.useState<string | null>(null);
     const [dragOverId, setDragOverId] = React.useState<string | null>(null);
+    const [dragOverZone, setDragOverZone] = React.useState<
+        "top" | "middle" | "bottom" | null
+    >(null);
+    const [collapsedLocationIds, setCollapsedLocationIds] = React.useState<
+        Record<string, boolean>
+    >({});
+    const autoExpandTimerRef = React.useRef<number | null>(null);
+    const autoExpandTargetRef = React.useRef<string | null>(null);
+    const revealTimerRef = React.useRef<number | null>(null);
+    const collapseTimersRef = React.useRef<Record<string, number>>({});
+    const [revealedLocationIds, setRevealedLocationIds] = React.useState<
+        Record<string, boolean>
+    >({});
+    const [collapsingLocationIds, setCollapsingLocationIds] = React.useState<
+        Record<string, boolean>
+    >({});
+
+    const clearAutoExpandTimer = React.useCallback(() => {
+        if (autoExpandTimerRef.current !== null) {
+            window.clearTimeout(autoExpandTimerRef.current);
+            autoExpandTimerRef.current = null;
+        }
+        autoExpandTargetRef.current = null;
+    }, []);
+
+    const clearRevealTimer = React.useCallback(() => {
+        if (revealTimerRef.current !== null) {
+            window.clearTimeout(revealTimerRef.current);
+            revealTimerRef.current = null;
+        }
+    }, []);
+
+    const clearCollapseTimer = React.useCallback((parentId: string) => {
+        const timerId = collapseTimersRef.current[parentId];
+        if (timerId !== undefined) {
+            window.clearTimeout(timerId);
+            delete collapseTimersRef.current[parentId];
+        }
+    }, []);
+
+    const clearCollapseTimers = React.useCallback(() => {
+        Object.values(collapseTimersRef.current).forEach((timerId) => {
+            window.clearTimeout(timerId);
+        });
+        collapseTimersRef.current = {};
+    }, []);
+
+    React.useEffect(() => {
+        return () => {
+            clearAutoExpandTimer();
+            clearRevealTimer();
+            clearCollapseTimers();
+        };
+    }, [clearAutoExpandTimer, clearRevealTimer, clearCollapseTimers]);
+
+    const getRevealedLocationIds = React.useCallback(
+        (
+            parentId: string,
+            collapsedMap: Record<string, boolean>,
+        ): Record<string, boolean> => {
+            const locationsById = new Map(
+                locations.map((location) => [location.id, location]),
+            );
+            const revealed: Record<string, boolean> = {};
+            const visit = (locationId: string) => {
+                const location = locationsById.get(locationId);
+                if (!location) {
+                    return;
+                }
+
+                location.sublocationIds.forEach((childId) => {
+                    if (!locationsById.has(childId)) {
+                        return;
+                    }
+                    revealed[childId] = true;
+
+                    if (!collapsedMap[childId]) {
+                        visit(childId);
+                    }
+                });
+            };
+
+            visit(parentId);
+            return revealed;
+        },
+        [locations],
+    );
 
     const handleSelectKind = (kind: WorkspaceDocumentKind) => {
         if (onActiveKindChange) {
@@ -346,6 +502,111 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         label: normalizeLabel(location.name, "Untitled Location"),
         kind: "location",
     }));
+
+    const locationRows = React.useMemo(() => {
+        const locationsById = new Map(
+            locations.map((location) => [location.id, location]),
+        );
+        const childIds = new Set<string>();
+        locations.forEach((location) => {
+            location.sublocationIds.forEach((childId) => {
+                childIds.add(childId);
+            });
+        });
+
+        const roots = rootLocationIds
+            .filter((id) => locationsById.has(id))
+            .concat(
+                locations
+                    .map((location) => location.id)
+                    .filter(
+                        (id) =>
+                            !rootLocationIds.includes(id) && !childIds.has(id),
+                    ),
+            );
+
+        const rows: Array<
+            BinderItem & { depth: number; hasChildren: boolean }
+        > = [];
+        const visited = new Set<string>();
+
+        const visit = (locationId: string, depth: number) => {
+            if (visited.has(locationId)) {
+                return;
+            }
+
+            visited.add(locationId);
+            const location = locationsById.get(locationId);
+            if (!location) {
+                return;
+            }
+
+            const hasChildren = location.sublocationIds.some((childId) =>
+                locationsById.has(childId),
+            );
+
+            rows.push({
+                id: location.id,
+                label: normalizeLabel(location.name, "Untitled Location"),
+                kind: "location",
+                depth,
+                hasChildren,
+            });
+
+            if (collapsedLocationIds[location.id]) {
+                return;
+            }
+
+            location.sublocationIds.forEach((childId) =>
+                visit(childId, depth + 1),
+            );
+        };
+
+        roots.forEach((rootId) => visit(rootId, 0));
+
+        locations.forEach((location) => {
+            if (!visited.has(location.id) && !childIds.has(location.id)) {
+                visit(location.id, 0);
+            }
+        });
+
+        return rows;
+    }, [collapsedLocationIds, locations, rootLocationIds]);
+
+    const getLocationDescendantCount = React.useCallback(
+        (locationId: string): number => {
+            const locationsById = new Map(
+                locations.map((location) => [location.id, location]),
+            );
+            let count = 0;
+            const stack = [locationId];
+            const visited = new Set<string>();
+
+            while (stack.length > 0) {
+                const currentId = stack.pop();
+                if (!currentId || visited.has(currentId)) {
+                    continue;
+                }
+                visited.add(currentId);
+
+                if (currentId !== locationId) {
+                    count += 1;
+                }
+
+                const current = locationsById.get(currentId);
+                if (!current) {
+                    continue;
+                }
+
+                current.sublocationIds.forEach((childId) =>
+                    stack.push(childId),
+                );
+            }
+
+            return count;
+        },
+        [locations],
+    );
 
     const organizationItems: BinderItem[] = organizations.map(
         (organization) => ({
@@ -423,6 +684,55 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         e.preventDefault(); // Allow drop
         if (draggedId && draggedId !== item.id) {
             setDragOverId(item.id);
+
+            if (activeSection.kind === "location") {
+                const element = e.currentTarget as HTMLElement;
+                const rect = element.getBoundingClientRect();
+                const ratio = (e.clientY - rect.top) / Math.max(rect.height, 1);
+                const hoveredLocation = locations.find(
+                    (location) => location.id === item.id,
+                );
+                const hasChildren =
+                    (hoveredLocation?.sublocationIds.length ?? 0) > 0;
+
+                if (ratio < 0.25) {
+                    setDragOverZone("top");
+                    clearAutoExpandTimer();
+                } else if (ratio > 0.75) {
+                    setDragOverZone("bottom");
+                    clearAutoExpandTimer();
+                } else {
+                    setDragOverZone("middle");
+
+                    if (hasChildren && collapsedLocationIds[item.id]) {
+                        if (autoExpandTargetRef.current !== item.id) {
+                            clearAutoExpandTimer();
+                            autoExpandTargetRef.current = item.id;
+                            autoExpandTimerRef.current = window.setTimeout(
+                                () => {
+                                    setCollapsedLocationIds((current) => {
+                                        if (!current[item.id]) {
+                                            return current;
+                                        }
+                                        return {
+                                            ...current,
+                                            [item.id]: false,
+                                        };
+                                    });
+                                    clearAutoExpandTimer();
+                                },
+                                550,
+                            );
+                        }
+                    } else {
+                        clearAutoExpandTimer();
+                    }
+                }
+                return;
+            }
+
+            setDragOverZone(null);
+            clearAutoExpandTimer();
         }
     };
 
@@ -431,6 +741,28 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         e.stopPropagation();
 
         if (draggedId && draggedId !== targetItem.id) {
+            if (activeSection.kind === "location") {
+                const dropMode =
+                    dragOverZone === "top"
+                        ? "before"
+                        : dragOverZone === "bottom"
+                          ? "after"
+                          : "inside";
+
+                onMoveLocation({
+                    locationId: draggedId,
+                    targetLocationId: targetItem.id,
+                    dropMode,
+                });
+
+                setDraggedId(null);
+                setDragOverId(null);
+                setDragOverZone(null);
+                setDraggedDocument(null);
+                clearAutoExpandTimer();
+                return;
+            }
+
             const oldIndex = activeSection.items.findIndex(
                 (i) => i.id === draggedId,
             );
@@ -448,16 +780,21 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
 
         setDraggedId(null);
         setDragOverId(null);
+        setDragOverZone(null);
         setDraggedDocument(null);
+        clearAutoExpandTimer();
     };
 
     const handleDragEnd = () => {
         setDraggedId(null);
         setDragOverId(null);
+        setDragOverZone(null);
         setDraggedDocument(null);
+        clearAutoExpandTimer();
     };
 
-    const renderedItems = activeSection.items;
+    const renderedItems =
+        activeSection.kind === "location" ? locationRows : activeSection.items;
 
     const toggleIcon =
         (isBinderOpen ?? true) ? <ChevronLeftIcon /> : <ChevronRightIcon />;
@@ -518,11 +855,17 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                                     draggedId !== renderedItems[0].id
                                 ) {
                                     setDragOverId(renderedItems[0].id);
+                                    if (activeSection.kind === "location") {
+                                        setDragOverZone("top");
+                                    }
                                 }
                             }}
                             onDrop={(e) => {
                                 e.preventDefault();
                                 if (renderedItems.length > 0) {
+                                    if (activeSection.kind === "location") {
+                                        setDragOverZone("top");
+                                    }
                                     handleDrop(e, renderedItems[0]);
                                 }
                             }}
@@ -538,15 +881,28 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                                         activeDocument.id === item.id;
 
                                     let dropPosition:
+                                        | "middle"
                                         | "top"
                                         | "bottom"
                                         | "none" = "none";
                                     if (dragOverId === item.id && draggedId) {
-                                        if (draggedIndex > index)
-                                            dropPosition = "top";
-                                        if (draggedIndex < index)
-                                            dropPosition = "bottom";
+                                        if (activeSection.kind === "location") {
+                                            dropPosition =
+                                                dragOverZone ?? "middle";
+                                        } else {
+                                            if (draggedIndex > index)
+                                                dropPosition = "top";
+                                            if (draggedIndex < index)
+                                                dropPosition = "bottom";
+                                        }
                                     }
+
+                                    const locationRow =
+                                        activeSection.kind === "location"
+                                            ? locationRows.find(
+                                                  (row) => row.id === item.id,
+                                              )
+                                            : undefined;
 
                                     return (
                                         <DraggableBinderItem
@@ -562,9 +918,19 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                                                 })
                                             }
                                             onDelete={() => {
+                                                const descendantCount =
+                                                    item.kind === "location"
+                                                        ? getLocationDescendantCount(
+                                                              item.id,
+                                                          )
+                                                        : 0;
+                                                const confirmMessage =
+                                                    descendantCount > 0
+                                                        ? `Delete "${item.label}" and its ${descendantCount} sub-location${descendantCount === 1 ? "" : "s"}? This cannot be undone.`
+                                                        : `Delete "${item.label}"?`;
                                                 if (
                                                     window.confirm(
-                                                        `Delete "${item.label}"?`,
+                                                        confirmMessage,
                                                     )
                                                 ) {
                                                     activeSection.onDelete(
@@ -580,6 +946,174 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                                             }
                                             onDrop={(e) => handleDrop(e, item)}
                                             onDragEnd={handleDragEnd}
+                                            indentLevel={
+                                                locationRow?.depth ?? 0
+                                            }
+                                            hasChildren={
+                                                locationRow?.hasChildren ??
+                                                false
+                                            }
+                                            isCollapsed={
+                                                !!collapsedLocationIds[item.id]
+                                            }
+                                            onToggleCollapse={() => {
+                                                setCollapsedLocationIds(
+                                                    (current) => {
+                                                        const isCurrentlyCollapsed =
+                                                            !!current[item.id];
+
+                                                        if (
+                                                            isCurrentlyCollapsed
+                                                        ) {
+                                                            clearCollapseTimer(
+                                                                item.id,
+                                                            );
+
+                                                            const next = {
+                                                                ...current,
+                                                                [item.id]: false,
+                                                            };
+
+                                                            const revealed =
+                                                                getRevealedLocationIds(
+                                                                    item.id,
+                                                                    current,
+                                                                );
+                                                            setCollapsingLocationIds(
+                                                                (existing) => {
+                                                                    if (
+                                                                        !Object.keys(
+                                                                            existing,
+                                                                        ).length
+                                                                    ) {
+                                                                        return existing;
+                                                                    }
+
+                                                                    const updated =
+                                                                        {
+                                                                            ...existing,
+                                                                        };
+                                                                    Object.keys(
+                                                                        revealed,
+                                                                    ).forEach(
+                                                                        (
+                                                                            id,
+                                                                        ) => {
+                                                                            delete updated[
+                                                                                id
+                                                                            ];
+                                                                        },
+                                                                    );
+                                                                    return updated;
+                                                                },
+                                                            );
+                                                            setRevealedLocationIds(
+                                                                revealed,
+                                                            );
+                                                            clearRevealTimer();
+                                                            revealTimerRef.current =
+                                                                window.setTimeout(
+                                                                    () => {
+                                                                        setRevealedLocationIds(
+                                                                            {},
+                                                                        );
+                                                                        clearRevealTimer();
+                                                                    },
+                                                                    220,
+                                                                );
+
+                                                            return next;
+                                                        } else {
+                                                            const collapsing =
+                                                                getRevealedLocationIds(
+                                                                    item.id,
+                                                                    current,
+                                                                );
+
+                                                            if (
+                                                                Object.keys(
+                                                                    collapsing,
+                                                                ).length === 0
+                                                            ) {
+                                                                return {
+                                                                    ...current,
+                                                                    [item.id]: true,
+                                                                };
+                                                            }
+
+                                                            setRevealedLocationIds(
+                                                                {},
+                                                            );
+                                                            clearRevealTimer();
+
+                                                            setCollapsingLocationIds(
+                                                                (existing) => ({
+                                                                    ...existing,
+                                                                    ...collapsing,
+                                                                }),
+                                                            );
+
+                                                            clearCollapseTimer(
+                                                                item.id,
+                                                            );
+                                                            collapseTimersRef.current[
+                                                                item.id
+                                                            ] =
+                                                                window.setTimeout(
+                                                                    () => {
+                                                                        setCollapsedLocationIds(
+                                                                            (
+                                                                                latest,
+                                                                            ) => ({
+                                                                                ...latest,
+                                                                                [item.id]: true,
+                                                                            }),
+                                                                        );
+                                                                        setCollapsingLocationIds(
+                                                                            (
+                                                                                existing,
+                                                                            ) => {
+                                                                                const updated =
+                                                                                    {
+                                                                                        ...existing,
+                                                                                    };
+                                                                                Object.keys(
+                                                                                    collapsing,
+                                                                                ).forEach(
+                                                                                    (
+                                                                                        id,
+                                                                                    ) => {
+                                                                                        delete updated[
+                                                                                            id
+                                                                                        ];
+                                                                                    },
+                                                                                );
+                                                                                return updated;
+                                                                            },
+                                                                        );
+                                                                        clearCollapseTimer(
+                                                                            item.id,
+                                                                        );
+                                                                    },
+                                                                    220,
+                                                                );
+
+                                                            return current;
+                                                        }
+                                                    },
+                                                );
+                                            }}
+                                            animateReveal={
+                                                activeSection.kind ===
+                                                    "location" &&
+                                                !!revealedLocationIds[item.id]
+                                            }
+                                            animateCollapse={
+                                                activeSection.kind ===
+                                                    "location" &&
+                                                !!collapsingLocationIds[item.id]
+                                            }
+                                            disableDrag={false}
                                         />
                                     );
                                 });

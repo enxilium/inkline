@@ -169,6 +169,47 @@ const resolveDocumentSelection = (
     return createDefaultSelection(payload);
 };
 
+const findParentLocationId = (
+    locationId: string,
+    locations: WorkspaceLocation[],
+): string | null => {
+    for (const location of locations) {
+        if (location.sublocationIds.includes(locationId)) {
+            return location.id;
+        }
+    }
+
+    return null;
+};
+
+const collectDescendantLocationIds = (
+    rootLocationId: string,
+    locations: WorkspaceLocation[],
+): Set<string> => {
+    const locationsById = new Map(
+        locations.map((location) => [location.id, location]),
+    );
+    const descendants = new Set<string>();
+    const stack = [rootLocationId];
+
+    while (stack.length > 0) {
+        const currentId = stack.pop();
+        if (!currentId || descendants.has(currentId)) {
+            continue;
+        }
+
+        descendants.add(currentId);
+        const current = locationsById.get(currentId);
+        if (!current) {
+            continue;
+        }
+
+        current.sublocationIds.forEach((childId) => stack.push(childId));
+    }
+
+    return descendants;
+};
+
 const patchEntity = <T extends { id: string }>(
     list: T[],
     entityId: string,
@@ -371,6 +412,11 @@ type AppStore = {
     reorderScrapNotes: (newOrder: string[]) => Promise<void>;
     reorderCharacters: (newOrder: string[]) => Promise<void>;
     reorderLocations: (newOrder: string[]) => Promise<void>;
+    moveLocationInTree: (params: {
+        locationId: string;
+        targetLocationId: string;
+        dropMode: "before" | "inside" | "after";
+    }) => Promise<void>;
     reorderOrganizations: (newOrder: string[]) => Promise<void>;
     renameDocument: (
         kind: string,
@@ -412,6 +458,7 @@ type AppStore = {
     updateScrapNoteRemote: RendererApi["manuscript"]["updateScrapNote"];
     saveCharacterInfo: RendererApi["logistics"]["saveCharacterInfo"];
     saveLocationInfo: RendererApi["logistics"]["saveLocationInfo"];
+    reorderLocationChildren: RendererApi["logistics"]["reorderLocationChildren"];
     saveOrganizationInfo: RendererApi["logistics"]["saveOrganizationInfo"];
     importAsset: RendererApi["asset"]["importAsset"];
     generateCharacterImage: RendererApi["generation"]["generateCharacterImage"];
@@ -1572,6 +1619,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         bgmId: null,
                         playlistId: null,
                         galleryImageIds: [],
+                        sublocationIds: [],
                         characterIds: [],
                         organizationIds: [],
                     },
@@ -1863,16 +1911,52 @@ export const useAppStore = create<AppStore>((set, get) => {
             });
 
             set((state) => {
-                const nextLocations = state.locations.filter(
-                    (l) => l.id !== locationId,
+                const locationsById = new Map(
+                    state.locations.map((location) => [location.id, location]),
                 );
+
+                const collectSubtreeIds = (rootId: string): Set<string> => {
+                    const collected = new Set<string>();
+                    const stack = [rootId];
+
+                    while (stack.length > 0) {
+                        const currentId = stack.pop();
+                        if (!currentId || collected.has(currentId)) {
+                            continue;
+                        }
+
+                        collected.add(currentId);
+                        const currentLocation = locationsById.get(currentId);
+                        if (!currentLocation) {
+                            continue;
+                        }
+
+                        currentLocation.sublocationIds.forEach((childId) => {
+                            stack.push(childId);
+                        });
+                    }
+
+                    return collected;
+                };
+
+                const subtreeIds = collectSubtreeIds(locationId);
+
+                const nextLocations = state.locations
+                    .filter((location) => !subtreeIds.has(location.id))
+                    .map((location) => ({
+                        ...location,
+                        sublocationIds: location.sublocationIds.filter(
+                            (childId) => !subtreeIds.has(childId),
+                        ),
+                    }));
                 const nextTabs = state.openTabs.filter(
-                    (t) => !(t.kind === "location" && t.id === locationId),
+                    (tab) =>
+                        !(tab.kind === "location" && subtreeIds.has(tab.id)),
                 );
                 let nextActive = state.activeDocument;
                 if (
                     state.activeDocument?.kind === "location" &&
-                    state.activeDocument.id === locationId
+                    subtreeIds.has(state.activeDocument.id)
                 ) {
                     nextActive =
                         nextTabs.length > 0
@@ -1880,6 +1964,15 @@ export const useAppStore = create<AppStore>((set, get) => {
                             : null;
                 }
                 return {
+                    workspaceProject: state.workspaceProject
+                        ? {
+                              ...state.workspaceProject,
+                              locationIds:
+                                  state.workspaceProject.locationIds.filter(
+                                      (id) => !subtreeIds.has(id),
+                                  ),
+                          }
+                        : state.workspaceProject,
                     locations: nextLocations,
                     activeDocument: nextActive,
                     openTabs: nextTabs,
@@ -2041,6 +2134,151 @@ export const useAppStore = create<AppStore>((set, get) => {
                 });
             }
         },
+        moveLocationInTree: async ({
+            locationId,
+            targetLocationId,
+            dropMode,
+        }) => {
+            const projectId = get().projectId.trim();
+            if (!projectId) {
+                return;
+            }
+
+            const previousState = get();
+            const previousLocations = previousState.locations;
+            const previousProject = previousState.workspaceProject;
+
+            if (!previousProject || locationId === targetLocationId) {
+                return;
+            }
+
+            const descendants = collectDescendantLocationIds(
+                locationId,
+                previousLocations,
+            );
+            if (dropMode === "inside" && descendants.has(targetLocationId)) {
+                return;
+            }
+
+            const locationsById = new Map(
+                previousLocations.map((location) => [
+                    location.id,
+                    {
+                        ...location,
+                        sublocationIds: [...location.sublocationIds],
+                    },
+                ]),
+            );
+
+            const sourceParentId = findParentLocationId(
+                locationId,
+                previousLocations,
+            );
+            const targetParentId = findParentLocationId(
+                targetLocationId,
+                previousLocations,
+            );
+            const destinationParentId =
+                dropMode === "inside" ? targetLocationId : targetParentId;
+
+            const nextProject = {
+                ...previousProject,
+                locationIds: [...previousProject.locationIds],
+            };
+
+            const getContainer = (parentId: string | null): string[] => {
+                if (!parentId) {
+                    return nextProject.locationIds;
+                }
+
+                const parent = locationsById.get(parentId);
+                if (!parent) {
+                    throw new Error("Location parent not found while moving.");
+                }
+
+                return parent.sublocationIds;
+            };
+
+            const sourceContainer = getContainer(sourceParentId);
+            const sourceIndex = sourceContainer.indexOf(locationId);
+            if (sourceIndex === -1) {
+                return;
+            }
+            sourceContainer.splice(sourceIndex, 1);
+
+            const destinationContainer = getContainer(destinationParentId);
+
+            let insertIndex = destinationContainer.length;
+            if (dropMode !== "inside") {
+                const targetIndex =
+                    destinationContainer.indexOf(targetLocationId);
+                if (targetIndex === -1) {
+                    return;
+                }
+
+                insertIndex =
+                    dropMode === "before" ? targetIndex : targetIndex + 1;
+
+                if (
+                    sourceContainer === destinationContainer &&
+                    sourceIndex < insertIndex
+                ) {
+                    insertIndex -= 1;
+                }
+            }
+
+            destinationContainer.splice(insertIndex, 0, locationId);
+
+            nextProject.updatedAt = new Date();
+
+            const nextLocations = Array.from(locationsById.values());
+
+            set({
+                workspaceProject: nextProject,
+                locations: nextLocations,
+            });
+
+            const persistContainer = async (
+                parentId: string | null,
+                orderedLocationIds: string[],
+            ) => {
+                await rendererApi.logistics.reorderLocationChildren({
+                    projectId,
+                    parentLocationId: parentId,
+                    orderedLocationIds,
+                });
+            };
+
+            try {
+                if (sourceParentId !== destinationParentId) {
+                    await rendererApi.logistics.saveLocationInfo({
+                        projectId,
+                        locationId,
+                        payload: {
+                            parentLocationId: destinationParentId,
+                        },
+                    });
+                }
+
+                const destinationOrder = [...destinationContainer];
+                const sourceOrder = [...sourceContainer];
+
+                if (sourceParentId !== destinationParentId) {
+                    await persistContainer(sourceParentId, sourceOrder);
+                }
+
+                await persistContainer(destinationParentId, destinationOrder);
+            } catch (error) {
+                set({
+                    workspaceProject: previousProject,
+                    locations: previousLocations,
+                    autosaveError: createErrorMessage(
+                        error,
+                        "Failed to move location in tree.",
+                    ),
+                });
+            }
+        },
         reorderOrganizations: async (newOrder) => {
             const projectId = get().projectId.trim();
             if (!projectId) return;
@@ -2121,6 +2359,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         })
                       : kind === "location"
                         ? rendererApi.logistics.saveLocationInfo({
+                              projectId,
                               locationId: id,
                               payload: { name: newTitle },
                           })
@@ -2540,6 +2779,9 @@ export const useAppStore = create<AppStore>((set, get) => {
         },
         saveLocationInfo: async (request) => {
             return rendererApi.logistics.saveLocationInfo(request);
+        },
+        reorderLocationChildren: async (request) => {
+            return rendererApi.logistics.reorderLocationChildren(request);
         },
         saveOrganizationInfo: async (request) => {
             return rendererApi.logistics.saveOrganizationInfo(request);

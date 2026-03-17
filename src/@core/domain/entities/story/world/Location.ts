@@ -15,7 +15,8 @@ export class Location {
         public bgmId: string | null,
         public playlistId: string | null,
         public galleryImageIds: string[],
+        public sublocationIds: string[],
         public characterIds: string[],
-        public organizationIds: string[]
+        public organizationIds: string[],
     ) {}
 }

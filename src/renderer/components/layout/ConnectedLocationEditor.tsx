@@ -6,6 +6,7 @@ import {
 } from "../workspace/LocationEditor";
 import type { AutosaveStatus } from "../../types";
 import type { DocumentRef } from "../ui/ListInput";
+import type { SelectOption } from "../ui/SearchableSelect";
 
 interface ConnectedLocationEditorProps {
     locationId: string;
@@ -61,15 +62,54 @@ export const ConnectedLocationEditor: React.FC<
 
     const location = React.useMemo(
         () => locations.find((l) => l.id === locationId),
-        [locations, locationId]
+        [locations, locationId],
     );
+
+    const parentLocationId = React.useMemo(() => {
+        for (const candidate of locations) {
+            if (candidate.sublocationIds.includes(locationId)) {
+                return candidate.id;
+            }
+        }
+
+        return null;
+    }, [locations, locationId]);
+
+    const parentOptions = React.useMemo((): SelectOption[] => {
+        const descendants = new Set<string>();
+        const stack = [locationId];
+
+        while (stack.length > 0) {
+            const currentId = stack.pop();
+            if (!currentId || descendants.has(currentId)) {
+                continue;
+            }
+
+            descendants.add(currentId);
+            const current = locations.find((entry) => entry.id === currentId);
+            if (!current) {
+                continue;
+            }
+
+            current.sublocationIds.forEach((childId) => {
+                stack.push(childId);
+            });
+        }
+
+        return locations
+            .filter((entry) => !descendants.has(entry.id))
+            .map((entry) => ({
+                id: entry.id,
+                label: entry.name || "Untitled Location",
+            }));
+    }, [locationId, locations]);
 
     const resolveStoredImageUrls = React.useCallback(
         (galleryIds: string[]): string[] =>
             galleryIds
                 .map((id) => assets.images[id]?.url)
                 .filter((url): url is string => Boolean(url)),
-        [assets.images]
+        [assets.images],
     );
 
     const gallerySources = React.useMemo(
@@ -77,12 +117,12 @@ export const ConnectedLocationEditor: React.FC<
             location
                 ? resolveStoredImageUrls(location.galleryImageIds ?? [])
                 : [],
-        [location, resolveStoredImageUrls]
+        [location, resolveStoredImageUrls],
     );
 
     const songUrl = React.useMemo(
         () => (location?.bgmId ? assets.bgms[location.bgmId]?.url : undefined),
-        [location, assets.bgms]
+        [location, assets.bgms],
     );
 
     const handleSubmit = React.useCallback(
@@ -93,6 +133,7 @@ export const ConnectedLocationEditor: React.FC<
 
             const payload = {
                 name: values.name,
+                parentLocationId: values.parentLocationId || null,
                 description: values.description,
                 culture: values.culture,
                 history: values.history,
@@ -108,13 +149,22 @@ export const ConnectedLocationEditor: React.FC<
 
             try {
                 await saveLocationInfo({
+                    projectId,
                     locationId: location.id,
                     payload,
                 });
+
+                if (
+                    (parentLocationId ?? null) !==
+                    (payload.parentLocationId ?? null)
+                ) {
+                    await reloadActiveProject();
+                }
+
                 setAutosaveStatus("saved");
                 setTimeout(() => {
                     setAutosaveStatus((prev) =>
-                        prev === "saved" ? "idle" : prev
+                        prev === "saved" ? "idle" : prev,
                     );
                 }, 2000);
             } catch (error) {
@@ -127,12 +177,13 @@ export const ConnectedLocationEditor: React.FC<
         },
         [
             location,
+            parentLocationId,
             projectId,
             updateLocationLocally,
             reloadActiveProject,
             saveLocationInfo,
             setGlobalAutosaveError,
-        ]
+        ],
     );
 
     const handleGeneratePortrait = async () => {
@@ -287,12 +338,14 @@ export const ConnectedLocationEditor: React.FC<
         (ref: DocumentRef) => {
             setActiveDocument({ kind: ref.kind, id: ref.id });
         },
-        [setActiveDocument]
+        [setActiveDocument],
     );
 
     return (
         <LocationEditor
             location={location}
+            parentOptions={parentOptions}
+            currentParentLocationId={parentLocationId}
             gallerySources={gallerySources}
             songUrl={songUrl}
             availableDocuments={availableDocuments}

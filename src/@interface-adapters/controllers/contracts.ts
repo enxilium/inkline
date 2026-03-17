@@ -26,6 +26,7 @@ import type { SaveChapterContentController } from "./logistics/SaveChapterConten
 import type { SaveCharacterInfoController } from "./logistics/SaveCharacterInfoController";
 import type { SaveLocationInfoController } from "./logistics/SaveLocationInfoController";
 import type { SaveManuscriptStructureController } from "./logistics/SaveManuscriptStructureController";
+import type { ReorderLocationChildrenController } from "./logistics/ReorderLocationChildrenController";
 import type { SaveOrganizationInfoController } from "./logistics/SaveOrganizationInfoController";
 import type { SaveProjectSettingsController } from "./logistics/SaveProjectSettingsController";
 import type { SaveUserSettingsController } from "./logistics/SaveUserSettingsController";
@@ -106,6 +107,7 @@ export interface ControllerInstanceMap {
         saveChapterContent: SaveChapterContentController;
         saveCharacterInfo: SaveCharacterInfoController;
         saveLocationInfo: SaveLocationInfoController;
+        reorderLocationChildren: ReorderLocationChildrenController;
         saveManuscriptStructure: SaveManuscriptStructureController;
         saveOrganizationInfo: SaveOrganizationInfoController;
         saveProjectSettings: SaveProjectSettingsController;
@@ -209,6 +211,7 @@ export const controllerChannels: ControllerChannelMap = {
         saveChapterContent: "logistics:saveChapterContent",
         saveCharacterInfo: "logistics:saveCharacterInfo",
         saveLocationInfo: "logistics:saveLocationInfo",
+        reorderLocationChildren: "logistics:reorderLocationChildren",
         saveManuscriptStructure: "logistics:saveManuscriptStructure",
         saveOrganizationInfo: "logistics:saveOrganizationInfo",
         saveProjectSettings: "logistics:saveProjectSettings",
