@@ -17,7 +17,7 @@
   <h3>Every story starts with a single stroke.</h3>
 </div>
 
-Welcome to **INKLINE STUDIO** —— a dedicated document editor for creative writers. Unlike generic apps like Google Docs or Microsoft Word, we offer dedicated interfaces to keep track of characters, organizations, or locations within your story, and methods to connect them like never before. Think of us like Campfire mixed with Scrivener — and completely free and open-source, forever.
+Welcome to **INKLINE STUDIO** — a dedicated document editor for creative writers. Unlike generic apps like Google Docs or Microsoft Word, we offer dedicated interfaces to keep track of characters, organizations, or locations within your story, and methods to connect them like never before. Think of us like Campfire mixed with Scrivener — and completely free and open-source, forever.
 
 <div align="center">
     <h3><i>"Built by writers, for writers."</i></h3>
