@@ -22,10 +22,22 @@ export const ConnectedOrganizationEditor: React.FC<
         chapters,
         scrapNotes,
         assets,
+        metafieldDefinitions,
+        metafieldAssignments,
         activeDocument,
         updateOrganizationLocally,
+        addOrUpdateMetafieldDefinitionLocally,
+        addOrUpdateMetafieldAssignmentLocally,
+        updateMetafieldAssignmentLocally,
+        removeMetafieldAssignmentLocally,
+        removeMetafieldDefinitionLocally,
         reloadActiveProject,
         saveOrganizationInfo,
+        createOrReuseMetafieldDefinition,
+        assignMetafieldToEntity,
+        saveMetafieldValue,
+        removeMetafieldFromEntity,
+        deleteMetafieldDefinitionGlobal,
         generateOrganizationImage,
         generateOrganizationSong,
         generateOrganizationPlaylist,
@@ -67,7 +79,7 @@ export const ConnectedOrganizationEditor: React.FC<
 
     const organization = React.useMemo(
         () => organizations.find((o) => o.id === organizationId),
-        [organizations, organizationId]
+        [organizations, organizationId],
     );
 
     const resolveStoredImageUrls = React.useCallback(
@@ -75,7 +87,7 @@ export const ConnectedOrganizationEditor: React.FC<
             galleryIds
                 .map((id) => assets.images[id]?.url)
                 .filter((url): url is string => Boolean(url)),
-        [assets.images]
+        [assets.images],
     );
 
     const gallerySources = React.useMemo(
@@ -83,7 +95,7 @@ export const ConnectedOrganizationEditor: React.FC<
             organization
                 ? resolveStoredImageUrls(organization.galleryImageIds ?? [])
                 : [],
-        [organization, resolveStoredImageUrls]
+        [organization, resolveStoredImageUrls],
     );
 
     const songUrl = React.useMemo(
@@ -91,7 +103,26 @@ export const ConnectedOrganizationEditor: React.FC<
             organization?.bgmId
                 ? assets.bgms[organization.bgmId]?.url
                 : undefined,
-        [organization, assets.bgms]
+        [organization, assets.bgms],
+    );
+
+    const imageOptions = React.useMemo(
+        () =>
+            Object.values(assets.images).map((image) => ({
+                id: image.id,
+                label: image.id.slice(0, 8),
+            })),
+        [assets.images],
+    );
+
+    const organizationMetafieldAssignments = React.useMemo(
+        () =>
+            metafieldAssignments.filter(
+                (assignment) =>
+                    assignment.entityType === "organization" &&
+                    assignment.entityId === organizationId,
+            ),
+        [metafieldAssignments, organizationId],
     );
 
     const handleSubmit = React.useCallback(
@@ -122,7 +153,7 @@ export const ConnectedOrganizationEditor: React.FC<
                 setAutosaveStatus("saved");
                 setTimeout(() => {
                     setAutosaveStatus((prev) =>
-                        prev === "saved" ? "idle" : prev
+                        prev === "saved" ? "idle" : prev,
                     );
                 }, 2000);
             } catch (error) {
@@ -130,7 +161,7 @@ export const ConnectedOrganizationEditor: React.FC<
                 setGlobalAutosaveError("Failed to save organization");
                 updateOrganizationLocally(
                     organization.id,
-                    originalOrganization
+                    originalOrganization,
                 );
                 await reloadActiveProject();
                 throw error;
@@ -143,7 +174,7 @@ export const ConnectedOrganizationEditor: React.FC<
             reloadActiveProject,
             saveOrganizationInfo,
             setGlobalAutosaveError,
-        ]
+        ],
     );
 
     const handleGeneratePortrait = async () => {
@@ -234,6 +265,121 @@ export const ConnectedOrganizationEditor: React.FC<
         await reloadActiveProject();
     };
 
+    const handleCreateOrReuseMetafieldDefinition = React.useCallback(
+        async (
+            request: Parameters<typeof createOrReuseMetafieldDefinition>[0],
+        ) => {
+            const response = await createOrReuseMetafieldDefinition(request);
+            addOrUpdateMetafieldDefinitionLocally(response.definition);
+            return response;
+        },
+        [
+            createOrReuseMetafieldDefinition,
+            addOrUpdateMetafieldDefinitionLocally,
+        ],
+    );
+
+    const handleAssignMetafieldToEntity = React.useCallback(
+        async (request: Parameters<typeof assignMetafieldToEntity>[0]) => {
+            const response = await assignMetafieldToEntity(request);
+            addOrUpdateMetafieldAssignmentLocally(response.assignment);
+            return response;
+        },
+        [assignMetafieldToEntity, addOrUpdateMetafieldAssignmentLocally],
+    );
+
+    const handleSaveMetafieldValue = React.useCallback(
+        async (request: Parameters<typeof saveMetafieldValue>[0]) => {
+            const original = organizationMetafieldAssignments.find(
+                (item) => item.id === request.assignmentId,
+            );
+
+            updateMetafieldAssignmentLocally(request.assignmentId, {
+                valueJson: request.value,
+                ...(request.orderIndex !== undefined
+                    ? { orderIndex: request.orderIndex }
+                    : {}),
+                updatedAt: new Date(),
+            });
+
+            try {
+                await saveMetafieldValue(request);
+            } catch (error) {
+                if (original) {
+                    updateMetafieldAssignmentLocally(request.assignmentId, {
+                        valueJson: original.valueJson,
+                        orderIndex: original.orderIndex,
+                        updatedAt: original.updatedAt,
+                    });
+                }
+                throw error;
+            }
+        },
+        [
+            organizationMetafieldAssignments,
+            saveMetafieldValue,
+            updateMetafieldAssignmentLocally,
+        ],
+    );
+
+    const handleRemoveMetafieldFromEntity = React.useCallback(
+        async (request: Parameters<typeof removeMetafieldFromEntity>[0]) => {
+            const existing = organizationMetafieldAssignments.find(
+                (assignment) =>
+                    assignment.definitionId === request.definitionId,
+            );
+
+            await removeMetafieldFromEntity(request);
+
+            if (existing) {
+                removeMetafieldAssignmentLocally(existing.id);
+            }
+        },
+        [
+            organizationMetafieldAssignments,
+            removeMetafieldFromEntity,
+            removeMetafieldAssignmentLocally,
+        ],
+    );
+
+    const handleDeleteMetafieldDefinitionGlobal = React.useCallback(
+        async (
+            request: Parameters<typeof deleteMetafieldDefinitionGlobal>[0],
+        ) => {
+            await deleteMetafieldDefinitionGlobal(request);
+            removeMetafieldDefinitionLocally(request.definitionId);
+        },
+        [deleteMetafieldDefinitionGlobal, removeMetafieldDefinitionLocally],
+    );
+
+    const handleImportMetafieldImage = React.useCallback(
+        async (file: File): Promise<string> => {
+            if (!projectId || !organization) {
+                throw new Error("Project or organization is missing.");
+            }
+
+            const buffer = await file.arrayBuffer();
+            const extension = file.name.split(".").pop();
+            const response = await importAsset({
+                projectId,
+                payload: {
+                    kind: "image",
+                    subjectType: "organization",
+                    subjectId: organization.id,
+                    fileData: buffer,
+                    extension,
+                },
+            });
+
+            if (response.kind !== "image") {
+                throw new Error("Imported asset is not an image.");
+            }
+
+            return response.image.id;
+        },
+        [importAsset, organization, projectId],
+    );
+
     const availableDocuments: DocumentRef[] = React.useMemo(() => {
         const docs: DocumentRef[] = [];
         for (const ch of chapters) {
@@ -287,7 +433,7 @@ export const ConnectedOrganizationEditor: React.FC<
         (ref: DocumentRef) => {
             setActiveDocument({ kind: ref.kind, id: ref.id });
         },
-        [setActiveDocument]
+        [setActiveDocument],
     );
 
     if (!organization) {
@@ -296,8 +442,15 @@ export const ConnectedOrganizationEditor: React.FC<
 
     return (
         <OrganizationEditor
+            projectId={projectId}
             organization={organization}
             locations={locations}
+            allCharacters={characters}
+            allLocations={locations}
+            allOrganizations={organizations}
+            metafieldDefinitions={metafieldDefinitions}
+            metafieldAssignments={organizationMetafieldAssignments}
+            imageOptions={imageOptions}
             gallerySources={gallerySources}
             songUrl={songUrl}
             availableDocuments={availableDocuments}
@@ -309,6 +462,16 @@ export const ConnectedOrganizationEditor: React.FC<
             onImportSong={handleImportSong}
             onGeneratePlaylist={handleGeneratePlaylist}
             onImportPlaylist={handleImportPlaylist}
+            onCreateOrReuseMetafieldDefinition={
+                handleCreateOrReuseMetafieldDefinition
+            }
+            onAssignMetafieldToEntity={handleAssignMetafieldToEntity}
+            onSaveMetafieldValue={handleSaveMetafieldValue}
+            onRemoveMetafieldFromEntity={handleRemoveMetafieldFromEntity}
+            onDeleteMetafieldDefinitionGlobal={
+                handleDeleteMetafieldDefinitionGlobal
+            }
+            onImportMetafieldImage={handleImportMetafieldImage}
             focusTitleOnMount={focusTitleOnMount}
         />
     );

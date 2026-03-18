@@ -22,10 +22,22 @@ export const ConnectedLocationEditor: React.FC<
         organizations,
         scrapNotes,
         assets,
+        metafieldDefinitions,
+        metafieldAssignments,
         activeDocument,
         updateLocationLocally,
+        addOrUpdateMetafieldDefinitionLocally,
+        addOrUpdateMetafieldAssignmentLocally,
+        updateMetafieldAssignmentLocally,
+        removeMetafieldAssignmentLocally,
+        removeMetafieldDefinitionLocally,
         reloadActiveProject,
         saveLocationInfo,
+        createOrReuseMetafieldDefinition,
+        assignMetafieldToEntity,
+        saveMetafieldValue,
+        removeMetafieldFromEntity,
+        deleteMetafieldDefinitionGlobal,
         generateLocationImage,
         generateLocationSong,
         generateLocationPlaylist,
@@ -61,7 +73,7 @@ export const ConnectedLocationEditor: React.FC<
 
     const location = React.useMemo(
         () => locations.find((l) => l.id === locationId),
-        [locations, locationId]
+        [locations, locationId],
     );
 
     const resolveStoredImageUrls = React.useCallback(
@@ -69,7 +81,7 @@ export const ConnectedLocationEditor: React.FC<
             galleryIds
                 .map((id) => assets.images[id]?.url)
                 .filter((url): url is string => Boolean(url)),
-        [assets.images]
+        [assets.images],
     );
 
     const gallerySources = React.useMemo(
@@ -77,12 +89,31 @@ export const ConnectedLocationEditor: React.FC<
             location
                 ? resolveStoredImageUrls(location.galleryImageIds ?? [])
                 : [],
-        [location, resolveStoredImageUrls]
+        [location, resolveStoredImageUrls],
     );
 
     const songUrl = React.useMemo(
         () => (location?.bgmId ? assets.bgms[location.bgmId]?.url : undefined),
-        [location, assets.bgms]
+        [location, assets.bgms],
+    );
+
+    const imageOptions = React.useMemo(
+        () =>
+            Object.values(assets.images).map((image) => ({
+                id: image.id,
+                label: image.id.slice(0, 8),
+            })),
+        [assets.images],
+    );
+
+    const locationMetafieldAssignments = React.useMemo(
+        () =>
+            metafieldAssignments.filter(
+                (assignment) =>
+                    assignment.entityType === "location" &&
+                    assignment.entityId === locationId,
+            ),
+        [metafieldAssignments, locationId],
     );
 
     const handleSubmit = React.useCallback(
@@ -114,7 +145,7 @@ export const ConnectedLocationEditor: React.FC<
                 setAutosaveStatus("saved");
                 setTimeout(() => {
                     setAutosaveStatus((prev) =>
-                        prev === "saved" ? "idle" : prev
+                        prev === "saved" ? "idle" : prev,
                     );
                 }, 2000);
             } catch (error) {
@@ -132,7 +163,7 @@ export const ConnectedLocationEditor: React.FC<
             reloadActiveProject,
             saveLocationInfo,
             setGlobalAutosaveError,
-        ]
+        ],
     );
 
     const handleGeneratePortrait = async () => {
@@ -223,6 +254,121 @@ export const ConnectedLocationEditor: React.FC<
         await reloadActiveProject();
     };
 
+    const handleCreateOrReuseMetafieldDefinition = React.useCallback(
+        async (
+            request: Parameters<typeof createOrReuseMetafieldDefinition>[0],
+        ) => {
+            const response = await createOrReuseMetafieldDefinition(request);
+            addOrUpdateMetafieldDefinitionLocally(response.definition);
+            return response;
+        },
+        [
+            createOrReuseMetafieldDefinition,
+            addOrUpdateMetafieldDefinitionLocally,
+        ],
+    );
+
+    const handleAssignMetafieldToEntity = React.useCallback(
+        async (request: Parameters<typeof assignMetafieldToEntity>[0]) => {
+            const response = await assignMetafieldToEntity(request);
+            addOrUpdateMetafieldAssignmentLocally(response.assignment);
+            return response;
+        },
+        [assignMetafieldToEntity, addOrUpdateMetafieldAssignmentLocally],
+    );
+
+    const handleSaveMetafieldValue = React.useCallback(
+        async (request: Parameters<typeof saveMetafieldValue>[0]) => {
+            const original = locationMetafieldAssignments.find(
+                (item) => item.id === request.assignmentId,
+            );
+
+            updateMetafieldAssignmentLocally(request.assignmentId, {
+                valueJson: request.value,
+                ...(request.orderIndex !== undefined
+                    ? { orderIndex: request.orderIndex }
+                    : {}),
+                updatedAt: new Date(),
+            });
+
+            try {
+                await saveMetafieldValue(request);
+            } catch (error) {
+                if (original) {
+                    updateMetafieldAssignmentLocally(request.assignmentId, {
+                        valueJson: original.valueJson,
+                        orderIndex: original.orderIndex,
+                        updatedAt: original.updatedAt,
+                    });
+                }
+                throw error;
+            }
+        },
+        [
+            locationMetafieldAssignments,
+            saveMetafieldValue,
+            updateMetafieldAssignmentLocally,
+        ],
+    );
+
+    const handleRemoveMetafieldFromEntity = React.useCallback(
+        async (request: Parameters<typeof removeMetafieldFromEntity>[0]) => {
+            const existing = locationMetafieldAssignments.find(
+                (assignment) =>
+                    assignment.definitionId === request.definitionId,
+            );
+
+            await removeMetafieldFromEntity(request);
+
+            if (existing) {
+                removeMetafieldAssignmentLocally(existing.id);
+            }
+        },
+        [
+            locationMetafieldAssignments,
+            removeMetafieldFromEntity,
+            removeMetafieldAssignmentLocally,
+        ],
+    );
+
+    const handleDeleteMetafieldDefinitionGlobal = React.useCallback(
+        async (
+            request: Parameters<typeof deleteMetafieldDefinitionGlobal>[0],
+        ) => {
+            await deleteMetafieldDefinitionGlobal(request);
+            removeMetafieldDefinitionLocally(request.definitionId);
+        },
+        [deleteMetafieldDefinitionGlobal, removeMetafieldDefinitionLocally],
+    );
+
+    const handleImportMetafieldImage = React.useCallback(
+        async (file: File): Promise<string> => {
+            if (!projectId || !location) {
+                throw new Error("Project or location is missing.");
+            }
+
+            const buffer = await file.arrayBuffer();
+            const extension = file.name.split(".").pop();
+            const response = await importAsset({
+                projectId,
+                payload: {
+                    kind: "image",
+                    subjectType: "location",
+                    subjectId: location.id,
+                    fileData: buffer,
+                    extension,
+                },
+            });
+
+            if (response.kind !== "image") {
+                throw new Error("Imported asset is not an image.");
+            }
+
+            return response.image.id;
+        },
+        [importAsset, location, projectId],
+    );
+
     if (!location) {
         return <div className="empty-editor">Location not found.</div>;
     }
@@ -287,12 +433,19 @@ export const ConnectedLocationEditor: React.FC<
         (ref: DocumentRef) => {
             setActiveDocument({ kind: ref.kind, id: ref.id });
         },
-        [setActiveDocument]
+        [setActiveDocument],
     );
 
     return (
         <LocationEditor
+            projectId={projectId}
             location={location}
+            allCharacters={characters}
+            allLocations={locations}
+            allOrganizations={organizations}
+            metafieldDefinitions={metafieldDefinitions}
+            metafieldAssignments={locationMetafieldAssignments}
+            imageOptions={imageOptions}
             gallerySources={gallerySources}
             songUrl={songUrl}
             availableDocuments={availableDocuments}
@@ -303,6 +456,16 @@ export const ConnectedLocationEditor: React.FC<
             onImportSong={handleImportSong}
             onGeneratePlaylist={handleGeneratePlaylist}
             onImportPlaylist={handleImportPlaylist}
+            onCreateOrReuseMetafieldDefinition={
+                handleCreateOrReuseMetafieldDefinition
+            }
+            onAssignMetafieldToEntity={handleAssignMetafieldToEntity}
+            onSaveMetafieldValue={handleSaveMetafieldValue}
+            onRemoveMetafieldFromEntity={handleRemoveMetafieldFromEntity}
+            onDeleteMetafieldDefinitionGlobal={
+                handleDeleteMetafieldDefinitionGlobal
+            }
+            onImportMetafieldImage={handleImportMetafieldImage}
             onNavigateToDocument={handleNavigateToDocument}
             focusTitleOnMount={focusTitleOnMount}
         />

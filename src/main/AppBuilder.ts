@@ -67,6 +67,12 @@ import { UpdateEvent } from "../@core/application/use-cases/timeline/UpdateEvent
 import { DeleteEvent } from "../@core/application/use-cases/timeline/DeleteEvent";
 import { LoadChatHistory } from "../@core/application/use-cases/analysis/LoadChatHistory";
 import { LoadChatMessages } from "../@core/application/use-cases/analysis/LoadChatMessages";
+import { ListProjectMetafields } from "../@core/application/use-cases/metafield/ListProjectMetafields";
+import { CreateOrReuseMetafieldDefinition } from "../@core/application/use-cases/metafield/CreateOrReuseMetafieldDefinition";
+import { AssignMetafieldToEntity } from "../@core/application/use-cases/metafield/AssignMetafieldToEntity";
+import { SaveMetafieldValue } from "../@core/application/use-cases/metafield/SaveMetafieldValue";
+import { RemoveMetafieldFromEntity } from "../@core/application/use-cases/metafield/RemoveMetafieldFromEntity";
+import { DeleteMetafieldDefinitionGlobal } from "../@core/application/use-cases/metafield/DeleteMetafieldDefinitionGlobal";
 import { LoadChatHistoryController } from "../@interface-adapters/controllers/analysis/LoadChatHistoryController";
 import { LoadChatMessagesController } from "../@interface-adapters/controllers/analysis/LoadChatMessagesController";
 import { AnalyzeTextController } from "../@interface-adapters/controllers/analysis/AnalyzeTextController";
@@ -131,6 +137,12 @@ import { DeleteTimelineController } from "../@interface-adapters/controllers/tim
 import { CreateEventController } from "../@interface-adapters/controllers/timeline/CreateEventController";
 import { UpdateEventController } from "../@interface-adapters/controllers/timeline/UpdateEventController";
 import { DeleteEventController } from "../@interface-adapters/controllers/timeline/DeleteEventController";
+import { ListProjectMetafieldsController } from "../@interface-adapters/controllers/metafield/ListProjectMetafieldsController";
+import { CreateOrReuseMetafieldDefinitionController } from "../@interface-adapters/controllers/metafield/CreateOrReuseMetafieldDefinitionController";
+import { AssignMetafieldToEntityController } from "../@interface-adapters/controllers/metafield/AssignMetafieldToEntityController";
+import { SaveMetafieldValueController } from "../@interface-adapters/controllers/metafield/SaveMetafieldValueController";
+import { RemoveMetafieldFromEntityController } from "../@interface-adapters/controllers/metafield/RemoveMetafieldFromEntityController";
+import { DeleteMetafieldDefinitionGlobalController } from "../@interface-adapters/controllers/metafield/DeleteMetafieldDefinitionGlobalController";
 import type { IAssetRepository } from "../@core/domain/repositories/IAssetRepository";
 import type { IChapterRepository } from "../@core/domain/repositories/IChapterRepository";
 import type { ICharacterRepository } from "../@core/domain/repositories/ICharacterRepository";
@@ -142,6 +154,8 @@ import type { IOrganizationRepository } from "../@core/domain/repositories/IOrga
 import type { IProjectRepository } from "../@core/domain/repositories/IProjectRepository";
 import type { IScrapNoteRepository } from "../@core/domain/repositories/IScrapNoteRepository";
 import type { IUserRepository } from "../@core/domain/repositories/IUserRepository";
+import type { IMetafieldDefinitionRepository } from "../@core/domain/repositories/IMetafieldDefinitionRepository";
+import type { IMetafieldAssignmentRepository } from "../@core/domain/repositories/IMetafieldAssignmentRepository";
 import type { IAITextService } from "../@core/domain/services/IAITextService";
 import type { ICreativeAssetGenerationService } from "../@core/domain/services/ICreativeAssetGenerationService";
 import type { IAuthService } from "../@core/domain/services/IAuthService";
@@ -152,7 +166,7 @@ import type { IStorageService } from "../@core/domain/services/IStorageService";
 import type { IUserSessionStore } from "../@core/domain/services/IUserSessionStore";
 import { ElectronAuthStateGateway } from "./auth/ElectronAuthStateGateway";
 import { ElectronSyncStateGateway } from "../@interface-adapters/controllers/sync/SyncStateGateway";
-import type { EntityType } from "../@infrastructure/db/offline/DeletionLog";
+import type { EntityType as SyncEntityType } from "../@interface-adapters/controllers/sync/SyncStateGateway";
 
 export type RepositoryDependencies = {
     asset: IAssetRepository;
@@ -166,6 +180,8 @@ export type RepositoryDependencies = {
     user: IUserRepository;
     timeline: ITimelineRepository;
     event: IEventRepository;
+    metafieldDefinition: IMetafieldDefinitionRepository;
+    metafieldAssignment: IMetafieldAssignmentRepository;
 };
 
 export type ServiceDependencies = {
@@ -209,6 +225,14 @@ type UseCaseMap = {
         updatePassword: UpdateUserPassword;
         resetPassword: ResetPassword;
         deleteAccount: DeleteAccount;
+    };
+    metafield: {
+        listProjectMetafields: ListProjectMetafields;
+        createOrReuseMetafieldDefinition: CreateOrReuseMetafieldDefinition;
+        assignMetafieldToEntity: AssignMetafieldToEntity;
+        saveMetafieldValue: SaveMetafieldValue;
+        removeMetafieldFromEntity: RemoveMetafieldFromEntity;
+        deleteMetafieldDefinitionGlobal: DeleteMetafieldDefinitionGlobal;
     };
     generation: {
         generateCharacterImage: GenerateCharacterImage;
@@ -322,7 +346,7 @@ export class AppBuilder {
             "sync:resolveConflict",
             async (
                 _event,
-                entityType: EntityType,
+                entityType: SyncEntityType,
                 entityId: string,
                 projectId: string,
                 resolution: "accept-remote" | "keep-local",
@@ -420,6 +444,32 @@ export class AppBuilder {
                     repo.asset,
                     svc.storage,
                 ),
+            },
+            metafield: {
+                listProjectMetafields: new ListProjectMetafields(
+                    repo.metafieldDefinition,
+                    repo.metafieldAssignment,
+                ),
+                createOrReuseMetafieldDefinition:
+                    new CreateOrReuseMetafieldDefinition(
+                        repo.metafieldDefinition,
+                    ),
+                assignMetafieldToEntity: new AssignMetafieldToEntity(
+                    repo.metafieldDefinition,
+                    repo.metafieldAssignment,
+                ),
+                saveMetafieldValue: new SaveMetafieldValue(
+                    repo.metafieldDefinition,
+                    repo.metafieldAssignment,
+                ),
+                removeMetafieldFromEntity: new RemoveMetafieldFromEntity(
+                    repo.metafieldAssignment,
+                ),
+                deleteMetafieldDefinitionGlobal:
+                    new DeleteMetafieldDefinitionGlobal(
+                        repo.metafieldDefinition,
+                        repo.metafieldAssignment,
+                    ),
             },
             generation: {
                 generateCharacterImage: new GenerateCharacterImage(
@@ -555,6 +605,8 @@ export class AppBuilder {
                     repo.asset,
                     repo.timeline,
                     repo.event,
+                    repo.metafieldDefinition,
+                    repo.metafieldAssignment,
                 ),
                 renameProject: new RenameProject(repo.project),
                 reorderProjectItems: new ReorderProjectItems(repo.project),
@@ -563,6 +615,8 @@ export class AppBuilder {
                 createCharacter: new CreateCharacter(
                     repo.character,
                     repo.project,
+                    repo.metafieldDefinition,
+                    repo.metafieldAssignment,
                 ),
                 createLocation: new CreateLocation(repo.location, repo.project),
                 createOrganization: new CreateOrganization(
@@ -684,6 +738,29 @@ export class AppBuilder {
                     useCases.auth.deleteAccount,
                     this.authStateGateway,
                 ),
+            },
+            metafield: {
+                listProjectMetafields: new ListProjectMetafieldsController(
+                    useCases.metafield.listProjectMetafields,
+                ),
+                createOrReuseMetafieldDefinition:
+                    new CreateOrReuseMetafieldDefinitionController(
+                        useCases.metafield.createOrReuseMetafieldDefinition,
+                    ),
+                assignMetafieldToEntity: new AssignMetafieldToEntityController(
+                    useCases.metafield.assignMetafieldToEntity,
+                ),
+                saveMetafieldValue: new SaveMetafieldValueController(
+                    useCases.metafield.saveMetafieldValue,
+                ),
+                removeMetafieldFromEntity:
+                    new RemoveMetafieldFromEntityController(
+                        useCases.metafield.removeMetafieldFromEntity,
+                    ),
+                deleteMetafieldDefinitionGlobal:
+                    new DeleteMetafieldDefinitionGlobalController(
+                        useCases.metafield.deleteMetafieldDefinitionGlobal,
+                    ),
             },
             generation: {
                 generateCharacterImage: new GenerateCharacterImageController(

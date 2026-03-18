@@ -21,6 +21,8 @@ export type EntityType =
     | "location"
     | "organization"
     | "scrapNote"
+    | "metafieldDefinition"
+    | "metafieldAssignment"
     | "image"
     | "bgm"
     | "playlist";

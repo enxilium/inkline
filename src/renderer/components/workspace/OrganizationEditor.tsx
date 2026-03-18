@@ -1,9 +1,31 @@
 import React from "react";
+import {
+    DndContext,
+    PointerSensor,
+    closestCenter,
+    useDroppable,
+    useSensor,
+    useSensors,
+    type DragEndEvent,
+    type DragOverEvent,
+} from "@dnd-kit/core";
+import {
+    SortableContext,
+    arrayMove,
+    useSortable,
+    verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
-import type { WorkspaceLocation, WorkspaceOrganization } from "../../types";
+import type {
+    WorkspaceCharacter,
+    WorkspaceLocation,
+    WorkspaceMetafieldAssignment,
+    WorkspaceMetafieldDefinition,
+    WorkspaceOrganization,
+} from "../../types";
 import { ActionDropdown } from "../ui/ActionDropdown";
 import { ChevronLeftIcon, ChevronRightIcon } from "../ui/Icons";
-import { Label } from "../ui/Label";
 import { ListInput, type DocumentRef } from "../ui/ListInput";
 import {
     SearchableMultiSelect,
@@ -11,6 +33,7 @@ import {
 } from "../ui/SearchableSelect";
 import { TagsInput } from "../ui/Tags";
 import { showToast } from "../ui/GenerationProgressToast";
+import { MetafieldsSection } from "./MetafieldsSection";
 import {
     normalizeUserFacingError,
     type UserErrorContext,
@@ -24,9 +47,34 @@ export type OrganizationEditorValues = {
     locationIds: string[];
 };
 
+type NewMetafieldKind = "field" | "paragraph" | "select";
+
+type OrganizationSectionId =
+    | "description"
+    | "mission"
+    | "tags"
+    | "locations"
+    | "portrait"
+    | "audio"
+    | "reach";
+
+type OrganizationColumnId = "left" | "right";
+
+type OrganizationSectionPlacement = {
+    left: string[];
+    right: string[];
+};
+
 export type OrganizationEditorProps = {
+    projectId: string;
     organization: WorkspaceOrganization;
     locations: WorkspaceLocation[];
+    allCharacters: WorkspaceCharacter[];
+    allLocations: WorkspaceLocation[];
+    allOrganizations: WorkspaceOrganization[];
+    metafieldDefinitions: WorkspaceMetafieldDefinition[];
+    metafieldAssignments: WorkspaceMetafieldAssignment[];
+    imageOptions: SelectOption[];
     gallerySources: string[];
     songUrl?: string;
     availableDocuments?: DocumentRef[];
@@ -38,6 +86,38 @@ export type OrganizationEditorProps = {
     onImportSong: (file: File) => Promise<void>;
     onGeneratePlaylist: () => Promise<void>;
     onImportPlaylist: (file: File) => Promise<void>;
+    onCreateOrReuseMetafieldDefinition: (request: {
+        projectId: string;
+        name: string;
+        scope: "character" | "location" | "organization" | "project";
+        valueType:
+            | "string"
+            | "string[]"
+            | "entity"
+            | "entity[]"
+            | "image"
+            | "image[]";
+        targetEntityKind?: "character" | "location" | "organization";
+    }) => Promise<{ definition: WorkspaceMetafieldDefinition }>;
+    onAssignMetafieldToEntity: (request: {
+        definitionId: string;
+        entityType: "character" | "location" | "organization";
+        entityId: string;
+    }) => Promise<{ assignment: WorkspaceMetafieldAssignment }>;
+    onSaveMetafieldValue: (request: {
+        assignmentId: string;
+        value?: unknown;
+        orderIndex?: number;
+    }) => Promise<void>;
+    onRemoveMetafieldFromEntity: (request: {
+        definitionId: string;
+        entityType: "character" | "location" | "organization";
+        entityId: string;
+    }) => Promise<void>;
+    onDeleteMetafieldDefinitionGlobal: (request: {
+        definitionId: string;
+    }) => Promise<void>;
+    onImportMetafieldImage: (file: File) => Promise<string>;
     focusTitleOnMount?: boolean;
 };
 
@@ -55,6 +135,113 @@ const defaultValues = (
     locationIds: organization.locationIds ?? [],
 });
 
+const ALL_SECTION_IDS: OrganizationSectionId[] = [
+    "description",
+    "mission",
+    "tags",
+    "locations",
+    "portrait",
+    "audio",
+    "reach",
+];
+
+const DEFAULT_SECTION_PLACEMENT: OrganizationSectionPlacement = {
+    left: ["description", "mission", "tags", "locations", "reach"],
+    right: ["portrait", "audio"],
+};
+
+const SECTION_TITLE: Record<OrganizationSectionId, string> = {
+    description: "Description",
+    mission: "Mission",
+    tags: "Tags",
+    locations: "Locations",
+    portrait: "Portrait",
+    audio: "Audio Assets",
+    reach: "Reach",
+};
+
+const COLUMN_DROP_ID = {
+    left: "organization-left-column",
+    right: "organization-right-column",
+} as const;
+
+const isOrganizationSectionId = (
+    value: string,
+): value is OrganizationSectionId =>
+    ALL_SECTION_IDS.includes(value as OrganizationSectionId);
+
+const isMetafieldItemId = (
+    value: string,
+    assignments: WorkspaceMetafieldAssignment[],
+): boolean => assignments.some((assignment) => assignment.id === value);
+
+const findColumnForSection = (
+    placement: OrganizationSectionPlacement,
+    id: string,
+): OrganizationColumnId | null => {
+    if (id === COLUMN_DROP_ID.left) {
+        return "left";
+    }
+    if (id === COLUMN_DROP_ID.right) {
+        return "right";
+    }
+    if (placement.left.includes(id)) {
+        return "left";
+    }
+    if (placement.right.includes(id)) {
+        return "right";
+    }
+    return null;
+};
+
+type SortableSectionCardProps = {
+    id: string;
+    title: string;
+    children: React.ReactNode;
+};
+
+const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
+    id,
+    title,
+    children,
+}) => {
+    const {
+        attributes,
+        listeners,
+        setNodeRef,
+        transform,
+        transition,
+        isDragging,
+    } = useSortable({ id });
+
+    const style = {
+        transform: CSS.Transform.toString(transform),
+        transition,
+    };
+
+    return (
+        <section
+            ref={setNodeRef}
+            style={style}
+            className={`entity-section-card${isDragging ? " is-dragging" : ""}`}
+        >
+            <div className="entity-section-card-header">
+                <h3 className="entity-section-card-title">{title}</h3>
+                <button
+                    type="button"
+                    className="entity-section-card-handle"
+                    aria-label={`Reorder ${title} section`}
+                    {...attributes}
+                    {...listeners}
+                >
+                    ⋮⋮
+                </button>
+            </div>
+            <div className="entity-section-card-body">{children}</div>
+        </section>
+    );
+};
+
 export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     organization,
     locations,
@@ -69,6 +256,19 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     onImportSong,
     onGeneratePlaylist,
     onImportPlaylist,
+    projectId,
+    allCharacters,
+    allLocations,
+    allOrganizations,
+    metafieldDefinitions,
+    metafieldAssignments,
+    imageOptions,
+    onCreateOrReuseMetafieldDefinition,
+    onAssignMetafieldToEntity,
+    onSaveMetafieldValue,
+    onRemoveMetafieldFromEntity,
+    onDeleteMetafieldDefinitionGlobal,
+    onImportMetafieldImage,
     focusTitleOnMount = false,
 }) => {
     const [values, setValues] = React.useState<OrganizationEditorValues>(() =>
@@ -78,16 +278,21 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     const [assetBusy, setAssetBusy] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
     const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
+    const [sectionPlacement, setSectionPlacement] =
+        React.useState<OrganizationSectionPlacement>(DEFAULT_SECTION_PLACEMENT);
     const firstImageRef = React.useRef<string | undefined>(undefined);
     const fileInputRef = React.useRef<HTMLInputElement>(null);
     const songInputRef = React.useRef<HTMLInputElement>(null);
     const playlistInputRef = React.useRef<HTMLInputElement>(null);
     const titleInputRef = React.useRef<HTMLInputElement>(null);
     const isUserChange = React.useRef(false);
+    const pendingMetafieldColumnsRef = React.useRef<
+        Map<string, OrganizationColumnId>
+    >(new Map());
 
     const toFriendlyError = React.useCallback(
-        (error: unknown, fallback: string, context?: UserErrorContext) =>
-            normalizeUserFacingError(error, fallback, context),
+        (err: unknown, fallback: string, context?: UserErrorContext) =>
+            normalizeUserFacingError(err, fallback, context),
         [],
     );
 
@@ -95,6 +300,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
         isUserChange.current = false;
         setValues(defaultValues(organization));
         setError(null);
+        setSectionPlacement(DEFAULT_SECTION_PLACEMENT);
     }, [organization]);
 
     React.useEffect(() => {
@@ -133,7 +339,51 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
         });
     }, [gallerySources]);
 
-    // Memoize options for searchable multi-select
+    React.useEffect(() => {
+        const assignmentIds = metafieldAssignments.map(
+            (assignment) => assignment.id,
+        );
+
+        setSectionPlacement((current) => {
+            const filteredLeft = current.left.filter(
+                (id) =>
+                    isOrganizationSectionId(id) || assignmentIds.includes(id),
+            );
+            const filteredRight = current.right.filter(
+                (id) =>
+                    isOrganizationSectionId(id) || assignmentIds.includes(id),
+            );
+
+            const present = new Set([...filteredLeft, ...filteredRight]);
+            const missing = assignmentIds.filter((id) => !present.has(id));
+
+            if (
+                filteredLeft.length === current.left.length &&
+                filteredRight.length === current.right.length &&
+                missing.length === 0
+            ) {
+                return current;
+            }
+
+            const missingLeft: string[] = [];
+            const missingRight: string[] = [];
+            for (const id of missing) {
+                const pendingColumn = pendingMetafieldColumnsRef.current.get(id);
+                if (pendingColumn === "right") {
+                    missingRight.push(id);
+                } else {
+                    missingLeft.push(id);
+                }
+                pendingMetafieldColumnsRef.current.delete(id);
+            }
+
+            return {
+                left: [...filteredLeft, ...missingLeft],
+                right: [...filteredRight, ...missingRight],
+            };
+        });
+    }, [metafieldAssignments]);
+
     const locationOptions: SelectOption[] = React.useMemo(
         () =>
             locations.map((loc) => ({
@@ -181,7 +431,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
         }
 
         autosaveTimerRef.current = setTimeout(() => {
-            handleSubmit();
+            void handleSubmit();
         }, 1000);
 
         return () => {
@@ -192,14 +442,8 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     }, [values]);
 
     const triggerFilePick = () => fileInputRef.current?.click();
-
-    const triggerSongPick = () => {
-        songInputRef.current?.click();
-    };
-
-    const triggerPlaylistPick = () => {
-        playlistInputRef.current?.click();
-    };
+    const triggerSongPick = () => songInputRef.current?.click();
+    const triggerPlaylistPick = () => playlistInputRef.current?.click();
 
     const handleFileChange = async (
         event: React.ChangeEvent<HTMLInputElement>,
@@ -250,9 +494,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
         try {
             await onImportPlaylist(file);
         } catch (importError) {
-            setError(
-                toFriendlyError(importError, "Failed to import playlist."),
-            );
+            setError(toFriendlyError(importError, "Failed to import playlist."));
         } finally {
             setAssetBusy(false);
             event.target.value = "";
@@ -325,30 +567,392 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
         );
     };
 
-    return (
-        <div className="entity-editor-panel">
-            <form className="entity-editor" onSubmit={handleSubmit}>
-                <div className="entity-header">
-                    <div className="entity-header-title">
-                        <p className="panel-label">Organization</p>
-                        <input
-                            ref={titleInputRef}
-                            type="text"
-                            className="entity-name-input"
-                            value={values.name}
-                            onChange={(e) =>
-                                handleChange("name", e.target.value)
+    const runtimeReach = React.useMemo(
+        () =>
+            locations.filter((location) =>
+                (location.organizationIds ?? []).includes(organization.id),
+            ).length,
+        [locations, organization.id],
+    );
+
+    const sensors = useSensors(
+        useSensor(PointerSensor, {
+            activationConstraint: { distance: 6 },
+        }),
+    );
+
+    const leftDroppable = useDroppable({ id: COLUMN_DROP_ID.left });
+    const rightDroppable = useDroppable({ id: COLUMN_DROP_ID.right });
+
+    const createMetafieldInColumn = React.useCallback(
+        async (targetColumn: OrganizationColumnId, kind: NewMetafieldKind) => {
+            const existingNames = new Set(
+                metafieldDefinitions
+                    .filter(
+                        (definition) =>
+                            definition.scope === "organization" &&
+                            !definition.name.startsWith("_sys:"),
+                    )
+                    .map((definition) => definition.name.trim().toLowerCase()),
+            );
+
+            let candidateIndex = metafieldDefinitions.length + 1;
+            let candidateName = `Metafield ${candidateIndex}`;
+            while (existingNames.has(candidateName.toLowerCase())) {
+                candidateIndex += 1;
+                candidateName = `Metafield ${candidateIndex}`;
+            }
+
+            try {
+                const definitionResponse =
+                    await onCreateOrReuseMetafieldDefinition({
+                        projectId,
+                        name: candidateName,
+                        scope: "organization",
+                        valueType: kind === "select" ? "string[]" : "string",
+                    });
+
+                const assignmentResponse = await onAssignMetafieldToEntity({
+                    definitionId: definitionResponse.definition.id,
+                    entityType: "organization",
+                    entityId: organization.id,
+                });
+
+                pendingMetafieldColumnsRef.current.set(
+                    assignmentResponse.assignment.id,
+                    targetColumn,
+                );
+
+                setSectionPlacement((current) => {
+                    const nextLeft = current.left.filter(
+                        (id) => id !== assignmentResponse.assignment.id,
+                    );
+                    const nextRight = current.right.filter(
+                        (id) => id !== assignmentResponse.assignment.id,
+                    );
+
+                    return targetColumn === "left"
+                        ? {
+                              left: [...nextLeft, assignmentResponse.assignment.id],
+                              right: nextRight,
+                          }
+                        : {
+                              left: nextLeft,
+                              right: [...nextRight, assignmentResponse.assignment.id],
+                          };
+                });
+
+                const initialValue =
+                    kind === "select"
+                        ? { kind: "select", value: [] as string[] }
+                        : {
+                              kind,
+                              value: "",
+                          };
+
+                await onSaveMetafieldValue({
+                    assignmentId: assignmentResponse.assignment.id,
+                    value: initialValue,
+                });
+            } catch (createError) {
+                const message = toFriendlyError(
+                    createError,
+                    "Failed to create metafield.",
+                );
+                setError(message);
+                showToast({
+                    id: "metafield-create-organization",
+                    variant: "error",
+                    title: "Metafield creation failed",
+                    description: message,
+                    durationMs: 6000,
+                });
+            }
+        },
+        [
+            metafieldDefinitions,
+            onAssignMetafieldToEntity,
+            onCreateOrReuseMetafieldDefinition,
+            onSaveMetafieldValue,
+            organization.id,
+            projectId,
+            toFriendlyError,
+        ],
+    );
+
+    const buildAddSectionOptions = React.useCallback(
+        (targetColumn: OrganizationColumnId) => {
+            const metafieldOptions = [
+                {
+                    label: "Add Field Metafield",
+                    onClick: () => {
+                        void createMetafieldInColumn(targetColumn, "field");
+                    },
+                },
+                {
+                    label: "Add Paragraph Metafield",
+                    onClick: () => {
+                        void createMetafieldInColumn(
+                            targetColumn,
+                            "paragraph",
+                        );
+                    },
+                },
+                {
+                    label: "Add Select Metafield",
+                    onClick: () => {
+                        void createMetafieldInColumn(targetColumn, "select");
+                    },
+                },
+            ];
+
+            return metafieldOptions;
+        },
+        [createMetafieldInColumn],
+    );
+
+    const handleSectionDragEnd = React.useCallback(
+        (event: DragEndEvent) => {
+            const { active, over } = event;
+            if (!over) {
+                return;
+            }
+
+            const activeId = String(active.id);
+            const overId = String(over.id);
+
+            let nextPlacement: OrganizationSectionPlacement | null = null;
+
+            setSectionPlacement((current) => {
+                const sourceColumn = findColumnForSection(current, activeId);
+                const targetColumn = findColumnForSection(current, overId);
+                if (!sourceColumn || !targetColumn) {
+                    return current;
+                }
+
+                if (sourceColumn === targetColumn) {
+                    const sourceItems = current[sourceColumn];
+                    const oldIndex = sourceItems.indexOf(activeId);
+                    if (oldIndex < 0) {
+                        return current;
+                    }
+
+                    const newIndex = sourceItems.includes(overId)
+                        ? sourceItems.indexOf(overId)
+                        : sourceItems.length - 1;
+
+                    if (newIndex < 0 || oldIndex === newIndex) {
+                        return current;
+                    }
+
+                    const reordered = arrayMove(sourceItems, oldIndex, newIndex);
+                    nextPlacement = {
+                        ...current,
+                        [sourceColumn]: reordered,
+                    };
+                    return nextPlacement;
+                }
+
+                const sourceItems = current[sourceColumn].filter(
+                    (id) => id !== activeId,
+                );
+                const targetItems = [...current[targetColumn]];
+                const targetIndex = targetItems.includes(overId)
+                    ? targetItems.indexOf(overId)
+                    : targetItems.length;
+
+                if (targetIndex < 0) {
+                    targetItems.push(activeId);
+                } else {
+                    targetItems.splice(targetIndex, 0, activeId);
+                }
+
+                nextPlacement = {
+                    ...current,
+                    [sourceColumn]: sourceItems,
+                    [targetColumn]: targetItems,
+                };
+                return nextPlacement;
+            });
+
+            if (!nextPlacement) {
+                return;
+            }
+
+            const orderedMetafieldIds = [
+                ...nextPlacement.left,
+                ...nextPlacement.right,
+            ].filter((id) => isMetafieldItemId(id, metafieldAssignments));
+
+            void (async () => {
+                try {
+                    await Promise.all(
+                        orderedMetafieldIds.map((assignmentId, orderIndex) => {
+                            const assignment = metafieldAssignments.find(
+                                (item) => item.id === assignmentId,
+                            );
+                            if (
+                                !assignment ||
+                                assignment.orderIndex === orderIndex
+                            ) {
+                                return Promise.resolve();
                             }
-                            placeholder="Untitled Organization"
-                        />
-                    </div>
-                </div>
-                <div className="entity-editor-grid">
-                    <div className="entity-column">
+
+                            return onSaveMetafieldValue({
+                                assignmentId,
+                                orderIndex,
+                            });
+                        }),
+                    );
+                } catch (dragSaveError) {
+                    const message = toFriendlyError(
+                        dragSaveError,
+                        "The card moved locally but failed to sync to cloud. Please resolve the sync conflict or retry.",
+                    );
+                    setError(message);
+                    showToast({
+                        id: "metafield-reorder-sync-organization",
+                        variant: "error",
+                        title: "Metafield reorder sync failed",
+                        description: message,
+                        durationMs: 6000,
+                    });
+                }
+            })();
+        },
+        [metafieldAssignments, onSaveMetafieldValue, toFriendlyError],
+    );
+
+    const handleSectionDragOver = React.useCallback((event: DragOverEvent) => {
+        const { active, over } = event;
+        if (!over) {
+            return;
+        }
+
+        const activeId = String(active.id);
+        const overId = String(over.id);
+
+        setSectionPlacement((current) => {
+            const sourceColumn = findColumnForSection(current, activeId);
+            const targetColumn = findColumnForSection(current, overId);
+
+            if (
+                !sourceColumn ||
+                !targetColumn ||
+                sourceColumn === targetColumn
+            ) {
+                return current;
+            }
+
+            const sourceItems = current[sourceColumn].filter(
+                (id) => id !== activeId,
+            );
+            const targetItems = [...current[targetColumn]];
+            const targetIndex = targetItems.includes(overId)
+                ? targetItems.indexOf(overId)
+                : targetItems.length;
+
+            if (targetIndex < 0) {
+                targetItems.push(activeId);
+            } else {
+                targetItems.splice(targetIndex, 0, activeId);
+            }
+
+            return {
+                ...current,
+                [sourceColumn]: sourceItems,
+                [targetColumn]: targetItems,
+            };
+        });
+    }, []);
+
+    const metafieldDefinitionsById = React.useMemo(
+        () =>
+            new Map(
+                metafieldDefinitions.map((definition) => [
+                    definition.id,
+                    definition,
+                ]),
+            ),
+        [metafieldDefinitions],
+    );
+
+    const metafieldAssignmentsById = React.useMemo(
+        () =>
+            new Map(
+                metafieldAssignments.map((assignment) => [assignment.id, assignment]),
+            ),
+        [metafieldAssignments],
+    );
+
+    const renderSection = React.useCallback(
+        (itemId: string) => {
+            if (!isOrganizationSectionId(itemId)) {
+                const assignment = metafieldAssignmentsById.get(itemId);
+                if (!assignment) {
+                    return null;
+                }
+
+                const definition = metafieldDefinitionsById.get(
+                    assignment.definitionId,
+                );
+
+                if (!definition) {
+                    return null;
+                }
+
+                return (
+                    <MetafieldsSection
+                        key={itemId}
+                        projectId={projectId}
+                        entityType="organization"
+                        entityId={organization.id}
+                        definitions={metafieldDefinitions}
+                        assignments={[assignment]}
+                        characterOptions={allCharacters.map((item) => ({
+                            id: item.id,
+                            label: item.name || "Untitled character",
+                        }))}
+                        locationOptions={allLocations.map((item) => ({
+                            id: item.id,
+                            label: item.name || "Untitled location",
+                        }))}
+                        organizationOptions={allOrganizations.map((item) => ({
+                            id: item.id,
+                            label: item.name || "Untitled organization",
+                        }))}
+                        imageOptions={imageOptions}
+                        onCreateOrReuseDefinition={(request) =>
+                            onCreateOrReuseMetafieldDefinition({
+                                ...request,
+                                projectId,
+                            })
+                        }
+                        onAssignDefinition={(request) =>
+                            onAssignMetafieldToEntity(request)
+                        }
+                        onSaveValue={onSaveMetafieldValue}
+                        onUnassign={onRemoveMetafieldFromEntity}
+                        onDeleteDefinitionGlobal={
+                            onDeleteMetafieldDefinitionGlobal
+                        }
+                        onImportImage={onImportMetafieldImage}
+                        hideControls
+                        disableDnd
+                    />
+                );
+            }
+
+            const sectionId = itemId;
+
+            if (sectionId === "description") {
+                return (
+                    <SortableSectionCard
+                        key={sectionId}
+                        id={sectionId}
+                        title={SECTION_TITLE[sectionId]}
+                    >
                         <div className="entity-field">
-                            <Label htmlFor="organization-description">
-                                Description
-                            </Label>
                             <ListInput
                                 value={values.description}
                                 onChange={(items) =>
@@ -360,10 +964,18 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                 onReferenceClick={onNavigateToDocument}
                             />
                         </div>
+                    </SortableSectionCard>
+                );
+            }
+
+            if (sectionId === "mission") {
+                return (
+                    <SortableSectionCard
+                        key={sectionId}
+                        id={sectionId}
+                        title={SECTION_TITLE[sectionId]}
+                    >
                         <div className="entity-field">
-                            <Label htmlFor="organization-mission">
-                                Mission
-                            </Label>
                             <ListInput
                                 value={values.mission}
                                 onChange={(items) =>
@@ -375,18 +987,36 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                 onReferenceClick={onNavigateToDocument}
                             />
                         </div>
+                    </SortableSectionCard>
+                );
+            }
+
+            if (sectionId === "tags") {
+                return (
+                    <SortableSectionCard
+                        key={sectionId}
+                        id={sectionId}
+                        title={SECTION_TITLE[sectionId]}
+                    >
                         <div className="entity-field">
-                            <Label htmlFor="organization-tags">Tags</Label>
                             <TagsInput
                                 value={values.tags}
                                 onChange={(tags) => handleChange("tags", tags)}
                                 placeholder="Enter one tag per line"
                             />
                         </div>
+                    </SortableSectionCard>
+                );
+            }
+
+            if (sectionId === "locations") {
+                return (
+                    <SortableSectionCard
+                        key={sectionId}
+                        id={sectionId}
+                        title={SECTION_TITLE[sectionId]}
+                    >
                         <div className="entity-field">
-                            <Label htmlFor="organization-locations">
-                                Locations
-                            </Label>
                             <SearchableMultiSelect
                                 value={values.locationIds}
                                 options={locationOptions}
@@ -396,8 +1026,17 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                 placeholder="Search to add locations..."
                             />
                         </div>
-                    </div>
-                    <div className="entity-column">
+                    </SortableSectionCard>
+                );
+            }
+
+            if (sectionId === "portrait") {
+                return (
+                    <SortableSectionCard
+                        key={sectionId}
+                        id={sectionId}
+                        title={SECTION_TITLE[sectionId]}
+                    >
                         <div className="portrait-card">
                             <div
                                 className={
@@ -466,8 +1105,18 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                 />
                             </div>
                         </div>
+                    </SortableSectionCard>
+                );
+            }
+
+            if (sectionId === "audio") {
+                return (
+                    <SortableSectionCard
+                        key={sectionId}
+                        id={sectionId}
+                        title={SECTION_TITLE[sectionId]}
+                    >
                         <div className="entity-summary">
-                            <span className="summary-label">Audio Assets</span>
                             <div className="audio-asset-row">
                                 <span className="audio-asset-label">
                                     Soundtrack
@@ -487,7 +1136,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                                 ? "Regenerate"
                                                 : "Generate",
                                             onClick: () =>
-                                                handleAssetAction(
+                                                void handleAssetAction(
                                                     onGenerateSong,
                                                     "Song generation failed",
                                                     "generation-audio",
@@ -523,7 +1172,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                                 ? "Regenerate"
                                                 : "Generate",
                                             onClick: () =>
-                                                handleAssetAction(
+                                                void handleAssetAction(
                                                     onGeneratePlaylist,
                                                     "Playlist generation failed",
                                                     "generation-playlist",
@@ -548,11 +1197,22 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                 />
                             </div>
                         </div>
+                    </SortableSectionCard>
+                );
+            }
+
+            if (sectionId === "reach") {
+                return (
+                    <SortableSectionCard
+                        key={sectionId}
+                        id={sectionId}
+                        title={SECTION_TITLE[sectionId]}
+                    >
                         <div className="entity-summary">
                             <div>
                                 <span className="summary-label">Reach</span>
                                 <span className="summary-value">
-                                    {values.locationIds.length} locations
+                                    {runtimeReach} locations
                                 </span>
                             </div>
                             <div>
@@ -564,11 +1224,124 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                                 </span>
                             </div>
                         </div>
+                    </SortableSectionCard>
+                );
+            }
+
+            return null;
+        },
+        [
+            allCharacters,
+            allLocations,
+            allOrganizations,
+            assetBusy,
+            availableDocuments,
+            canCycleGallery,
+            currentImageIndex,
+            gallerySources,
+            handleAssetAction,
+            imageOptions,
+            locationOptions,
+            metafieldAssignmentsById,
+            metafieldDefinitions,
+            metafieldDefinitionsById,
+            onAssignMetafieldToEntity,
+            onCreateOrReuseMetafieldDefinition,
+            onDeleteMetafieldDefinitionGlobal,
+            onGeneratePlaylist,
+            onGenerateSong,
+            onImportMetafieldImage,
+            onNavigateToDocument,
+            onRemoveMetafieldFromEntity,
+            onSaveMetafieldValue,
+            onGeneratePortrait,
+            organization,
+            portraitUrl,
+            projectId,
+            runtimeReach,
+            showNextImage,
+            showPreviousImage,
+            songUrl,
+            triggerFilePick,
+            triggerPlaylistPick,
+            triggerSongPick,
+            values.description,
+            values.locationIds,
+            values.mission,
+            values.tags,
+        ],
+    );
+
+    return (
+        <div className="entity-editor-panel">
+            <form className="entity-editor" onSubmit={handleSubmit}>
+                <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragOver={handleSectionDragOver}
+                    onDragEnd={handleSectionDragEnd}
+                >
+                    <div className="entity-editor-grid entity-editor-grid--balanced">
+                        <div className="entity-header entity-header--lhs">
+                            <div className="entity-header-title">
+                                <p className="panel-label">Organization</p>
+                                <input
+                                    ref={titleInputRef}
+                                    type="text"
+                                    className="entity-name-input"
+                                    value={values.name}
+                                    onChange={(e) =>
+                                        handleChange("name", e.target.value)
+                                    }
+                                    placeholder="Untitled Organization"
+                                />
+                            </div>
+                        </div>
+                        <div className="entity-column-shell entity-column-shell--lhs">
+                            <div
+                                ref={leftDroppable.setNodeRef}
+                                className="entity-column-dropzone"
+                            >
+                                <SortableContext
+                                    items={sectionPlacement.left}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    <div className="entity-column entity-column--sortable">
+                                        {sectionPlacement.left.map(renderSection)}
+                                    </div>
+                                </SortableContext>
+                            </div>
+                            <div className="entity-column-add">
+                                <ActionDropdown
+                                    options={buildAddSectionOptions("left")}
+                                    size={14}
+                                />
+                            </div>
+                        </div>
+                        <div className="entity-column-shell entity-column-shell--rhs">
+                            <div
+                                ref={rightDroppable.setNodeRef}
+                                className="entity-column-dropzone"
+                            >
+                                <SortableContext
+                                    items={sectionPlacement.right}
+                                    strategy={verticalListSortingStrategy}
+                                >
+                                    <div className="entity-column entity-column--sortable">
+                                        {sectionPlacement.right.map(renderSection)}
+                                    </div>
+                                </SortableContext>
+                            </div>
+                            <div className="entity-column-add">
+                                <ActionDropdown
+                                    options={buildAddSectionOptions("right")}
+                                    size={14}
+                                />
+                            </div>
+                        </div>
                     </div>
-                </div>
-                {error ? (
-                    <span className="card-hint is-error">{error}</span>
-                ) : null}
+                </DndContext>
+                {error ? <span className="card-hint is-error">{error}</span> : null}
             </form>
         </div>
     );

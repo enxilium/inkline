@@ -1,6 +1,14 @@
 import type { IpcRenderer } from "electron";
 import type { RendererApi } from "../../@interface-adapters/controllers/contracts";
 import type { AuthStatePayload } from "../../@interface-adapters/controllers/auth/AuthStateGateway";
+import type {
+    SyncStatePayload,
+    RemoteChangePayload,
+    ConflictPayload,
+    EntityUpdatedPayload,
+    EntityDeletedPayload,
+    EntityType as SyncEntityType,
+} from "../../@interface-adapters/controllers/sync/SyncStateGateway";
 
 export type ContextMenuType =
     | "editor"
@@ -49,7 +57,29 @@ declare global {
                 listener: (payload: { progress: number }) => void,
             ): () => IpcRenderer;
         };
-        // Note: syncEvents was removed as conflicts are now auto-resolved using "most recent wins" strategy.
+        syncEvents: {
+            onStateChanged(
+                listener: (payload: SyncStatePayload) => void,
+            ): () => IpcRenderer;
+            onRemoteChange(
+                listener: (payload: RemoteChangePayload) => void,
+            ): () => IpcRenderer;
+            onConflict(
+                listener: (payload: ConflictPayload) => void,
+            ): () => IpcRenderer;
+            onEntityUpdated(
+                listener: (payload: EntityUpdatedPayload) => void,
+            ): () => IpcRenderer;
+            onEntityDeleted(
+                listener: (payload: EntityDeletedPayload) => void,
+            ): () => IpcRenderer;
+            resolveConflict: (
+                entityType: SyncEntityType,
+                entityId: string,
+                projectId: string,
+                resolution: "accept-remote" | "keep-local",
+            ) => Promise<void>;
+        };
     }
 }
 
