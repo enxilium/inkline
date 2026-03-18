@@ -6,6 +6,7 @@ import {
     useDroppable,
     useSensor,
     useSensors,
+    type DragStartEvent,
     type DragEndEvent,
     type DragOverEvent,
 } from "@dnd-kit/core";
@@ -41,6 +42,13 @@ import {
 
 type NewMetafieldKind = "field" | "paragraph" | "select";
 export type RichEditorColumnId = "left" | "right";
+
+type OptimisticMetafieldCard = {
+    tempAssignmentId: string;
+    name: string;
+    kind: NewMetafieldKind;
+    targetColumn: RichEditorColumnId;
+};
 
 export type RichEditorSectionPlacement = {
     left: string[];
@@ -135,6 +143,9 @@ type SortableSectionCardProps = {
     title: string;
     children: React.ReactNode;
     className?: string;
+    disableDrag?: boolean;
+    isActiveDrag?: boolean;
+    dragDimensions?: { width: number; height: number } | null;
 };
 
 const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
@@ -142,6 +153,9 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
     title,
     children,
     className,
+    disableDrag = false,
+    isActiveDrag = false,
+    dragDimensions = null,
 }) => {
     const {
         attributes,
@@ -150,11 +164,20 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
         transform,
         transition,
         isDragging,
-    } = useSortable({ id });
+    } = useSortable({
+        id,
+        disabled: disableDrag,
+    });
 
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
+        ...(isDragging && isActiveDrag && dragDimensions
+            ? {
+                  width: dragDimensions.width,
+                  height: dragDimensions.height,
+              }
+            : {}),
     };
 
     return (
@@ -296,6 +319,11 @@ const findColumnForSection = (
     return null;
 };
 
+const createOptimisticCardId = (): string =>
+    `optimistic-metafield:${Date.now().toString(36)}:${Math.random()
+        .toString(36)
+        .slice(2, 10)}`;
+
 const resolveMetafieldUiKind = (
     assignment: WorkspaceMetafieldAssignment,
     definition: WorkspaceMetafieldDefinition,
@@ -368,6 +396,16 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     const [error, setError] = React.useState<string | null>(null);
     const [assetBusy, setAssetBusy] = React.useState(false);
     const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
+    const [activeDragSectionId, setActiveDragSectionId] = React.useState<
+        string | null
+    >(null);
+    const [dragPreviewDimensions, setDragPreviewDimensions] = React.useState<{
+        width: number;
+        height: number;
+    } | null>(null);
+    const [optimisticMetafields, setOptimisticMetafields] = React.useState<
+        OptimisticMetafieldCard[]
+    >([]);
     const [sectionPlacement, setSectionPlacement] =
         React.useState<RichEditorSectionPlacement>(() => {
             const defs = CORE_CARD_CONFIG;
@@ -520,6 +558,9 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
         }
         setValues(initialValues);
         setError(null);
+        setOptimisticMetafields([]);
+        setActiveDragSectionId(null);
+        setDragPreviewDimensions(null);
         setSectionPlacement(initialSectionPlacement ?? defaultPlacement);
     }, [
         defaultPlacement,
@@ -569,9 +610,10 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     }, [gallerySources]);
 
     React.useEffect(() => {
-        const assignmentIds = metafieldAssignments.map(
-            (assignment) => assignment.id,
-        );
+        const assignmentIds = [
+            ...metafieldAssignments.map((assignment) => assignment.id),
+            ...optimisticMetafields.map((card) => card.tempAssignmentId),
+        ];
         const fixedIds = new Set(internalCards.map((card) => card.id));
 
         setSectionPlacement((current) => {
@@ -629,7 +671,7 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 right: [...filteredRight, ...missingRight],
             };
         });
-    }, [internalCards, metafieldAssignments]);
+    }, [internalCards, metafieldAssignments, optimisticMetafields]);
 
     const handleChange = React.useCallback(
         <K extends keyof TValues>(field: K, value: TValues[K]) => {
@@ -835,6 +877,37 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 candidateName = `Metafield ${candidateIndex}`;
             }
 
+            const tempAssignmentId = createOptimisticCardId();
+
+            setOptimisticMetafields((current) => [
+                ...current,
+                {
+                    tempAssignmentId,
+                    name: candidateName,
+                    kind,
+                    targetColumn,
+                },
+            ]);
+
+            setSectionPlacement((current) => {
+                const nextLeft = current.left.filter(
+                    (id) => id !== tempAssignmentId,
+                );
+                const nextRight = current.right.filter(
+                    (id) => id !== tempAssignmentId,
+                );
+
+                return targetColumn === "left"
+                    ? {
+                          left: [...nextLeft, tempAssignmentId],
+                          right: nextRight,
+                      }
+                    : {
+                          left: nextLeft,
+                          right: [...nextRight, tempAssignmentId],
+                      };
+            });
+
             try {
                 const definitionResponse =
                     await onCreateOrReuseMetafieldDefinition({
@@ -860,10 +933,14 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
 
                 setSectionPlacement((current) => {
                     const nextLeft = current.left.filter(
-                        (id) => id !== assignmentResponse.assignment.id,
+                        (id) =>
+                            id !== assignmentResponse.assignment.id &&
+                            id !== tempAssignmentId,
                     );
                     const nextRight = current.right.filter(
-                        (id) => id !== assignmentResponse.assignment.id,
+                        (id) =>
+                            id !== assignmentResponse.assignment.id &&
+                            id !== tempAssignmentId,
                     );
 
                     const nextPlacement =
@@ -886,6 +963,12 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                     nextPlacementToSync = nextPlacement;
                     return nextPlacement;
                 });
+
+                setOptimisticMetafields((current) =>
+                    current.filter(
+                        (card) => card.tempAssignmentId !== tempAssignmentId,
+                    ),
+                );
 
                 if (nextPlacementToSync) {
                     await onSectionLayoutSync?.(nextPlacementToSync);
@@ -912,6 +995,17 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                     },
                 });
             } catch (createError) {
+                setOptimisticMetafields((current) =>
+                    current.filter(
+                        (card) => card.tempAssignmentId !== tempAssignmentId,
+                    ),
+                );
+                setSectionPlacement((current) => ({
+                    left: current.left.filter((id) => id !== tempAssignmentId),
+                    right: current.right.filter(
+                        (id) => id !== tempAssignmentId,
+                    ),
+                }));
                 const message = toFriendlyError(
                     createError,
                     "Failed to create metafield.",
@@ -964,9 +1058,33 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
         [createMetafieldInColumn],
     );
 
+    const handleSectionDragStart = React.useCallback(
+        (event: DragStartEvent) => {
+            setActiveDragSectionId(String(event.active.id));
+
+            const initialRect = event.active.rect.current.initial;
+            if (
+                initialRect &&
+                initialRect.width > 0 &&
+                initialRect.height > 0
+            ) {
+                setDragPreviewDimensions({
+                    width: initialRect.width,
+                    height: initialRect.height,
+                });
+                return;
+            }
+
+            setDragPreviewDimensions(null);
+        },
+        [],
+    );
+
     const handleSectionDragEnd = React.useCallback(
         (event: DragEndEvent) => {
             const { active, over } = event;
+            setActiveDragSectionId(null);
+            setDragPreviewDimensions(null);
             if (!over) {
                 return;
             }
@@ -1137,6 +1255,11 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 [targetColumn]: targetItems,
             };
         });
+    }, []);
+
+    const handleSectionDragCancel = React.useCallback(() => {
+        setActiveDragSectionId(null);
+        setDragPreviewDimensions(null);
     }, []);
 
     const sensors = useSensors(
@@ -1361,8 +1484,39 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                         key={fixedCard.id}
                         id={fixedCard.id}
                         title={fixedCard.title}
+                        isActiveDrag={activeDragSectionId === fixedCard.id}
+                        dragDimensions={dragPreviewDimensions}
                     >
                         {content}
+                    </SortableSectionCard>
+                );
+            }
+
+            const optimisticCard = optimisticMetafields.find(
+                (card) => card.tempAssignmentId === itemId,
+            );
+
+            if (optimisticCard) {
+                return (
+                    <SortableSectionCard
+                        key={optimisticCard.tempAssignmentId}
+                        id={optimisticCard.tempAssignmentId}
+                        title={optimisticCard.name}
+                        className={
+                            optimisticCard.kind === "field"
+                                ? "entity-section-card--half"
+                                : "entity-section-card--full"
+                        }
+                        disableDrag
+                        isActiveDrag={
+                            activeDragSectionId ===
+                            optimisticCard.tempAssignmentId
+                        }
+                        dragDimensions={dragPreviewDimensions}
+                    >
+                        <div className="entity-metafield-pending">
+                            Creating metafield...
+                        </div>
                     </SortableSectionCard>
                 );
             }
@@ -1440,12 +1594,15 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             entityId,
             entityType,
             gallerySources,
+            dragPreviewDimensions,
             handleAssetAction,
             handleChange,
             imageOptions,
             internalCardById,
             metafieldAssignments,
             metafieldDefinitions,
+            optimisticMetafields,
+            activeDragSectionId,
             onAssignMetafieldToEntity,
             onCreateOrReuseMetafieldDefinition,
             onDeleteMetafieldDefinitionGlobal,
@@ -1473,8 +1630,10 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
+                    onDragStart={handleSectionDragStart}
                     onDragOver={handleSectionDragOver}
                     onDragEnd={handleSectionDragEnd}
+                    onDragCancel={handleSectionDragCancel}
                 >
                     <div className="entity-editor-grid entity-editor-grid--balanced">
                         <div className="entity-header entity-header--lhs">

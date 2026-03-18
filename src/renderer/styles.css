@@ -3178,6 +3178,14 @@ input.toolbar-color:focus {
     gap: 0.5rem;
 }
 
+.entity-metafield-pending {
+    color: var(--text-subtle);
+    font-size: var(--text-sm1);
+    min-height: 2.25rem;
+    display: flex;
+    align-items: center;
+}
+
 .entity-field {
     display: flex;
     flex-direction: column;

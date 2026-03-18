@@ -333,19 +333,50 @@ export class SynchronizationService extends EventEmitter {
     }
 
     // Type for Supabase realtime payload records
-    private extractRecordFields(record: Record<string, unknown>): {
+    private extractRecordFields(
+        payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
+        record: Record<string, unknown>,
+    ): {
         projectId: string;
         entityId: string;
         updatedAt: string;
         assetType?: string;
     } {
-        const rawProjectId = record.project_id;
-        const rawEntityId = record.id;
+        const payloadRecord = payload as unknown as {
+            new?: Record<string, unknown>;
+            old?: Record<string, unknown>;
+            old_record?: Record<string, unknown>;
+            record?: Record<string, unknown>;
+        };
+
+        const normalize = (value: unknown): string =>
+            typeof value === "string" ? value.trim() : "";
+
+        const rawProjectIdCandidates = [
+            record.project_id,
+            payloadRecord.new?.project_id,
+            payloadRecord.old?.project_id,
+            payloadRecord.old_record?.project_id,
+            payloadRecord.record?.project_id,
+        ];
+        const rawEntityIdCandidates = [
+            record.id,
+            payloadRecord.new?.id,
+            payloadRecord.old?.id,
+            payloadRecord.old_record?.id,
+            payloadRecord.record?.id,
+        ];
+
+        const projectId = rawProjectIdCandidates
+            .map(normalize)
+            .find((value) => value.length > 0);
+        const entityId = rawEntityIdCandidates
+            .map(normalize)
+            .find((value) => value.length > 0);
 
         return {
-            projectId:
-                typeof rawProjectId === "string" ? rawProjectId.trim() : "",
-            entityId: typeof rawEntityId === "string" ? rawEntityId.trim() : "",
+            projectId: projectId ?? "",
+            entityId: entityId ?? "",
             updatedAt:
                 (record.updated_at as string) || new Date().toISOString(),
             assetType: record.type as string | undefined,
@@ -531,11 +562,22 @@ export class SynchronizationService extends EventEmitter {
         resolved: { projectId: string; entityId: string; updatedAt: string },
     ): void {
         const { projectId, entityId, updatedAt } = resolved;
+        const normalizedEventType = String(
+            payload.eventType ?? "",
+        ).toUpperCase();
+        const isProjectlessDelete =
+            normalizedEventType === "DELETE" &&
+            entityType !== "project" &&
+            (!projectId || projectId.length === 0);
 
         // Filter out changes for projects we don't own (security filter)
         // Projects table is already filtered by user_id in the subscription,
         // but child entities need client-side filtering (we rely on projectId)
-        if (entityType !== "project" && !this.userProjectIds.has(projectId)) {
+        if (
+            entityType !== "project" &&
+            !isProjectlessDelete &&
+            !this.userProjectIds.has(projectId)
+        ) {
             // If the cache isn't ready yet (startup / initial sync), don't drop events.
             if (this.userProjectIds.size === 0) {
                 this.eventQueue.push({
@@ -564,7 +606,7 @@ export class SynchronizationService extends EventEmitter {
             entityType,
             entityId,
             projectId,
-            changeType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
+            changeType: normalizedEventType as "INSERT" | "UPDATE" | "DELETE",
             updatedAt,
         };
 
@@ -578,7 +620,10 @@ export class SynchronizationService extends EventEmitter {
                 entityType,
                 entityId,
                 projectId,
-                eventType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
+                eventType: normalizedEventType as
+                    | "INSERT"
+                    | "UPDATE"
+                    | "DELETE",
                 timestamp: Date.now(),
             });
             return;
@@ -590,7 +635,7 @@ export class SynchronizationService extends EventEmitter {
                 entityType,
                 entityId,
                 projectId,
-                payload.eventType,
+                normalizedEventType,
             );
         }
     }
@@ -599,13 +644,18 @@ export class SynchronizationService extends EventEmitter {
         entityType: SyncEntityType,
         payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
     ): void {
+        const normalizedEventType = String(
+            payload.eventType ?? "",
+        ).toUpperCase();
         const record = (payload.new || payload.old) as
             | Record<string, unknown>
             | undefined;
         if (!record) return;
 
-        const { projectId, entityId, updatedAt } =
-            this.extractRecordFields(record);
+        const { projectId, entityId, updatedAt } = this.extractRecordFields(
+            payload,
+            record,
+        );
         if (!entityId) {
             logger.warn(
                 `Realtime payload missing id; cannot process ${entityType} ${payload.eventType}`,
@@ -619,6 +669,15 @@ export class SynchronizationService extends EventEmitter {
             entityType !== "project" &&
             (!projectId || projectId.length === 0)
         ) {
+            if (normalizedEventType === "DELETE") {
+                this.handleRealtimeChangeResolved(entityType, payload, {
+                    projectId: "",
+                    entityId,
+                    updatedAt,
+                });
+                return;
+            }
+
             void (async () => {
                 const resolvedProjectId =
                     (await this.resolveProjectIdForEntity(
@@ -627,7 +686,7 @@ export class SynchronizationService extends EventEmitter {
                     )) || "";
                 if (!resolvedProjectId) {
                     logger.warn(
-                        `Realtime payload missing project_id; cannot process ${entityType} ${payload.eventType} ${entityId}`,
+                        `Realtime payload missing project_id; cannot process ${entityType} ${normalizedEventType || payload.eventType} ${entityId}`,
                     );
                     return;
                 }
@@ -656,7 +715,7 @@ export class SynchronizationService extends EventEmitter {
         if (!record) return;
 
         const { assetType, entityId, updatedAt, projectId } =
-            this.extractRecordFields(record);
+            this.extractRecordFields(payload, record);
         if (!entityId) {
             logger.warn(
                 `Realtime payload missing asset id; cannot process ${payload.eventType}`,
@@ -692,7 +751,9 @@ export class SynchronizationService extends EventEmitter {
                         entityId,
                     )) ||
                     "";
-                if (!resolvedProjectId) return;
+                if (!resolvedProjectId && payload.eventType !== "DELETE") {
+                    return;
+                }
 
                 this.handleRealtimeChangeResolved(resolvedEntityType, payload, {
                     projectId: resolvedProjectId,
@@ -732,7 +793,9 @@ export class SynchronizationService extends EventEmitter {
             const resolvedProjectId =
                 (await this.resolveProjectIdForEntity(entityType, entityId)) ||
                 "";
-            if (!resolvedProjectId) return;
+            if (!resolvedProjectId && payload.eventType !== "DELETE") {
+                return;
+            }
             this.handleRealtimeChangeResolved(entityType, payload, {
                 projectId: resolvedProjectId,
                 entityId,

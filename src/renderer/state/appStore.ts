@@ -1030,8 +1030,23 @@ export const useAppStore = create<AppStore>((set, get) => {
                 const { projectId, stage, assets, activeDocument, openTabs } =
                     get();
 
-                // Only handle deletions for the currently open project
-                if (stage !== "workspace" || payload.projectId !== projectId) {
+                if (stage !== "workspace") {
+                    return;
+                }
+
+                // For child entities/assets, allow project-less deletes and trust globally unique IDs.
+                // For project deletes, keep strict project matching.
+                const isCurrentProjectDelete =
+                    payload.entityType === "project" &&
+                    payload.entityId === projectId;
+                const isCurrentWorkspaceEntityDelete =
+                    payload.entityType !== "project" &&
+                    (!payload.projectId || payload.projectId === projectId);
+
+                if (
+                    !isCurrentProjectDelete &&
+                    !isCurrentWorkspaceEntityDelete
+                ) {
                     return;
                 }
 
