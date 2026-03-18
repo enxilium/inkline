@@ -63,6 +63,56 @@ export class CreateOrReuseMetafieldDefinition {
         }
 
         const now = new Date();
+
+        const existing =
+            await this.definitionRepository.findByProjectAndNameNormalized(
+                projectId,
+                normalized,
+            );
+
+        if (existing) {
+            const needsNormalization =
+                existing.nameNormalized !== normalized ||
+                existing.name !== name;
+
+            if (existing.valueType !== request.valueType) {
+                throw new Error(
+                    "A metafield with this name already exists with a different value type.",
+                );
+            }
+
+            const existingTarget = existing.targetEntityKind ?? null;
+            const requestedTarget = request.targetEntityKind ?? null;
+            if (existingTarget !== requestedTarget) {
+                throw new Error(
+                    "A metafield with this name already exists with a different target entity kind.",
+                );
+            }
+
+            const canPromoteToProjectScope =
+                existing.scope !== request.scope &&
+                existing.scope !== "project" &&
+                request.scope !== "project";
+
+            if (needsNormalization) {
+                existing.name = name;
+                existing.nameNormalized = normalized;
+                existing.updatedAt = now;
+                await this.definitionRepository.update(existing);
+            }
+
+            if (canPromoteToProjectScope) {
+                existing.scope = "project";
+                existing.updatedAt = now;
+                await this.definitionRepository.update(existing);
+            }
+
+            return {
+                definition: existing,
+                created: false,
+            };
+        }
+
         const definition = new MetafieldDefinition(
             generateId(),
             projectId,

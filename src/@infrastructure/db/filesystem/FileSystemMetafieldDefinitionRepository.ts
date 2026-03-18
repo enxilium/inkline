@@ -3,6 +3,7 @@ import {
     MetafieldScope,
 } from "../../../@core/domain/entities/story/world/MetafieldDefinition";
 import { IMetafieldDefinitionRepository } from "../../../@core/domain/repositories/IMetafieldDefinitionRepository";
+import { normalizeMetafieldName } from "../../../@core/application/utils/normalizeMetafieldName";
 import { fileSystemService } from "../../storage/FileSystemService";
 import * as path from "path";
 
@@ -99,10 +100,13 @@ export class FileSystemMetafieldDefinitionRepository implements IMetafieldDefini
         projectId: string,
         nameNormalized: string,
     ): Promise<MetafieldDefinition | null> {
+        const normalized = normalizeMetafieldName(nameNormalized);
         const definitions = await this.findByProjectId(projectId);
         return (
             definitions.find(
-                (definition) => definition.nameNormalized === nameNormalized,
+                (definition) =>
+                    normalizeMetafieldName(definition.nameNormalized) ===
+                    normalized,
             ) ?? null
         );
     }
@@ -139,11 +143,12 @@ export class FileSystemMetafieldDefinitionRepository implements IMetafieldDefini
     private toDto(
         definition: MetafieldDefinition,
     ): FileSystemMetafieldDefinition {
+        const normalized = normalizeMetafieldName(definition.name);
         return {
             id: definition.id,
             projectId: definition.projectId,
             name: definition.name,
-            nameNormalized: definition.nameNormalized,
+            nameNormalized: normalized,
             scope: definition.scope,
             valueType: definition.valueType,
             targetEntityKind: definition.targetEntityKind,

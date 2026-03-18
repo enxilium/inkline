@@ -17,6 +17,13 @@ type MetafieldAssignmentRow = {
     updated_at: string;
 };
 
+const ensureNonNullValueJson = (value: unknown): unknown => {
+    if (value === null || value === undefined) {
+        return "";
+    }
+    return value;
+};
+
 const mapRowToAssignment = (row: MetafieldAssignmentRow): MetafieldAssignment =>
     new MetafieldAssignment(
         row.id,
@@ -39,7 +46,7 @@ export class SupabaseMetafieldAssignmentRepository implements IMetafieldAssignme
             definition_id: assignment.definitionId,
             entity_type: assignment.entityType,
             entity_id: assignment.entityId,
-            value_json: assignment.valueJson,
+            value_json: ensureNonNullValueJson(assignment.valueJson),
             order_index: assignment.orderIndex,
             created_at: assignment.createdAt.toISOString(),
             updated_at: assignment.updatedAt.toISOString(),
@@ -140,7 +147,7 @@ export class SupabaseMetafieldAssignmentRepository implements IMetafieldAssignme
         const { error } = await client
             .from("metafield_assignments")
             .update({
-                value_json: assignment.valueJson,
+                value_json: ensureNonNullValueJson(assignment.valueJson),
                 order_index: assignment.orderIndex,
                 updated_at: assignment.updatedAt.toISOString(),
             })

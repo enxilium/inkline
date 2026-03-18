@@ -89,9 +89,6 @@ type Props = {
     controlsOnly?: boolean;
 };
 
-const normalizeName = (value: string): string =>
-    value.trim().replace(/\s+/g, " ").toLowerCase();
-
 const areValuesEqual = (left: unknown, right: unknown): boolean => {
     if (Object.is(left, right)) {
         return true;
@@ -526,6 +523,8 @@ export const MetafieldsSection: React.FC<Props> = ({
         if (staged.kind === "paragraph") {
             return (
                 <RichTextAreaInput
+                    key={`metafield:${assignment.id}:paragraph`}
+                    syncSourceKey={`metafield:${assignment.id}:paragraph`}
                     value={staged.value}
                     rows={6}
                     placeholder="Write paragraph..."
@@ -681,24 +680,24 @@ export const MetafieldsSection: React.FC<Props> = ({
                 </div>
             ) : null}
 
-            {!controlsOnly
-                ? disableDnd
-                    ? cards
-                    : (
-                        <DndContext
-                            sensors={sensors}
-                            collisionDetection={closestCenter}
-                            onDragEnd={handleDragEnd}
+            {!controlsOnly ? (
+                disableDnd ? (
+                    cards
+                ) : (
+                    <DndContext
+                        sensors={sensors}
+                        collisionDetection={closestCenter}
+                        onDragEnd={handleDragEnd}
+                    >
+                        <SortableContext
+                            items={orderedAssignmentIds}
+                            strategy={verticalListSortingStrategy}
                         >
-                            <SortableContext
-                                items={orderedAssignmentIds}
-                                strategy={verticalListSortingStrategy}
-                            >
-                                {cards}
-                            </SortableContext>
-                        </DndContext>
-                    )
-                : null}
+                            {cards}
+                        </SortableContext>
+                    </DndContext>
+                )
+            ) : null}
 
             {error ? <span className="card-hint is-error">{error}</span> : null}
         </>

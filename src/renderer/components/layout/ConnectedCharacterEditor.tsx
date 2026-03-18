@@ -37,7 +37,6 @@ export const ConnectedCharacterEditor: React.FC<
         updateMetafieldAssignmentLocally,
         removeMetafieldAssignmentLocally,
         removeMetafieldDefinitionLocally,
-        reloadActiveProject,
         saveCharacterInfo,
         createOrReuseMetafieldDefinition,
         assignMetafieldToEntity,
@@ -50,9 +49,16 @@ export const ConnectedCharacterEditor: React.FC<
         importAsset,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
+        markDocumentEditorDirty,
+        clearDocumentEditorDirty,
         setActiveDocument,
         consumePendingTitleFocus,
     } = useAppStore();
+
+    const editorSelection = React.useMemo(
+        () => ({ kind: "character", id: characterId }) as const,
+        [characterId],
+    );
 
     const [autosaveStatus, setAutosaveStatus] =
         React.useState<AutosaveStatus>("idle");
@@ -352,10 +358,7 @@ export const ConnectedCharacterEditor: React.FC<
                 void flushActionLog();
             }, 600);
         },
-        [
-            projectId,
-            flushActionLog,
-        ],
+        [projectId, flushActionLog],
     );
 
     React.useEffect(
@@ -467,7 +470,6 @@ export const ConnectedCharacterEditor: React.FC<
                 setAutosaveStatus("error");
                 setGlobalAutosaveError("Failed to save character");
                 updateCharacterLocally(character.id, originalCharacter);
-                await reloadActiveProject();
                 throw error;
             }
         },
@@ -475,27 +477,119 @@ export const ConnectedCharacterEditor: React.FC<
             character,
             projectId,
             updateCharacterLocally,
-            reloadActiveProject,
             saveCharacterInfo,
             setGlobalAutosaveError,
         ],
     );
 
+    const handleDirtyStateChange = React.useCallback(
+        (isDirty: boolean) => {
+            if (isDirty) {
+                markDocumentEditorDirty(editorSelection);
+                return;
+            }
+
+            clearDocumentEditorDirty(editorSelection);
+        },
+        [clearDocumentEditorDirty, editorSelection, markDocumentEditorDirty],
+    );
+
+    React.useEffect(
+        () => () => {
+            clearDocumentEditorDirty(editorSelection);
+        },
+        [clearDocumentEditorDirty, editorSelection],
+    );
+
+    const addImageLocally = React.useCallback(
+        (image: { id: string }) => {
+            if (!character) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    images: {
+                        ...state.assets.images,
+                        [image.id]: image as never,
+                    },
+                },
+            }));
+
+            if (!character.galleryImageIds.includes(image.id)) {
+                updateCharacterLocally(character.id, {
+                    galleryImageIds: [...character.galleryImageIds, image.id],
+                    updatedAt: new Date(),
+                });
+            }
+        },
+        [character, updateCharacterLocally],
+    );
+
+    const setBgmLocally = React.useCallback(
+        (bgm: { id: string }) => {
+            if (!character) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    bgms: {
+                        ...state.assets.bgms,
+                        [bgm.id]: bgm as never,
+                    },
+                },
+            }));
+
+            updateCharacterLocally(character.id, {
+                bgmId: bgm.id,
+                updatedAt: new Date(),
+            });
+        },
+        [character, updateCharacterLocally],
+    );
+
+    const setPlaylistLocally = React.useCallback(
+        (playlist: { id: string }) => {
+            if (!character) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    playlists: {
+                        ...state.assets.playlists,
+                        [playlist.id]: playlist as never,
+                    },
+                },
+            }));
+
+            updateCharacterLocally(character.id, {
+                playlistId: playlist.id,
+                updatedAt: new Date(),
+            });
+        },
+        [character, updateCharacterLocally],
+    );
+
     // Handlers
     const handleGeneratePortrait = async () => {
         if (!projectId || !character) return;
-        await generateCharacterImage({
+        const response = await generateCharacterImage({
             projectId,
             characterId: character.id,
         });
-        await reloadActiveProject();
+        addImageLocally(response.image);
     };
 
     const handleImportPortrait = async (file: File) => {
         if (!projectId || !character) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "image",
@@ -505,23 +599,26 @@ export const ConnectedCharacterEditor: React.FC<
                 extension,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "image") {
+            addImageLocally(response.image);
+        }
     };
 
     const handleGenerateSong = async () => {
         if (!projectId || !character) return;
-        await generateCharacterSong({
+        const response = await generateCharacterSong({
             projectId,
             characterId: character.id,
         });
-        await reloadActiveProject();
+        setBgmLocally(response.track);
     };
 
     const handleImportSong = async (file: File) => {
         if (!projectId || !character) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "bgm",
@@ -533,16 +630,19 @@ export const ConnectedCharacterEditor: React.FC<
                 extension,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "bgm") {
+            setBgmLocally(response.track);
+        }
     };
 
     const handleGeneratePlaylist = async () => {
         if (!projectId || !character) return;
-        await generateCharacterPlaylist({
+        const response = await generateCharacterPlaylist({
             projectId,
             characterId: character.id,
         });
-        await reloadActiveProject();
+        setPlaylistLocally(response.playlist);
     };
 
     const handleImportPlaylist = async (file: File) => {
@@ -555,7 +655,7 @@ export const ConnectedCharacterEditor: React.FC<
             throw new Error("Invalid playlist JSON.");
         }
 
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "playlist",
@@ -567,7 +667,10 @@ export const ConnectedCharacterEditor: React.FC<
                 subjectId: character.id,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "playlist") {
+            setPlaylistLocally(response.playlist);
+        }
     };
 
     const handleCreateOrReuseMetafieldDefinition = React.useCallback(
@@ -729,6 +832,7 @@ export const ConnectedCharacterEditor: React.FC<
             onActionLog={handleActionLog}
             onSectionLayoutSync={handleSectionLayoutSync}
             initialSectionPlacement={initialSectionPlacement}
+            onDirtyStateChange={handleDirtyStateChange}
             onNavigateToDocument={handleNavigateToDocument}
             focusTitleOnMount={focusTitleOnMount}
         />

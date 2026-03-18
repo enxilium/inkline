@@ -29,6 +29,7 @@ export interface RichTextAreaInputProps {
     autoFocus?: boolean;
     singleLine?: boolean;
     enableGrammarCheck?: boolean;
+    syncSourceKey?: string;
 }
 
 export interface RichTextAreaInputRef {
@@ -54,6 +55,7 @@ export const RichTextAreaInput = forwardRef<
             autoFocus,
             singleLine,
             enableGrammarCheck = true,
+            syncSourceKey,
         },
         ref,
     ) => {
@@ -124,14 +126,24 @@ export const RichTextAreaInput = forwardRef<
             editor: editor,
         }));
 
-        // Sync value changes from parent
+        // Hydrate content when the source document/field changes.
+        const lastHydratedSourceKeyRef = useRef<string | null>(null);
         useEffect(() => {
-            if (editor && value !== editor.getHTML()) {
-                if (editor.getHTML() !== value) {
-                    editor.commands.setContent(value);
-                }
+            if (!editor) {
+                return;
             }
-        }, [value, editor]);
+
+            const nextSourceKey = syncSourceKey ?? id ?? "default";
+            if (lastHydratedSourceKeyRef.current === nextSourceKey) {
+                return;
+            }
+
+            if (editor.getHTML() !== value) {
+                editor.commands.setContent(value);
+            }
+
+            lastHydratedSourceKeyRef.current = nextSourceKey;
+        }, [editor, id, syncSourceKey, value]);
 
         return (
             <div className="rich-textarea-wrapper">

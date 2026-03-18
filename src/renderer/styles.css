@@ -3030,8 +3030,9 @@ input.toolbar-color:focus {
 }
 
 .entity-column {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
     gap: 0.85rem;
 }
 
@@ -3063,6 +3064,7 @@ input.toolbar-color:focus {
 }
 
 .entity-section-card {
+    grid-column: 1 / -1;
     border: 1px solid var(--overlay-12);
     border-radius: var(--radius-md);
     background: var(--overlay-3);
@@ -3071,6 +3073,38 @@ input.toolbar-color:focus {
         border-color var(--duration-fast) var(--ease-default),
         box-shadow var(--duration-fast) var(--ease-default),
         opacity var(--duration-fast) var(--ease-default);
+}
+
+.entity-section-card--half {
+    grid-column: span 1;
+}
+
+.entity-section-card--full {
+    grid-column: 1 / -1;
+}
+
+.entity-metafield-section {
+    grid-column: 1 / -1;
+    min-width: 0;
+}
+
+.entity-metafield-section--half {
+    grid-column: span 1;
+}
+
+.entity-metafield-section--full {
+    grid-column: 1 / -1;
+}
+
+@media (max-width: 1080px) {
+    .entity-column {
+        grid-template-columns: 1fr;
+    }
+
+    .entity-section-card--half,
+    .entity-metafield-section--half {
+        grid-column: 1 / -1;
+    }
 }
 
 .entity-section-card:hover {
@@ -3104,14 +3138,38 @@ input.toolbar-color:focus {
     background: var(--overlay-4);
     color: var(--text-subtle);
     border-radius: var(--radius-sm);
-    font-size: var(--text-xs2);
+    width: 1.65rem;
+    height: 1.65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     line-height: 1;
-    padding: 0.15rem 0.35rem;
+    padding: 0;
     cursor: grab;
+    transition:
+        background-color var(--duration-fast) var(--ease-default),
+        border-color var(--duration-fast) var(--ease-default),
+        color var(--duration-fast) var(--ease-default),
+        transform var(--duration-fast) var(--ease-default);
+}
+
+.entity-section-card-handle:hover {
+    border-color: var(--overlay-20);
+    background: var(--overlay-5);
+    color: var(--text);
+}
+
+.entity-section-card-handle:focus-visible {
+    outline: none;
+    border-color: var(--accent-transparent2);
+    background: var(--overlay-5);
+    color: var(--text);
+    box-shadow: 0 0 0 2px var(--accent-transparent2);
 }
 
 .entity-section-card-handle:active {
     cursor: grabbing;
+    transform: scale(0.96);
 }
 
 .entity-section-card-body {

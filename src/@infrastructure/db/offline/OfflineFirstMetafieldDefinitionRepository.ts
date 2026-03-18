@@ -3,6 +3,7 @@ import {
     MetafieldDefinition,
     MetafieldScope,
 } from "../../../@core/domain/entities/story/world/MetafieldDefinition";
+import { normalizeMetafieldName } from "../../../@core/application/utils/normalizeMetafieldName";
 import { SupabaseMetafieldDefinitionRepository } from "../SupabaseMetafieldDefinitionRepository";
 import { FileSystemMetafieldDefinitionRepository } from "../filesystem/FileSystemMetafieldDefinitionRepository";
 import { deletionLog } from "./DeletionLog";
@@ -70,10 +71,13 @@ export class OfflineFirstMetafieldDefinitionRepository implements IMetafieldDefi
         projectId: string,
         nameNormalized: string,
     ): Promise<MetafieldDefinition | null> {
+        const normalized = normalizeMetafieldName(nameNormalized);
         const definitions = await this.findByProjectId(projectId);
         return (
             definitions.find(
-                (definition) => definition.nameNormalized === nameNormalized,
+                (definition) =>
+                    normalizeMetafieldName(definition.nameNormalized) ===
+                    normalized,
             ) ?? null
         );
     }

@@ -25,6 +25,31 @@ const isScopeAllowed = (
     return scope === entityType;
 };
 
+const makeInitialAssignmentValue = (
+    valueType:
+        | "string"
+        | "string[]"
+        | "entity"
+        | "entity[]"
+        | "image"
+        | "image[]",
+    providedValue: unknown,
+): unknown => {
+    if (providedValue !== undefined && providedValue !== null) {
+        return providedValue;
+    }
+
+    if (
+        valueType === "string[]" ||
+        valueType === "entity[]" ||
+        valueType === "image[]"
+    ) {
+        return [];
+    }
+
+    return "";
+};
+
 export class AssignMetafieldToEntity {
     constructor(
         private readonly definitionRepository: IMetafieldDefinitionRepository,
@@ -73,6 +98,24 @@ export class AssignMetafieldToEntity {
             request.entityType,
             entityId,
         );
+
+        for (const entityAssignment of entityAssignments) {
+            const assignedDefinition = await this.definitionRepository.findById(
+                entityAssignment.definitionId,
+            );
+            if (!assignedDefinition) {
+                continue;
+            }
+
+            if (
+                assignedDefinition.nameNormalized === definition.nameNormalized
+            ) {
+                throw new Error(
+                    "This entity already has a metafield with the same normalized name.",
+                );
+            }
+        }
+
         const nextOrderIndex =
             entityAssignments.reduce(
                 (max, assignment) => Math.max(max, assignment.orderIndex),
@@ -86,7 +129,10 @@ export class AssignMetafieldToEntity {
             definition.id,
             request.entityType,
             entityId,
-            request.initialValue ?? null,
+            makeInitialAssignmentValue(
+                definition.valueType,
+                request.initialValue,
+            ),
             nextOrderIndex,
             now,
             now,

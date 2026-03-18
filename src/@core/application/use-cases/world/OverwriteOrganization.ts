@@ -5,8 +5,6 @@ export interface OverwriteOrganizationRequest {
     organizationId: string;
     name: string;
     description: string;
-    mission: string;
-    tags: string[];
     locationIds: string[];
     bgmId: string | null;
     playlistId: string | null;
@@ -16,7 +14,7 @@ export interface OverwriteOrganizationRequest {
 export class OverwriteOrganization {
     constructor(
         private readonly organizationRepository: IOrganizationRepository,
-        private readonly locationRepository: ILocationRepository
+        private readonly locationRepository: ILocationRepository,
     ) {}
 
     async execute(request: OverwriteOrganizationRequest): Promise<void> {
@@ -32,8 +30,6 @@ export class OverwriteOrganization {
 
         organization.name = payload.name;
         organization.description = payload.description;
-        organization.mission = payload.mission;
-        organization.tags = payload.tags;
         organization.locationIds = payload.locationIds;
         organization.bgmId = payload.bgmId;
         organization.playlistId = payload.playlistId;
@@ -46,14 +42,14 @@ export class OverwriteOrganization {
         await this.syncLocationCaches(
             organization.id,
             previousLocationIds,
-            organization.locationIds
+            organization.locationIds,
         );
     }
 
     private async syncLocationCaches(
         organizationId: string,
         previousLocationIds: string[],
-        nextLocationIds: string[]
+        nextLocationIds: string[],
     ): Promise<void> {
         const previous = new Set(previousLocationIds);
         const next = new Set(nextLocationIds);
@@ -63,17 +59,17 @@ export class OverwriteOrganization {
 
         await Promise.all([
             ...toAdd.map((locationId) =>
-                this.addOrganizationToLocation(organizationId, locationId)
+                this.addOrganizationToLocation(organizationId, locationId),
             ),
             ...toRemove.map((locationId) =>
-                this.removeOrganizationFromLocation(organizationId, locationId)
+                this.removeOrganizationFromLocation(organizationId, locationId),
             ),
         ]);
     }
 
     private async addOrganizationToLocation(
         organizationId: string,
-        locationId: string
+        locationId: string,
     ): Promise<void> {
         const location = await this.locationRepository.findById(locationId);
         if (!location) {
@@ -89,7 +85,7 @@ export class OverwriteOrganization {
 
     private async removeOrganizationFromLocation(
         organizationId: string,
-        locationId: string
+        locationId: string,
     ): Promise<void> {
         const location = await this.locationRepository.findById(locationId);
         if (!location) {
@@ -98,7 +94,7 @@ export class OverwriteOrganization {
 
         if (location.organizationIds.includes(organizationId)) {
             location.organizationIds = location.organizationIds.filter(
-                (id) => id !== organizationId
+                (id) => id !== organizationId,
             );
             location.updatedAt = new Date();
             await this.locationRepository.update(location);

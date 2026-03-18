@@ -9,6 +9,7 @@ import { IMetafieldAssignmentRepository } from "../../../domain/repositories/IMe
 import { IMetafieldDefinitionRepository } from "../../../domain/repositories/IMetafieldDefinitionRepository";
 import { IProjectRepository } from "../../../domain/repositories/IProjectRepository";
 import { generateId } from "../../utils/id";
+import { normalizeMetafieldName } from "../../utils/normalizeMetafieldName";
 
 type CharacterMetafieldSeed = {
     name: string;
@@ -66,15 +67,8 @@ export class CreateCharacter {
             "",
             "",
             null,
-            "",
             null,
             null,
-            null,
-            [],
-            [],
-            [],
-            [],
-            [],
             null,
             null,
             [],
@@ -128,11 +122,21 @@ export class CreateCharacter {
         seed: CharacterMetafieldSeed,
         now: Date,
     ): Promise<MetafieldDefinition> {
+        const normalized = normalizeMetafieldName(seed.name);
+        const existing =
+            await this.metafieldDefinitionRepository.findByProjectAndNameNormalized(
+                projectId,
+                normalized,
+            );
+        if (existing) {
+            return existing;
+        }
+
         const definition = new MetafieldDefinition(
             generateId(),
             projectId,
             seed.name,
-            `${seed.name.toLowerCase().trim().replace(/\s+/g, "-")}-${generateId()}`,
+            normalized,
             "character",
             seed.valueType,
             null,

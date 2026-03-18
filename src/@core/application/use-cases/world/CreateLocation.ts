@@ -16,11 +16,11 @@ export interface CreateLocationResponse {
 export class CreateLocation {
     constructor(
         private readonly locationRepository: ILocationRepository,
-        private readonly projectRepository: IProjectRepository
+        private readonly projectRepository: IProjectRepository,
     ) {}
 
     async execute(
-        request: CreateLocationRequest
+        request: CreateLocationRequest,
     ): Promise<CreateLocationResponse> {
         const projectId = request.projectId.trim();
 
@@ -39,17 +39,13 @@ export class CreateLocation {
             id,
             "",
             "",
-            "",
-            "",
-            [],
-            [],
             now,
             now,
             null,
             null,
             [],
             [],
-            []
+            [],
         );
 
         await this.locationRepository.create(projectId, location);

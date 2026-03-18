@@ -31,7 +31,6 @@ export const ConnectedLocationEditor: React.FC<
         updateMetafieldAssignmentLocally,
         removeMetafieldAssignmentLocally,
         removeMetafieldDefinitionLocally,
-        reloadActiveProject,
         saveLocationInfo,
         createOrReuseMetafieldDefinition,
         assignMetafieldToEntity,
@@ -44,9 +43,16 @@ export const ConnectedLocationEditor: React.FC<
         importAsset,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
+        markDocumentEditorDirty,
+        clearDocumentEditorDirty,
         setActiveDocument,
         consumePendingTitleFocus,
     } = useAppStore();
+
+    const editorSelection = React.useMemo(
+        () => ({ kind: "location", id: locationId }) as const,
+        [locationId],
+    );
 
     const [autosaveStatus, setAutosaveStatus] =
         React.useState<AutosaveStatus>("idle");
@@ -125,10 +131,6 @@ export const ConnectedLocationEditor: React.FC<
             const payload = {
                 name: values.name,
                 description: values.description,
-                culture: values.culture,
-                history: values.history,
-                conflicts: values.conflicts,
-                tags: values.tags,
             };
 
             const originalLocation = { ...location };
@@ -152,7 +154,6 @@ export const ConnectedLocationEditor: React.FC<
                 setAutosaveStatus("error");
                 setGlobalAutosaveError("Failed to save location");
                 updateLocationLocally(location.id, originalLocation);
-                await reloadActiveProject();
                 throw error;
             }
         },
@@ -160,26 +161,118 @@ export const ConnectedLocationEditor: React.FC<
             location,
             projectId,
             updateLocationLocally,
-            reloadActiveProject,
             saveLocationInfo,
             setGlobalAutosaveError,
         ],
     );
 
+    const handleDirtyStateChange = React.useCallback(
+        (isDirty: boolean) => {
+            if (isDirty) {
+                markDocumentEditorDirty(editorSelection);
+                return;
+            }
+
+            clearDocumentEditorDirty(editorSelection);
+        },
+        [clearDocumentEditorDirty, editorSelection, markDocumentEditorDirty],
+    );
+
+    React.useEffect(
+        () => () => {
+            clearDocumentEditorDirty(editorSelection);
+        },
+        [clearDocumentEditorDirty, editorSelection],
+    );
+
+    const addImageLocally = React.useCallback(
+        (image: { id: string }) => {
+            if (!location) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    images: {
+                        ...state.assets.images,
+                        [image.id]: image as never,
+                    },
+                },
+            }));
+
+            if (!location.galleryImageIds.includes(image.id)) {
+                updateLocationLocally(location.id, {
+                    galleryImageIds: [...location.galleryImageIds, image.id],
+                    updatedAt: new Date(),
+                });
+            }
+        },
+        [location, updateLocationLocally],
+    );
+
+    const setBgmLocally = React.useCallback(
+        (bgm: { id: string }) => {
+            if (!location) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    bgms: {
+                        ...state.assets.bgms,
+                        [bgm.id]: bgm as never,
+                    },
+                },
+            }));
+
+            updateLocationLocally(location.id, {
+                bgmId: bgm.id,
+                updatedAt: new Date(),
+            });
+        },
+        [location, updateLocationLocally],
+    );
+
+    const setPlaylistLocally = React.useCallback(
+        (playlist: { id: string }) => {
+            if (!location) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    playlists: {
+                        ...state.assets.playlists,
+                        [playlist.id]: playlist as never,
+                    },
+                },
+            }));
+
+            updateLocationLocally(location.id, {
+                playlistId: playlist.id,
+                updatedAt: new Date(),
+            });
+        },
+        [location, updateLocationLocally],
+    );
+
     const handleGeneratePortrait = async () => {
         if (!projectId || !location) return;
-        await generateLocationImage({
+        const response = await generateLocationImage({
             projectId,
             locationId: location.id,
         });
-        await reloadActiveProject();
+        addImageLocally(response.image);
     };
 
     const handleImportPortrait = async (file: File) => {
         if (!projectId || !location) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "image",
@@ -189,23 +282,26 @@ export const ConnectedLocationEditor: React.FC<
                 extension,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "image") {
+            addImageLocally(response.image);
+        }
     };
 
     const handleGenerateSong = async () => {
         if (!projectId || !location) return;
-        await generateLocationSong({
+        const response = await generateLocationSong({
             projectId,
             locationId: location.id,
         });
-        await reloadActiveProject();
+        setBgmLocally(response.track);
     };
 
     const handleImportSong = async (file: File) => {
         if (!projectId || !location) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "bgm",
@@ -217,16 +313,19 @@ export const ConnectedLocationEditor: React.FC<
                 extension,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "bgm") {
+            setBgmLocally(response.track);
+        }
     };
 
     const handleGeneratePlaylist = async () => {
         if (!projectId || !location) return;
-        await generateLocationPlaylist({
+        const response = await generateLocationPlaylist({
             projectId,
             locationId: location.id,
         });
-        await reloadActiveProject();
+        setPlaylistLocally(response.playlist);
     };
 
     const handleImportPlaylist = async (file: File) => {
@@ -239,7 +338,7 @@ export const ConnectedLocationEditor: React.FC<
             throw new Error("Invalid playlist JSON.");
         }
 
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "playlist",
@@ -251,7 +350,10 @@ export const ConnectedLocationEditor: React.FC<
                 subjectId: location.id,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "playlist") {
+            setPlaylistLocally(response.playlist);
+        }
     };
 
     const handleCreateOrReuseMetafieldDefinition = React.useCallback(
@@ -466,6 +568,7 @@ export const ConnectedLocationEditor: React.FC<
                 handleDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={handleImportMetafieldImage}
+            onDirtyStateChange={handleDirtyStateChange}
             onNavigateToDocument={handleNavigateToDocument}
             focusTitleOnMount={focusTitleOnMount}
         />

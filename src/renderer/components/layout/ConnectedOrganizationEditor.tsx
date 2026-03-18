@@ -31,7 +31,6 @@ export const ConnectedOrganizationEditor: React.FC<
         updateMetafieldAssignmentLocally,
         removeMetafieldAssignmentLocally,
         removeMetafieldDefinitionLocally,
-        reloadActiveProject,
         saveOrganizationInfo,
         createOrReuseMetafieldDefinition,
         assignMetafieldToEntity,
@@ -45,8 +44,15 @@ export const ConnectedOrganizationEditor: React.FC<
         setActiveDocument,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
+        markDocumentEditorDirty,
+        clearDocumentEditorDirty,
         consumePendingTitleFocus,
     } = useAppStore();
+
+    const editorSelection = React.useMemo(
+        () => ({ kind: "organization", id: organizationId }) as const,
+        [organizationId],
+    );
 
     const [autosaveStatus, setAutosaveStatus] =
         React.useState<AutosaveStatus>("idle");
@@ -133,9 +139,7 @@ export const ConnectedOrganizationEditor: React.FC<
 
             const payload = {
                 name: values.name,
-                description: values.description.join("\n"),
-                mission: values.mission.join("\n"),
-                tags: values.tags,
+                description: values.description,
                 locationIds: values.locationIds,
             };
 
@@ -163,7 +167,6 @@ export const ConnectedOrganizationEditor: React.FC<
                     organization.id,
                     originalOrganization,
                 );
-                await reloadActiveProject();
                 throw error;
             }
         },
@@ -171,26 +174,121 @@ export const ConnectedOrganizationEditor: React.FC<
             organization,
             projectId,
             updateOrganizationLocally,
-            reloadActiveProject,
             saveOrganizationInfo,
             setGlobalAutosaveError,
         ],
     );
 
+    const handleDirtyStateChange = React.useCallback(
+        (isDirty: boolean) => {
+            if (isDirty) {
+                markDocumentEditorDirty(editorSelection);
+                return;
+            }
+
+            clearDocumentEditorDirty(editorSelection);
+        },
+        [clearDocumentEditorDirty, editorSelection, markDocumentEditorDirty],
+    );
+
+    React.useEffect(
+        () => () => {
+            clearDocumentEditorDirty(editorSelection);
+        },
+        [clearDocumentEditorDirty, editorSelection],
+    );
+
+    const addImageLocally = React.useCallback(
+        (image: { id: string }) => {
+            if (!organization) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    images: {
+                        ...state.assets.images,
+                        [image.id]: image as never,
+                    },
+                },
+            }));
+
+            if (!organization.galleryImageIds.includes(image.id)) {
+                updateOrganizationLocally(organization.id, {
+                    galleryImageIds: [
+                        ...organization.galleryImageIds,
+                        image.id,
+                    ],
+                    updatedAt: new Date(),
+                });
+            }
+        },
+        [organization, updateOrganizationLocally],
+    );
+
+    const setBgmLocally = React.useCallback(
+        (bgm: { id: string }) => {
+            if (!organization) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    bgms: {
+                        ...state.assets.bgms,
+                        [bgm.id]: bgm as never,
+                    },
+                },
+            }));
+
+            updateOrganizationLocally(organization.id, {
+                bgmId: bgm.id,
+                updatedAt: new Date(),
+            });
+        },
+        [organization, updateOrganizationLocally],
+    );
+
+    const setPlaylistLocally = React.useCallback(
+        (playlist: { id: string }) => {
+            if (!organization) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    playlists: {
+                        ...state.assets.playlists,
+                        [playlist.id]: playlist as never,
+                    },
+                },
+            }));
+
+            updateOrganizationLocally(organization.id, {
+                playlistId: playlist.id,
+                updatedAt: new Date(),
+            });
+        },
+        [organization, updateOrganizationLocally],
+    );
+
     const handleGeneratePortrait = async () => {
         if (!projectId || !organization) return;
-        await generateOrganizationImage({
+        const response = await generateOrganizationImage({
             projectId,
             organizationId: organization.id,
         });
-        await reloadActiveProject();
+        addImageLocally(response.image);
     };
 
     const handleImportPortrait = async (file: File) => {
         if (!projectId || !organization) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "image",
@@ -200,23 +298,26 @@ export const ConnectedOrganizationEditor: React.FC<
                 extension,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "image") {
+            addImageLocally(response.image);
+        }
     };
 
     const handleGenerateSong = async () => {
         if (!projectId || !organization) return;
-        await generateOrganizationSong({
+        const response = await generateOrganizationSong({
             projectId,
             organizationId: organization.id,
         });
-        await reloadActiveProject();
+        setBgmLocally(response.track);
     };
 
     const handleImportSong = async (file: File) => {
         if (!projectId || !organization) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "bgm",
@@ -228,16 +329,19 @@ export const ConnectedOrganizationEditor: React.FC<
                 extension,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "bgm") {
+            setBgmLocally(response.track);
+        }
     };
 
     const handleGeneratePlaylist = async () => {
         if (!projectId || !organization) return;
-        await generateOrganizationPlaylist({
+        const response = await generateOrganizationPlaylist({
             projectId,
             organizationId: organization.id,
         });
-        await reloadActiveProject();
+        setPlaylistLocally(response.playlist);
     };
 
     const handleImportPlaylist = async (file: File) => {
@@ -250,7 +354,7 @@ export const ConnectedOrganizationEditor: React.FC<
             throw new Error("Invalid playlist JSON.");
         }
 
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "playlist",
@@ -262,7 +366,10 @@ export const ConnectedOrganizationEditor: React.FC<
                 subjectId: organization.id,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "playlist") {
+            setPlaylistLocally(response.playlist);
+        }
     };
 
     const handleCreateOrReuseMetafieldDefinition = React.useCallback(
@@ -472,6 +579,7 @@ export const ConnectedOrganizationEditor: React.FC<
                 handleDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={handleImportMetafieldImage}
+            onDirtyStateChange={handleDirtyStateChange}
             focusTitleOnMount={focusTitleOnMount}
         />
     );

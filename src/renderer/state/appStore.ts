@@ -28,6 +28,7 @@ import type {
     WorkspaceScrapNote,
     WorkspaceAssets,
     WorkspaceAssetBundle,
+    WorkspaceDocumentKind,
     WorkspaceImageAsset,
     WorkspaceBGMAsset,
     WorkspacePlaylistAsset,
@@ -82,9 +83,10 @@ const rendererApi = getRendererApi();
 const authEvents = getAuthEvents();
 const syncEvents = getSyncEvents();
 let unsubscribeAuthState: (() => void) | null = null;
-let unsubscribeSyncListeners: Array<() => void> = [];
+const unsubscribeSyncListeners: Array<() => void> = [];
 const recentlyResolvedConflicts = new Map<string, number>();
 const recentLocalMetafieldWrites = new Map<string, number>();
+const acceptedConflictOverwrites = new Set<string>();
 const CONFLICT_SUPPRESSION_MS = 15000;
 const LOCAL_METAFIELD_CONFLICT_SUPPRESSION_MS = 4000;
 
@@ -96,8 +98,33 @@ const getConflictKey = (
 const getConflictEventKey = (payload: ConflictPayload): string =>
     `${payload.entityType}:${payload.entityId}:${payload.localUpdatedAt}:${payload.remoteUpdatedAt}`;
 
+const getConflictEntityKey = (
+    entityType: ConflictPayload["entityType"],
+    entityId: string,
+): string => `${entityType}:${entityId}`;
+
 const markLocalMetafieldWrite = (assignmentId: string): void => {
     recentLocalMetafieldWrites.set(assignmentId, Date.now());
+};
+
+const markAcceptedConflictOverwrite = (
+    entityType: ConflictPayload["entityType"],
+    entityId: string,
+): void => {
+    acceptedConflictOverwrites.add(getConflictEntityKey(entityType, entityId));
+};
+
+const consumeAcceptedConflictOverwrite = (
+    entityType: ConflictPayload["entityType"],
+    entityId: string,
+): boolean => {
+    const key = getConflictEntityKey(entityType, entityId);
+    if (!acceptedConflictOverwrites.has(key)) {
+        return false;
+    }
+
+    acceptedConflictOverwrites.delete(key);
+    return true;
 };
 
 const hasRecentLocalMetafieldWrite = (assignmentId: string): boolean => {
@@ -106,9 +133,7 @@ const hasRecentLocalMetafieldWrite = (assignmentId: string): boolean => {
         return false;
     }
 
-    if (
-        Date.now() - timestamp > LOCAL_METAFIELD_CONFLICT_SUPPRESSION_MS
-    ) {
+    if (Date.now() - timestamp > LOCAL_METAFIELD_CONFLICT_SUPPRESSION_MS) {
         recentLocalMetafieldWrites.delete(assignmentId);
         return false;
     }
@@ -125,9 +150,41 @@ const omitKey = <T extends Record<string, unknown>>(
     return next;
 };
 
+const toWorkspaceDocumentKind = (
+    entityType: ConflictPayload["entityType"],
+): WorkspaceDocumentKind | null => {
+    if (
+        entityType === "chapter" ||
+        entityType === "scrapNote" ||
+        entityType === "character" ||
+        entityType === "location" ||
+        entityType === "organization"
+    ) {
+        return entityType;
+    }
+
+    return null;
+};
+
+const isOpenDocumentTarget = (
+    activeDocument: WorkspaceDocumentRef | null,
+    openTabs: WorkspaceDocumentRef[],
+    kind: WorkspaceDocumentKind,
+    id: string,
+): boolean => {
+    if (activeDocument?.kind === kind && activeDocument.id === id) {
+        return true;
+    }
+
+    return openTabs.some((tab) => tab.kind === kind && tab.id === id);
+};
+
 const createErrorMessage = (error: unknown, fallback: string): string => {
     return normalizeUserFacingError(error, fallback);
 };
+
+const toWorkspaceDocumentKey = (selection: WorkspaceDocumentRef): string =>
+    `${selection.kind}:${selection.id}`;
 
 const generateOptimisticId = (): string => {
     // Electron renderer supports Web Crypto in modern versions.
@@ -139,6 +196,9 @@ const generateOptimisticId = (): string => {
     // Fallback: keep collision probability extremely low.
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
+
+const normalizeOptimisticMetafieldName = (name: string): string =>
+    name.trim().replace(/\s+/g, " ").toLowerCase();
 
 const CHARACTER_DEFAULT_METAFIELDS = [
     { name: "Race", valueType: "string" as const, initialValue: "" },
@@ -334,6 +394,7 @@ type AppStore = {
     >;
     pendingEditsById: Record<string, PendingChapterEdit>;
     archivedEditsById: Record<string, PendingChapterEdit>;
+    dirtyDocumentEditors: Record<string, WorkspaceDocumentRef>;
 
     currentSelection: {
         text: string;
@@ -342,6 +403,8 @@ type AppStore = {
     setCurrentSelection: (
         selection: { text: string; range: string } | null,
     ) => void;
+    markDocumentEditorDirty: (selection: WorkspaceDocumentRef) => void;
+    clearDocumentEditorDirty: (selection: WorkspaceDocumentRef) => void;
 
     addPendingEdits: (payload: {
         comments: {
@@ -569,6 +632,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         | "pendingEditsByChapterId"
         | "pendingEditsById"
         | "archivedEditsById"
+        | "dirtyDocumentEditors"
         | "pendingTitleFocusDocument"
     > => ({
         projectId: "",
@@ -595,6 +659,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         pendingEditsByChapterId: {},
         pendingEditsById: {},
         archivedEditsById: {},
+        dirtyDocumentEditors: {},
         pendingTitleFocusDocument: null,
     });
 
@@ -613,13 +678,25 @@ export const useAppStore = create<AppStore>((set, get) => {
     };
 
     const confirmDiscardPendingEdits = (): boolean => {
-        const pendingCount = Object.keys(get().pendingEditsById).length;
-        if (pendingCount === 0) {
+        const pendingChapterEditCount = Object.keys(
+            get().pendingEditsById,
+        ).length;
+        const dirtyEditorCount = Object.keys(get().dirtyDocumentEditors).length;
+
+        if (pendingChapterEditCount === 0 && dirtyEditorCount === 0) {
             return true;
         }
 
+        const pendingParts: string[] = [];
+        if (pendingChapterEditCount > 0) {
+            pendingParts.push("pending chapter edits");
+        }
+        if (dirtyEditorCount > 0) {
+            pendingParts.push("unsaved editor changes");
+        }
+
         return window.confirm(
-            "You have pending chapter edits that are not saved and will be lost. Continue?",
+            `You have ${pendingParts.join(" and ")} that will be lost. Continue?`,
         );
     };
 
@@ -736,14 +813,60 @@ export const useAppStore = create<AppStore>((set, get) => {
         // Subscribe to incremental entity updates - update state in place
         unsubscribeSyncListeners.push(
             syncEvents.onEntityUpdated((payload) => {
-                const { projectId, stage, assets } = get();
+                const { projectId, stage, assets, activeDocument, openTabs } =
+                    get();
 
                 // Only handle updates for the currently open project
                 if (stage !== "workspace" || payload.projectId !== projectId) {
                     return;
                 }
 
+                const documentKind = toWorkspaceDocumentKind(
+                    payload.entityType,
+                );
+                const allowAcceptedConflictOverwrite =
+                    consumeAcceptedConflictOverwrite(
+                        payload.entityType,
+                        payload.entityId,
+                    );
+                if (
+                    !allowAcceptedConflictOverwrite &&
+                    documentKind &&
+                    isOpenDocumentTarget(
+                        activeDocument,
+                        openTabs,
+                        documentKind,
+                        payload.entityId,
+                    )
+                ) {
+                    return;
+                }
+
                 const data = payload.data;
+
+                if (payload.entityType === "metafieldAssignment") {
+                    const assignment =
+                        data as unknown as WorkspaceMetafieldAssignment & {
+                            entityType?: WorkspaceDocumentKind;
+                            entityId?: string;
+                        };
+                    const targetKind = assignment.entityType;
+                    const targetId = assignment.entityId;
+
+                    if (
+                        !allowAcceptedConflictOverwrite &&
+                        targetKind &&
+                        targetId &&
+                        isOpenDocumentTarget(
+                            activeDocument,
+                            openTabs,
+                            targetKind,
+                            targetId,
+                        )
+                    ) {
+                        return;
+                    }
+                }
 
                 switch (payload.entityType) {
                     case "project": {
@@ -943,6 +1066,15 @@ export const useAppStore = create<AppStore>((set, get) => {
                     }
                     case "chapter": {
                         set((state) => ({
+                            workspaceProject: state.workspaceProject
+                                ? {
+                                      ...state.workspaceProject,
+                                      chapterIds:
+                                          state.workspaceProject.chapterIds.filter(
+                                              (id) => id !== entityId,
+                                          ),
+                                  }
+                                : state.workspaceProject,
                             chapters: state.chapters.filter(
                                 (c) => c.id !== entityId,
                             ),
@@ -952,6 +1084,15 @@ export const useAppStore = create<AppStore>((set, get) => {
                     }
                     case "character": {
                         set((state) => ({
+                            workspaceProject: state.workspaceProject
+                                ? {
+                                      ...state.workspaceProject,
+                                      characterIds:
+                                          state.workspaceProject.characterIds.filter(
+                                              (id) => id !== entityId,
+                                          ),
+                                  }
+                                : state.workspaceProject,
                             characters: state.characters.filter(
                                 (c) => c.id !== entityId,
                             ),
@@ -961,6 +1102,15 @@ export const useAppStore = create<AppStore>((set, get) => {
                     }
                     case "location": {
                         set((state) => ({
+                            workspaceProject: state.workspaceProject
+                                ? {
+                                      ...state.workspaceProject,
+                                      locationIds:
+                                          state.workspaceProject.locationIds.filter(
+                                              (id) => id !== entityId,
+                                          ),
+                                  }
+                                : state.workspaceProject,
                             locations: state.locations.filter(
                                 (l) => l.id !== entityId,
                             ),
@@ -970,6 +1120,15 @@ export const useAppStore = create<AppStore>((set, get) => {
                     }
                     case "organization": {
                         set((state) => ({
+                            workspaceProject: state.workspaceProject
+                                ? {
+                                      ...state.workspaceProject,
+                                      organizationIds:
+                                          state.workspaceProject.organizationIds.filter(
+                                              (id) => id !== entityId,
+                                          ),
+                                  }
+                                : state.workspaceProject,
                             organizations: state.organizations.filter(
                                 (o) => o.id !== entityId,
                             ),
@@ -979,6 +1138,15 @@ export const useAppStore = create<AppStore>((set, get) => {
                     }
                     case "scrapNote": {
                         set((state) => ({
+                            workspaceProject: state.workspaceProject
+                                ? {
+                                      ...state.workspaceProject,
+                                      scrapNoteIds:
+                                          state.workspaceProject.scrapNoteIds.filter(
+                                              (id) => id !== entityId,
+                                          ),
+                                  }
+                                : state.workspaceProject,
                             scrapNotes: state.scrapNotes.filter(
                                 (s) => s.id !== entityId,
                             ),
@@ -1725,14 +1893,15 @@ export const useAppStore = create<AppStore>((set, get) => {
             const now = new Date();
             const id = generateOptimisticId();
             const optimisticDefinitions: WorkspaceMetafieldDefinition[] =
-                CHARACTER_DEFAULT_METAFIELDS.map(
-                (seed) => {
+                CHARACTER_DEFAULT_METAFIELDS.map((seed) => {
                     const definitionId = generateOptimisticId();
                     return {
                         id: definitionId,
                         projectId,
                         name: seed.name,
-                        nameNormalized: `${seed.name.toLowerCase().trim().replace(/\s+/g, "-")}-${definitionId}`,
+                        nameNormalized: normalizeOptimisticMetafieldName(
+                            seed.name,
+                        ),
                         scope: "character" as const,
                         valueType: seed.valueType,
                         targetEntityKind:
@@ -1740,11 +1909,9 @@ export const useAppStore = create<AppStore>((set, get) => {
                         createdAt: now,
                         updatedAt: now,
                     };
-                },
-            );
+                });
             const optimisticAssignments: WorkspaceMetafieldAssignment[] =
-                optimisticDefinitions.map(
-                (definition, index) => ({
+                optimisticDefinitions.map((definition, index) => ({
                     id: generateOptimisticId(),
                     projectId,
                     definitionId: definition.id,
@@ -1754,8 +1921,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                     orderIndex: index,
                     createdAt: now,
                     updatedAt: now,
-                }),
-            );
+                }));
 
             set((state) => {
                 const nextCharacters = [
@@ -1763,17 +1929,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     {
                         id,
                         name: "",
-                        race: "",
-                        age: null,
                         description: "",
                         currentLocationId: null,
                         backgroundLocationId: null,
                         organizationId: null,
-                        traits: [],
-                        goals: [],
-                        secrets: [],
-                        powers: [],
-                        tags: [],
                         bgmId: null,
                         playlistId: null,
                         galleryImageIds: [],
@@ -1864,10 +2023,6 @@ export const useAppStore = create<AppStore>((set, get) => {
                         id,
                         name: "",
                         description: "",
-                        culture: "",
-                        history: "",
-                        conflicts: [],
-                        tags: [],
                         createdAt: now,
                         updatedAt: now,
                         bgmId: null,
@@ -1940,8 +2095,6 @@ export const useAppStore = create<AppStore>((set, get) => {
                         id,
                         name: "",
                         description: "",
-                        mission: "",
-                        tags: [],
                         locationIds: [],
                         galleryImageIds: [],
                         playlistId: null,
@@ -2253,9 +2406,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                 const nextProject = state.workspaceProject
                     ? {
                           ...state.workspaceProject,
-                          locationIds: state.workspaceProject.locationIds.filter(
-                              (id) => id !== locationId,
-                          ),
+                          locationIds:
+                              state.workspaceProject.locationIds.filter(
+                                  (id) => id !== locationId,
+                              ),
                           updatedAt: new Date(),
                       }
                     : state.workspaceProject;
@@ -2590,7 +2744,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             set({ pendingConflict: conflict });
         },
         resolveConflict: async (resolution) => {
-            const { pendingConflict, projectId } = get();
+            const { pendingConflict } = get();
             if (!pendingConflict) return;
 
             const conflictKey = getConflictKey(
@@ -2599,23 +2753,26 @@ export const useAppStore = create<AppStore>((set, get) => {
             );
 
             try {
+                if (resolution === "accept-remote") {
+                    markAcceptedConflictOverwrite(
+                        pendingConflict.entityType,
+                        pendingConflict.entityId,
+                    );
+                }
+
                 await syncEvents.resolveConflict(
                     pendingConflict.entityType,
                     pendingConflict.entityId,
                     pendingConflict.projectId,
                     resolution,
                 );
-
-                // If we accepted remote changes and this is the current project, reload
-                if (
-                    resolution === "accept-remote" &&
-                    pendingConflict.projectId === projectId
-                ) {
-                    // Reload the project to get fresh data
-                    const { reloadActiveProject } = get();
-                    await reloadActiveProject();
-                }
             } catch (error) {
+                acceptedConflictOverwrites.delete(
+                    getConflictEntityKey(
+                        pendingConflict.entityType,
+                        pendingConflict.entityId,
+                    ),
+                );
                 console.error("Failed to resolve conflict:", error);
             } finally {
                 recentlyResolvedConflicts.set(conflictKey, Date.now());
@@ -2644,6 +2801,36 @@ export const useAppStore = create<AppStore>((set, get) => {
         currentSelection: null,
         setCurrentSelection: (selection) =>
             set({ currentSelection: selection }),
+        markDocumentEditorDirty: (selection) => {
+            const key = toWorkspaceDocumentKey(selection);
+            set((state) => {
+                if (state.dirtyDocumentEditors[key]) {
+                    return state;
+                }
+
+                return {
+                    dirtyDocumentEditors: {
+                        ...state.dirtyDocumentEditors,
+                        [key]: selection,
+                    },
+                };
+            });
+        },
+        clearDocumentEditorDirty: (selection) => {
+            const key = toWorkspaceDocumentKey(selection);
+            set((state) => {
+                if (!state.dirtyDocumentEditors[key]) {
+                    return state;
+                }
+
+                const next = { ...state.dirtyDocumentEditors };
+                delete next[key];
+
+                return {
+                    dirtyDocumentEditors: next,
+                };
+            });
+        },
         setDraggedDocument: (doc) => {
             set({ draggedDocument: doc });
         },
@@ -2677,6 +2864,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         pendingEditsByChapterId: {},
         pendingEditsById: {},
         archivedEditsById: {},
+        dirtyDocumentEditors: {},
         addPendingEdits: (payload) => {
             const createdAt = Date.now();
             const pendingById: Record<string, PendingChapterEdit> = {};
@@ -3231,14 +3419,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 kind: "location" as const,
                 id: location.id,
                 title: normalizeLabel(location.name, "Untitled Location"),
-                content: joinParts([
-                    location.name,
-                    location.description,
-                    location.culture,
-                    location.history,
-                    ...(location.conflicts ?? []),
-                    ...(location.tags ?? []),
-                ]),
+                content: joinParts([location.name, location.description]),
                 contentFormat: "plain" as const,
                 binderIndex: index,
             }));
@@ -3247,12 +3428,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 kind: "organization" as const,
                 id: org.id,
                 title: normalizeLabel(org.name, "Untitled Organization"),
-                content: joinParts([
-                    org.name,
-                    org.description,
-                    org.mission,
-                    ...(org.tags ?? []),
-                ]),
+                content: joinParts([org.name, org.description]),
                 contentFormat: "plain" as const,
                 binderIndex: index,
             }));

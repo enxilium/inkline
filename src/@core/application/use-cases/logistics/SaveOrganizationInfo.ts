@@ -6,8 +6,6 @@ export interface SaveOrganizationInfoRequest {
     payload: {
         name?: string;
         description?: string;
-        mission?: string;
-        tags?: string[];
         locationIds?: string[];
     };
 }
@@ -15,7 +13,7 @@ export interface SaveOrganizationInfoRequest {
 export class SaveOrganizationInfo {
     constructor(
         private readonly organizationRepository: IOrganizationRepository,
-        private readonly locationRepository: ILocationRepository
+        private readonly locationRepository: ILocationRepository,
     ) {}
 
     async execute(request: SaveOrganizationInfoRequest): Promise<void> {
@@ -44,27 +42,12 @@ export class SaveOrganizationInfo {
             organization.description = payload.description;
             hasChanges = true;
         }
-        if (
-            payload.mission !== undefined &&
-            organization.mission !== payload.mission
-        ) {
-            organization.mission = payload.mission;
-            hasChanges = true;
-        }
-        if (
-            payload.tags !== undefined &&
-            JSON.stringify(organization.tags) !== JSON.stringify(payload.tags)
-        ) {
-            organization.tags = payload.tags;
-            hasChanges = true;
-        }
-
         const previousLocationIds = [...organization.locationIds];
         let nextLocationIds: string[] | null = null;
 
         if (payload.locationIds !== undefined) {
             nextLocationIds = await this.validateLocationIds(
-                payload.locationIds
+                payload.locationIds,
             );
             if (
                 JSON.stringify(organization.locationIds) !==
@@ -84,16 +67,16 @@ export class SaveOrganizationInfo {
             await this.syncLocationCaches(
                 organization.id,
                 previousLocationIds,
-                nextLocationIds
+                nextLocationIds,
             );
         }
     }
 
     private async validateLocationIds(
-        locationIds: string[]
+        locationIds: string[],
     ): Promise<string[]> {
         const uniqueIds = Array.from(
-            new Set(locationIds.map((id) => id.trim()))
+            new Set(locationIds.map((id) => id.trim())),
         );
         const filtered = uniqueIds.filter((id) => !!id);
 
@@ -103,10 +86,10 @@ export class SaveOrganizationInfo {
                     await this.locationRepository.findById(locationId);
                 if (!location) {
                     throw new Error(
-                        `Location ${locationId} not found for this project.`
+                        `Location ${locationId} not found for this project.`,
                     );
                 }
-            })
+            }),
         );
 
         return filtered;
@@ -115,7 +98,7 @@ export class SaveOrganizationInfo {
     private async syncLocationCaches(
         organizationId: string,
         previousLocationIds: string[],
-        nextLocationIds: string[]
+        nextLocationIds: string[],
     ): Promise<void> {
         const previous = new Set(previousLocationIds);
         const next = new Set(nextLocationIds);
@@ -125,17 +108,17 @@ export class SaveOrganizationInfo {
 
         await Promise.all([
             ...toAdd.map((locationId) =>
-                this.addOrganizationToLocation(organizationId, locationId)
+                this.addOrganizationToLocation(organizationId, locationId),
             ),
             ...toRemove.map((locationId) =>
-                this.removeOrganizationFromLocation(organizationId, locationId)
+                this.removeOrganizationFromLocation(organizationId, locationId),
             ),
         ]);
     }
 
     private async addOrganizationToLocation(
         organizationId: string,
-        locationId: string
+        locationId: string,
     ): Promise<void> {
         const location = await this.locationRepository.findById(locationId);
         if (!location) {
@@ -151,7 +134,7 @@ export class SaveOrganizationInfo {
 
     private async removeOrganizationFromLocation(
         organizationId: string,
-        locationId: string
+        locationId: string,
     ): Promise<void> {
         const location = await this.locationRepository.findById(locationId);
         if (!location) {
@@ -160,7 +143,7 @@ export class SaveOrganizationInfo {
 
         if (location.organizationIds.includes(organizationId)) {
             location.organizationIds = location.organizationIds.filter(
-                (id) => id !== organizationId
+                (id) => id !== organizationId,
             );
             location.updatedAt = new Date();
             await this.locationRepository.update(location);

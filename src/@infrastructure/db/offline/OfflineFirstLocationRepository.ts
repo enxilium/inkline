@@ -13,7 +13,7 @@ import { deletionLog } from "./DeletionLog";
 export class OfflineFirstLocationRepository implements ILocationRepository {
     constructor(
         private supabaseRepo: SupabaseLocationRepository,
-        private fsRepo: FileSystemLocationRepository
+        private fsRepo: FileSystemLocationRepository,
     ) {}
 
     async create(projectId: string, location: Location): Promise<void> {
@@ -23,7 +23,7 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
         } catch (error) {
             console.warn(
                 "Failed to create location in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -75,11 +75,10 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
     }
 
     async getLocationProfiles(
-        projectId: string
-    ): Promise<{ id: string; name: string; description: string }[]> {
+        projectId: string,
+    ): Promise<{ name: string; description: string }[]> {
         const locations = await this.findByProjectId(projectId);
         return locations.map((l) => ({
-            id: l.id,
             name: l.name,
             description: l.description,
         }));
@@ -92,7 +91,7 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
         } catch (error) {
             console.warn(
                 "Failed to update location in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -114,7 +113,7 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete location in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -144,7 +143,7 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete locations in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -158,7 +157,7 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
      */
     private pickMostRecent(
         local: Location | null,
-        remote: Location | null
+        remote: Location | null,
     ): Location | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
@@ -171,7 +170,7 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
      */
     private mergeByMostRecent(
         local: Location[],
-        remote: Location[]
+        remote: Location[],
     ): Location[] {
         const map = new Map<string, Location>();
 
@@ -197,7 +196,7 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
     }
 
     private async getRemoteProjectId(
-        locationId: string
+        locationId: string,
     ): Promise<string | null> {
         try {
             const client = SupabaseService.getClient();
