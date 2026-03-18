@@ -33,7 +33,7 @@ export class GeminiAITextService implements IAITextService {
         characterRepository: ICharacterRepository,
         locationRepository: ILocationRepository,
         organizationRepository: IOrganizationRepository,
-        scrapNoteRepository: IScrapNoteRepository
+        scrapNoteRepository: IScrapNoteRepository,
     ) {
         this.sessionStore = sessionStore;
         this.chapterRepository = chapterRepository;
@@ -50,7 +50,7 @@ export class GeminiAITextService implements IAITextService {
 
             if (!key) {
                 throw new Error(
-                    "Gemini API Key is missing. Please add it in Settings."
+                    "Gemini API Key is missing. Please add it in Settings.",
                 );
             }
 
@@ -76,7 +76,7 @@ export class GeminiAITextService implements IAITextService {
     async *analyze(
         content: string,
         instruction: string,
-        context: NarrativeContext
+        context: NarrativeContext,
     ): AsyncGenerator<string, void, unknown> {
         const contextStr = this.formatContext(context);
 
@@ -112,7 +112,7 @@ export class GeminiAITextService implements IAITextService {
 
     async editManuscript(
         chapterIds: string[],
-        context: NarrativeContext
+        context: NarrativeContext,
     ): Promise<{
         comments: {
             chapterId: string;
@@ -135,11 +135,11 @@ export class GeminiAITextService implements IAITextService {
 
         // Fetch chapters
         const chapters = await Promise.all(
-            chapterIds.map((id) => this.chapterRepository.findById(id))
+            chapterIds.map((id) => this.chapterRepository.findById(id)),
         );
 
         const validChapters = chapters.filter(
-            (c): c is NonNullable<typeof c> => c !== null
+            (c): c is NonNullable<typeof c> => c !== null,
         );
         if (validChapters.length === 0) {
             return { comments: [], replacements: [] };
@@ -255,7 +255,7 @@ export class GeminiAITextService implements IAITextService {
                 };
 
                 const asRecord = (
-                    value: unknown
+                    value: unknown,
                 ): Record<string, unknown> | null => {
                     if (!value || typeof value !== "object") {
                         return null;
@@ -414,7 +414,7 @@ export class GeminiAITextService implements IAITextService {
     async startChatWithTitle(
         prompt: string,
         context: NarrativeContext,
-        options?: ChatHistoryOptions
+        options?: ChatHistoryOptions,
     ): Promise<{ title: string; reply: string }> {
         const client = await this.getModel();
         const contextStr = this.formatContext(context);
@@ -439,9 +439,7 @@ export class GeminiAITextService implements IAITextService {
                             if (character)
                                 content = `Character: ${character.name}\nDescription: ${
                                     character.description
-                                }\nTraits: ${character.traits.join(
-                                    ", "
-                                )}\nGoals: ${character.goals.join(", ")}`;
+                                }`;
                             break;
                         }
                         case "location": {
@@ -454,7 +452,7 @@ export class GeminiAITextService implements IAITextService {
                         case "organization": {
                             const org =
                                 await this.organizationRepository.findById(
-                                    doc.id
+                                    doc.id,
                                 );
                             if (org)
                                 content = `Organization: ${org.name}\nDescription: ${org.description}`;
@@ -536,7 +534,7 @@ export class GeminiAITextService implements IAITextService {
     async *chat(
         prompt: string,
         context: NarrativeContext,
-        options?: ChatHistoryOptions
+        options?: ChatHistoryOptions,
     ): AsyncGenerator<string, void, unknown> {
         const client = await this.getModel();
 
@@ -572,9 +570,7 @@ export class GeminiAITextService implements IAITextService {
                             if (character)
                                 content = `Character: ${character.name}\nDescription: ${
                                     character.description
-                                }\nTraits: ${character.traits.join(
-                                    ", "
-                                )}\nGoals: ${character.goals.join(", ")}`;
+                                }`;
                             break;
                         }
                         case "location": {
@@ -587,7 +583,7 @@ export class GeminiAITextService implements IAITextService {
                         case "organization": {
                             const org =
                                 await this.organizationRepository.findById(
-                                    doc.id
+                                    doc.id,
                                 );
                             if (org)
                                 content = `Organization: ${org.name}\nDescription: ${org.description}`;

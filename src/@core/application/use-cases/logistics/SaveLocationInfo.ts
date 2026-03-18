@@ -5,10 +5,6 @@ export interface SaveLocationInfoRequest {
     payload: {
         name?: string;
         description?: string;
-        culture?: string;
-        history?: string;
-        conflicts?: string[];
-        tags?: string[];
     };
 }
 
@@ -40,36 +36,6 @@ export class SaveLocationInfo {
             location.description = payload.description;
             hasChanges = true;
         }
-        if (
-            payload.culture !== undefined &&
-            location.culture !== payload.culture
-        ) {
-            location.culture = payload.culture;
-            hasChanges = true;
-        }
-        if (
-            payload.history !== undefined &&
-            location.history !== payload.history
-        ) {
-            location.history = payload.history;
-            hasChanges = true;
-        }
-        if (
-            payload.conflicts !== undefined &&
-            JSON.stringify(location.conflicts) !==
-                JSON.stringify(payload.conflicts)
-        ) {
-            location.conflicts = payload.conflicts;
-            hasChanges = true;
-        }
-        if (
-            payload.tags !== undefined &&
-            JSON.stringify(location.tags) !== JSON.stringify(payload.tags)
-        ) {
-            location.tags = payload.tags;
-            hasChanges = true;
-        }
-
         if (hasChanges) {
             location.updatedAt = new Date();
             await this.locationRepository.update(location);

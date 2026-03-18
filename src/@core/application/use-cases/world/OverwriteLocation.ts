@@ -7,10 +7,6 @@ export interface OverwriteLocationRequest {
     locationId: string;
     name: string;
     description: string;
-    culture: string;
-    history: string;
-    conflicts: string[];
-    tags: string[];
     characterIds: string[]; // Ignored in favor of recalculation
     organizationIds: string[]; // Ignored in favor of recalculation
     bgmId: string | null;
@@ -22,7 +18,7 @@ export class OverwriteLocation {
     constructor(
         private readonly locationRepository: ILocationRepository,
         private readonly characterRepository: ICharacterRepository,
-        private readonly organizationRepository: IOrganizationRepository
+        private readonly organizationRepository: IOrganizationRepository,
     ) {}
 
     async execute(request: OverwriteLocationRequest): Promise<void> {
@@ -36,10 +32,6 @@ export class OverwriteLocation {
         // Update fields (excluding caches)
         location.name = payload.name;
         location.description = payload.description;
-        location.culture = payload.culture;
-        location.history = payload.history;
-        location.conflicts = payload.conflicts;
-        location.tags = payload.tags;
         location.bgmId = payload.bgmId;
         location.playlistId = payload.playlistId;
         location.galleryImageIds = payload.galleryImageIds;
@@ -53,7 +45,7 @@ export class OverwriteLocation {
         const charactersAtLocation = projectCharacters.filter(
             (c) =>
                 c.currentLocationId === locationId ||
-                c.backgroundLocationId === locationId
+                c.backgroundLocationId === locationId,
         );
         location.characterIds = charactersAtLocation.map((c) => c.id);
 

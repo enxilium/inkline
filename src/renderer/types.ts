@@ -50,6 +50,10 @@ export type WorkspacePlaylistAsset = WorkspaceAssetBundle["playlists"][number];
 
 export type WorkspaceTimeline = OpenProjectPayload["timelines"][number];
 export type WorkspaceEvent = OpenProjectPayload["events"][number];
+export type WorkspaceMetafieldDefinition =
+    OpenProjectPayload["metafieldDefinitions"][number];
+export type WorkspaceMetafieldAssignment =
+    OpenProjectPayload["metafieldAssignments"][number];
 
 export type WorkspaceViewMode = "manuscript" | "timeline";
 

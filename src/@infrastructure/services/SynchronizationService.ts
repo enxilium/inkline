@@ -17,6 +17,10 @@ import { SupabaseScrapNoteRepository } from "../db/SupabaseScrapNoteRepository";
 import { FileSystemScrapNoteRepository } from "../db/filesystem/FileSystemScrapNoteRepository";
 import { SupabaseAssetRepository } from "../db/SupabaseAssetRepository";
 import { FileSystemAssetRepository } from "../db/filesystem/FileSystemAssetRepository";
+import { SupabaseMetafieldDefinitionRepository } from "../db/SupabaseMetafieldDefinitionRepository";
+import { FileSystemMetafieldDefinitionRepository } from "../db/filesystem/FileSystemMetafieldDefinitionRepository";
+import { SupabaseMetafieldAssignmentRepository } from "../db/SupabaseMetafieldAssignmentRepository";
+import { FileSystemMetafieldAssignmentRepository } from "../db/filesystem/FileSystemMetafieldAssignmentRepository";
 import { SupabaseService } from "../db/SupabaseService";
 import { fileSystemService } from "../storage/FileSystemService";
 import * as path from "path";
@@ -65,6 +69,8 @@ type QueuedRealtimeEvent = {
  */
 export class SynchronizationService extends EventEmitter {
     private syncStateGateway: SyncStateGateway | null = null;
+    private static readonly CONFLICT_GRACE_MS = 3000;
+    private static readonly METAFIELD_ACK_WINDOW_MS = 1200;
 
     constructor(
         private supabaseProjectRepo: SupabaseProjectRepository,
@@ -81,6 +87,10 @@ export class SynchronizationService extends EventEmitter {
         private fsScrapNoteRepo: FileSystemScrapNoteRepository,
         private supabaseAssetRepo: SupabaseAssetRepository,
         private fsAssetRepo: FileSystemAssetRepository,
+        private supabaseMetafieldDefinitionRepo: SupabaseMetafieldDefinitionRepository,
+        private fsMetafieldDefinitionRepo: FileSystemMetafieldDefinitionRepository,
+        private supabaseMetafieldAssignmentRepo: SupabaseMetafieldAssignmentRepository,
+        private fsMetafieldAssignmentRepo: FileSystemMetafieldAssignmentRepository,
         private supabaseDeletionLogRepo: SupabaseDeletionLogRepository,
     ) {
         super();
@@ -237,6 +247,26 @@ export class SynchronizationService extends EventEmitter {
             )
             .on(
                 "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "metafield_definitions",
+                },
+                (payload) =>
+                    this.handleRealtimeChange("metafieldDefinition", payload),
+            )
+            .on(
+                "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "metafield_assignments",
+                },
+                (payload) =>
+                    this.handleRealtimeChange("metafieldAssignment", payload),
+            )
+            .on(
+                "postgres_changes",
                 { event: "*", schema: "public", table: "assets" },
                 (payload) => this.handleAssetRealtimeChange(payload),
             )
@@ -303,15 +333,50 @@ export class SynchronizationService extends EventEmitter {
     }
 
     // Type for Supabase realtime payload records
-    private extractRecordFields(record: Record<string, unknown>): {
+    private extractRecordFields(
+        payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
+        record: Record<string, unknown>,
+    ): {
         projectId: string;
         entityId: string;
         updatedAt: string;
         assetType?: string;
     } {
+        const payloadRecord = payload as unknown as {
+            new?: Record<string, unknown>;
+            old?: Record<string, unknown>;
+            old_record?: Record<string, unknown>;
+            record?: Record<string, unknown>;
+        };
+
+        const normalize = (value: unknown): string =>
+            typeof value === "string" ? value.trim() : "";
+
+        const rawProjectIdCandidates = [
+            record.project_id,
+            payloadRecord.new?.project_id,
+            payloadRecord.old?.project_id,
+            payloadRecord.old_record?.project_id,
+            payloadRecord.record?.project_id,
+        ];
+        const rawEntityIdCandidates = [
+            record.id,
+            payloadRecord.new?.id,
+            payloadRecord.old?.id,
+            payloadRecord.old_record?.id,
+            payloadRecord.record?.id,
+        ];
+
+        const projectId = rawProjectIdCandidates
+            .map(normalize)
+            .find((value) => value.length > 0);
+        const entityId = rawEntityIdCandidates
+            .map(normalize)
+            .find((value) => value.length > 0);
+
         return {
-            projectId: (record.project_id as string) || "",
-            entityId: (record.id as string) || "",
+            projectId: projectId ?? "",
+            entityId: entityId ?? "",
             updatedAt:
                 (record.updated_at as string) || new Date().toISOString(),
             assetType: record.type as string | undefined,
@@ -334,6 +399,10 @@ export class SynchronizationService extends EventEmitter {
                 return "organizations";
             case "scrapNote":
                 return "scrap_notes";
+            case "metafieldDefinition":
+                return "metafield_definitions";
+            case "metafieldAssignment":
+                return "metafield_assignments";
             case "image":
             case "bgm":
             case "playlist":
@@ -350,11 +419,16 @@ export class SynchronizationService extends EventEmitter {
         const tableName = this.getTableNameForEntityType(entityType);
         if (!tableName || tableName === "projects") return null;
 
+        const normalizedEntityId = entityId.trim();
+        if (!normalizedEntityId) {
+            return null;
+        }
+
         const client = SupabaseService.getClient();
         const { data, error } = await client
             .from(tableName)
             .select("project_id")
-            .eq("id", entityId)
+            .eq("id", normalizedEntityId)
             .maybeSingle();
 
         if (error) {
@@ -369,12 +443,64 @@ export class SynchronizationService extends EventEmitter {
         return projectId || null;
     }
 
+    private async lookupLocalProjectIdForEntity(
+        entityType: SyncEntityType,
+        entityId: string,
+    ): Promise<string | null> {
+        try {
+            switch (entityType) {
+                case "metafieldDefinition": {
+                    const definition =
+                        await this.fsMetafieldDefinitionRepo.findById(entityId);
+                    return definition?.projectId ?? null;
+                }
+                case "metafieldAssignment": {
+                    const assignment =
+                        await this.fsMetafieldAssignmentRepo.findById(entityId);
+                    return assignment?.projectId ?? null;
+                }
+                default:
+                    return null;
+            }
+        } catch {
+            return null;
+        }
+    }
+
+    private async resolveProjectIdForEntity(
+        entityType: SyncEntityType,
+        entityId: string,
+    ): Promise<string | null> {
+        const normalizedEntityId = entityId.trim();
+        if (!normalizedEntityId) {
+            return null;
+        }
+
+        const remoteProjectId = await this.lookupProjectIdForEntity(
+            entityType,
+            normalizedEntityId,
+        );
+        if (remoteProjectId) {
+            return remoteProjectId;
+        }
+
+        return this.lookupLocalProjectIdForEntity(
+            entityType,
+            normalizedEntityId,
+        );
+    }
+
     private async lookupAssetType(entityId: string): Promise<string | null> {
+        const normalizedEntityId = entityId.trim();
+        if (!normalizedEntityId) {
+            return null;
+        }
+
         const client = SupabaseService.getClient();
         const { data, error } = await client
             .from("assets")
             .select("type")
-            .eq("id", entityId)
+            .eq("id", normalizedEntityId)
             .maybeSingle();
 
         if (error) {
@@ -389,17 +515,69 @@ export class SynchronizationService extends EventEmitter {
         return assetType || null;
     }
 
+    private async lookupLocalAssetType(
+        entityId: string,
+    ): Promise<string | null> {
+        const normalizedEntityId = entityId.trim();
+        if (!normalizedEntityId) {
+            return null;
+        }
+
+        try {
+            if (await this.fsAssetRepo.findImageById(normalizedEntityId)) {
+                return "image";
+            }
+
+            if (await this.fsAssetRepo.findBGMById(normalizedEntityId)) {
+                return "bgm";
+            }
+
+            if (await this.fsAssetRepo.findPlaylistById(normalizedEntityId)) {
+                return "playlist";
+            }
+
+            return null;
+        } catch {
+            return null;
+        }
+    }
+
+    private async resolveAssetType(entityId: string): Promise<string | null> {
+        const normalizedEntityId = entityId.trim();
+        if (!normalizedEntityId) {
+            return null;
+        }
+
+        const remoteType = await this.lookupAssetType(normalizedEntityId);
+        if (remoteType) {
+            return remoteType;
+        }
+
+        return this.lookupLocalAssetType(normalizedEntityId);
+    }
+
     private handleRealtimeChangeResolved(
         entityType: SyncEntityType,
         payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
         resolved: { projectId: string; entityId: string; updatedAt: string },
     ): void {
         const { projectId, entityId, updatedAt } = resolved;
+        const normalizedEventType = String(
+            payload.eventType ?? "",
+        ).toUpperCase();
+        const isProjectlessDelete =
+            normalizedEventType === "DELETE" &&
+            entityType !== "project" &&
+            (!projectId || projectId.length === 0);
 
         // Filter out changes for projects we don't own (security filter)
         // Projects table is already filtered by user_id in the subscription,
         // but child entities need client-side filtering (we rely on projectId)
-        if (entityType !== "project" && !this.userProjectIds.has(projectId)) {
+        if (
+            entityType !== "project" &&
+            !isProjectlessDelete &&
+            !this.userProjectIds.has(projectId)
+        ) {
             // If the cache isn't ready yet (startup / initial sync), don't drop events.
             if (this.userProjectIds.size === 0) {
                 this.eventQueue.push({
@@ -428,7 +606,7 @@ export class SynchronizationService extends EventEmitter {
             entityType,
             entityId,
             projectId,
-            changeType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
+            changeType: normalizedEventType as "INSERT" | "UPDATE" | "DELETE",
             updatedAt,
         };
 
@@ -442,7 +620,10 @@ export class SynchronizationService extends EventEmitter {
                 entityType,
                 entityId,
                 projectId,
-                eventType: payload.eventType as "INSERT" | "UPDATE" | "DELETE",
+                eventType: normalizedEventType as
+                    | "INSERT"
+                    | "UPDATE"
+                    | "DELETE",
                 timestamp: Date.now(),
             });
             return;
@@ -454,7 +635,7 @@ export class SynchronizationService extends EventEmitter {
                 entityType,
                 entityId,
                 projectId,
-                payload.eventType,
+                normalizedEventType,
             );
         }
     }
@@ -463,13 +644,24 @@ export class SynchronizationService extends EventEmitter {
         entityType: SyncEntityType,
         payload: RealtimePostgresChangesPayload<Record<string, unknown>>,
     ): void {
+        const normalizedEventType = String(
+            payload.eventType ?? "",
+        ).toUpperCase();
         const record = (payload.new || payload.old) as
             | Record<string, unknown>
             | undefined;
         if (!record) return;
 
-        const { projectId, entityId, updatedAt } =
-            this.extractRecordFields(record);
+        const { projectId, entityId, updatedAt } = this.extractRecordFields(
+            payload,
+            record,
+        );
+        if (!entityId) {
+            logger.warn(
+                `Realtime payload missing id; cannot process ${entityType} ${payload.eventType}`,
+            );
+            return;
+        }
 
         // For UPDATE events, some columns (like project_id) may not be present in the payload.
         // If projectId is missing for child entities, resolve it before filtering/emitting.
@@ -477,15 +669,24 @@ export class SynchronizationService extends EventEmitter {
             entityType !== "project" &&
             (!projectId || projectId.length === 0)
         ) {
+            if (normalizedEventType === "DELETE") {
+                this.handleRealtimeChangeResolved(entityType, payload, {
+                    projectId: "",
+                    entityId,
+                    updatedAt,
+                });
+                return;
+            }
+
             void (async () => {
                 const resolvedProjectId =
-                    (await this.lookupProjectIdForEntity(
+                    (await this.resolveProjectIdForEntity(
                         entityType,
                         entityId,
                     )) || "";
                 if (!resolvedProjectId) {
                     logger.warn(
-                        `Realtime payload missing project_id; cannot process ${entityType} ${payload.eventType} ${entityId}`,
+                        `Realtime payload missing project_id; cannot process ${entityType} ${normalizedEventType || payload.eventType} ${entityId}`,
                     );
                     return;
                 }
@@ -514,12 +715,18 @@ export class SynchronizationService extends EventEmitter {
         if (!record) return;
 
         const { assetType, entityId, updatedAt, projectId } =
-            this.extractRecordFields(record);
+            this.extractRecordFields(payload, record);
+        if (!entityId) {
+            logger.warn(
+                `Realtime payload missing asset id; cannot process ${payload.eventType}`,
+            );
+            return;
+        }
 
         // Asset updates may omit `type` and/or `project_id` in the payload. Resolve if needed.
         if (!assetType) {
             void (async () => {
-                const resolvedAssetType = await this.lookupAssetType(entityId);
+                const resolvedAssetType = await this.resolveAssetType(entityId);
                 if (!resolvedAssetType) return;
 
                 let resolvedEntityType: SyncEntityType;
@@ -539,12 +746,14 @@ export class SynchronizationService extends EventEmitter {
 
                 const resolvedProjectId =
                     projectId ||
-                    (await this.lookupProjectIdForEntity(
+                    (await this.resolveProjectIdForEntity(
                         resolvedEntityType,
                         entityId,
                     )) ||
                     "";
-                if (!resolvedProjectId) return;
+                if (!resolvedProjectId && payload.eventType !== "DELETE") {
+                    return;
+                }
 
                 this.handleRealtimeChangeResolved(resolvedEntityType, payload, {
                     projectId: resolvedProjectId,
@@ -582,9 +791,11 @@ export class SynchronizationService extends EventEmitter {
 
         void (async () => {
             const resolvedProjectId =
-                (await this.lookupProjectIdForEntity(entityType, entityId)) ||
+                (await this.resolveProjectIdForEntity(entityType, entityId)) ||
                 "";
-            if (!resolvedProjectId) return;
+            if (!resolvedProjectId && payload.eventType !== "DELETE") {
+                return;
+            }
             this.handleRealtimeChangeResolved(entityType, payload, {
                 projectId: resolvedProjectId,
                 entityId,
@@ -615,7 +826,14 @@ export class SynchronizationService extends EventEmitter {
             try {
                 const remoteProject =
                     await this.supabaseProjectRepo.findById(entityId);
-                if (remoteProject) {
+                if (!remoteProject) {
+                    return;
+                }
+
+                const localProject =
+                    await this.fsProjectRepo.findById(entityId);
+
+                if (!localProject) {
                     await this.fsProjectRepo.update(remoteProject);
                     this.syncStateGateway?.notifyEntityUpdated({
                         entityType,
@@ -623,6 +841,43 @@ export class SynchronizationService extends EventEmitter {
                         projectId: entityId,
                         data: remoteProject,
                     });
+                    return;
+                }
+
+                if (
+                    remoteProject.updatedAt.getTime() >
+                    localProject.updatedAt.getTime()
+                ) {
+                    this.syncStateGateway?.notifyConflict({
+                        entityType,
+                        entityId,
+                        projectId: entityId,
+                        entityName:
+                            localProject.title ||
+                            remoteProject.title ||
+                            remoteProject.id,
+                        localUpdatedAt: localProject.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteProject.updatedAt.toISOString(),
+                    });
+                    return;
+                }
+
+                if (
+                    localProject.updatedAt.getTime() >
+                    remoteProject.updatedAt.getTime()
+                ) {
+                    this.syncStateGateway?.notifyConflict({
+                        entityType,
+                        entityId,
+                        projectId: entityId,
+                        entityName:
+                            localProject.title ||
+                            remoteProject.title ||
+                            remoteProject.id,
+                        localUpdatedAt: localProject.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteProject.updatedAt.toISOString(),
+                    });
+                    return;
                 }
             } catch (error) {
                 logger.error(`Failed to sync project ${entityId}`, error);
@@ -673,8 +928,37 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
 
+            if (remoteUpdatedAt.getTime() === localUpdatedAt.getTime()) {
+                return;
+            }
+
+            const updateDeltaMs = Math.abs(
+                remoteUpdatedAt.getTime() - localUpdatedAt.getTime(),
+            );
+
             // Cloud is newer: ALWAYS prompt user which version to keep.
             if (remoteUpdatedAt > localUpdatedAt) {
+                if (
+                    entityType === "metafieldAssignment" &&
+                    updateDeltaMs <=
+                        SynchronizationService.METAFIELD_ACK_WINDOW_MS
+                ) {
+                    const entity = await this.syncSingleEntityAndReturn(
+                        entityType as EntityType,
+                        entityId,
+                        projectId,
+                    );
+                    if (entity) {
+                        this.syncStateGateway?.notifyEntityUpdated({
+                            entityType,
+                            entityId,
+                            projectId,
+                            data: entity,
+                        });
+                    }
+                    return;
+                }
+
                 const entityName = await this.getEntityName(
                     entityType as EntityType,
                     entityId,
@@ -692,44 +976,19 @@ export class SynchronizationService extends EventEmitter {
 
             // Local is newer.
             if (localUpdatedAt > remoteUpdatedAt) {
-                // During reconnect-safe windows, do NOT auto-push; surface a conflict.
-                if (this.activeSyncMode === "reconnect") {
-                    const entityName = await this.getEntityName(
-                        entityType as EntityType,
-                        entityId,
-                    );
-                    this.syncStateGateway?.notifyConflict({
-                        entityType,
-                        entityId,
-                        projectId,
-                        entityName: entityName || entityId,
-                        localUpdatedAt: localUpdatedAt.toISOString(),
-                        remoteUpdatedAt: remoteUpdatedAt.toISOString(),
-                    });
-                    return;
-                }
-
-                await this.pushLocalToRemoteAndReturn(
+                const entityName = await this.getEntityName(
                     entityType as EntityType,
                     entityId,
-                    projectId,
                 );
-
-                // Refresh local from remote after push so timestamps converge
-                // and we don't re-prompt on our own write.
-                const refreshed = await this.syncSingleEntityAndReturn(
-                    entityType as EntityType,
+                this.syncStateGateway?.notifyConflict({
+                    entityType,
                     entityId,
                     projectId,
-                );
-                if (refreshed) {
-                    this.syncStateGateway?.notifyEntityUpdated({
-                        entityType,
-                        entityId,
-                        projectId,
-                        data: refreshed,
-                    });
-                }
+                    entityName: entityName || entityId,
+                    localUpdatedAt: localUpdatedAt.toISOString(),
+                    remoteUpdatedAt: remoteUpdatedAt.toISOString(),
+                });
+                return;
             }
         } catch (error) {
             logger.error(
@@ -770,6 +1029,13 @@ export class SynchronizationService extends EventEmitter {
                     const scrapNote = await this.fsScrapNoteRepo.findById(id);
                     return scrapNote?.title ?? null;
                 }
+                case "metafieldDefinition": {
+                    const definition =
+                        await this.fsMetafieldDefinitionRepo.findById(id);
+                    return definition?.name ?? null;
+                }
+                case "metafieldAssignment":
+                    return id;
                 default:
                     return null;
             }
@@ -783,11 +1049,19 @@ export class SynchronizationService extends EventEmitter {
      * Used for incremental updates to notify the renderer with fresh data.
      */
     private async syncSingleEntityAndReturn(
-        type: EntityType,
+        type: EntityType | "project",
         id: string,
         projectId: string,
     ): Promise<unknown | null> {
         switch (type) {
+            case "project": {
+                const project = await this.supabaseProjectRepo.findById(id);
+                if (project) {
+                    await this.fsProjectRepo.update(project);
+                    return project;
+                }
+                return null;
+            }
             case "chapter": {
                 const chapter = await this.supabaseChapterRepo.findById(id);
                 if (chapter) {
@@ -829,6 +1103,24 @@ export class SynchronizationService extends EventEmitter {
                 }
                 return null;
             }
+            case "metafieldDefinition": {
+                const definition =
+                    await this.supabaseMetafieldDefinitionRepo.findById(id);
+                if (definition) {
+                    await this.fsMetafieldDefinitionRepo.update(definition);
+                    return definition;
+                }
+                return null;
+            }
+            case "metafieldAssignment": {
+                const assignment =
+                    await this.supabaseMetafieldAssignmentRepo.findById(id);
+                if (assignment) {
+                    await this.fsMetafieldAssignmentRepo.update(assignment);
+                    return assignment;
+                }
+                return null;
+            }
             case "image": {
                 const image = await this.supabaseAssetRepo.findImageById(id);
                 if (image) {
@@ -864,11 +1156,16 @@ export class SynchronizationService extends EventEmitter {
     }
 
     private async syncSingleEntity(
-        type: EntityType,
+        type: EntityType | "project",
         id: string,
         projectId: string,
     ): Promise<void> {
         switch (type) {
+            case "project": {
+                const project = await this.supabaseProjectRepo.findById(id);
+                if (project) await this.fsProjectRepo.update(project);
+                break;
+            }
             case "chapter": {
                 const chapter = await this.supabaseChapterRepo.findById(id);
                 if (chapter) await this.fsChapterRepo.update(chapter);
@@ -894,6 +1191,20 @@ export class SynchronizationService extends EventEmitter {
             case "scrapNote": {
                 const scrapNote = await this.supabaseScrapNoteRepo.findById(id);
                 if (scrapNote) await this.fsScrapNoteRepo.update(scrapNote);
+                break;
+            }
+            case "metafieldDefinition": {
+                const definition =
+                    await this.supabaseMetafieldDefinitionRepo.findById(id);
+                if (definition)
+                    await this.fsMetafieldDefinitionRepo.update(definition);
+                break;
+            }
+            case "metafieldAssignment": {
+                const assignment =
+                    await this.supabaseMetafieldAssignmentRepo.findById(id);
+                if (assignment)
+                    await this.fsMetafieldAssignmentRepo.update(assignment);
                 break;
             }
             case "image": {
@@ -930,7 +1241,7 @@ export class SynchronizationService extends EventEmitter {
      * Returns the resolved entity data so the UI can update.
      */
     async resolveConflict(
-        entityType: EntityType,
+        entityType: EntityType | "project",
         entityId: string,
         projectId: string,
         resolution: "accept-remote" | "keep-local",
@@ -974,12 +1285,24 @@ export class SynchronizationService extends EventEmitter {
      * Push local entity to remote and return the entity.
      */
     private async pushLocalToRemoteAndReturn(
-        type: EntityType,
+        type: EntityType | "project",
         id: string,
         projectId: string,
         forceUpdateTimestamp = false,
     ): Promise<unknown | null> {
         switch (type) {
+            case "project": {
+                const project = await this.fsProjectRepo.findById(id);
+                if (project) {
+                    if (forceUpdateTimestamp) {
+                        project.updatedAt = new Date();
+                        await this.fsProjectRepo.update(project);
+                    }
+                    await this.supabaseProjectRepo.update(project);
+                    return project;
+                }
+                return null;
+            }
             case "chapter": {
                 const chapter = await this.fsChapterRepo.findById(id);
                 if (chapter) {
@@ -1037,6 +1360,36 @@ export class SynchronizationService extends EventEmitter {
                     }
                     await this.supabaseScrapNoteRepo.update(scrapNote);
                     return scrapNote;
+                }
+                return null;
+            }
+            case "metafieldDefinition": {
+                const definition =
+                    await this.fsMetafieldDefinitionRepo.findById(id);
+                if (definition) {
+                    if (forceUpdateTimestamp) {
+                        definition.updatedAt = new Date();
+                        await this.fsMetafieldDefinitionRepo.update(definition);
+                    }
+                    await this.supabaseMetafieldDefinitionRepo.update(
+                        definition,
+                    );
+                    return definition;
+                }
+                return null;
+            }
+            case "metafieldAssignment": {
+                const assignment =
+                    await this.fsMetafieldAssignmentRepo.findById(id);
+                if (assignment) {
+                    if (forceUpdateTimestamp) {
+                        assignment.updatedAt = new Date();
+                        await this.fsMetafieldAssignmentRepo.update(assignment);
+                    }
+                    await this.supabaseMetafieldAssignmentRepo.update(
+                        assignment,
+                    );
+                    return assignment;
                 }
                 return null;
             }
@@ -1176,23 +1529,16 @@ export class SynchronizationService extends EventEmitter {
                             localP.updatedAt.getTime() >
                             remoteP.updatedAt.getTime()
                         ) {
-                            if (mode === "reconnect") {
-                                this.syncStateGateway?.notifyConflict({
-                                    entityType: "project",
-                                    entityId: remoteP.id,
-                                    projectId: remoteP.id,
-                                    entityName:
-                                        localP.title ||
-                                        remoteP.title ||
-                                        remoteP.id,
-                                    localUpdatedAt:
-                                        localP.updatedAt.toISOString(),
-                                    remoteUpdatedAt:
-                                        remoteP.updatedAt.toISOString(),
-                                });
-                            } else {
-                                await this.supabaseProjectRepo.update(localP);
-                            }
+                            this.syncStateGateway?.notifyConflict({
+                                entityType: "project",
+                                entityId: remoteP.id,
+                                projectId: remoteP.id,
+                                entityName:
+                                    localP.title || remoteP.title || remoteP.id,
+                                localUpdatedAt: localP.updatedAt.toISOString(),
+                                remoteUpdatedAt:
+                                    remoteP.updatedAt.toISOString(),
+                            });
                         }
                     } else {
                         // Remote-only project, save locally
@@ -1293,7 +1639,131 @@ export class SynchronizationService extends EventEmitter {
         await this.syncLocations(projectId, mode);
         await this.syncOrganizations(projectId, mode);
         await this.syncScrapNotes(projectId, mode);
+        await this.syncMetafields(projectId, mode);
         await this.syncAssets(projectId, mode);
+    }
+
+    private async syncMetafields(
+        projectId: string,
+        mode: "normal" | "reconnect",
+    ) {
+        await this.syncMetafieldDefinitions(projectId, mode);
+        await this.syncMetafieldAssignments(projectId, mode);
+    }
+
+    private async syncMetafieldDefinitions(
+        projectId: string,
+        mode: "normal" | "reconnect",
+    ) {
+        const remote =
+            await this.supabaseMetafieldDefinitionRepo.findByProjectId(
+                projectId,
+            );
+        const local =
+            await this.fsMetafieldDefinitionRepo.findByProjectId(projectId);
+        const localMap = new Map(local.map((item) => [item.id, item]));
+        const remoteMap = new Map(remote.map((item) => [item.id, item]));
+
+        for (const remoteItem of remote) {
+            if (await deletionLog.isDeleted(remoteItem.id)) continue;
+
+            const localItem = localMap.get(remoteItem.id);
+            if (localItem) {
+                if (
+                    remoteItem.updatedAt.getTime() >
+                    localItem.updatedAt.getTime()
+                ) {
+                    await this.fsMetafieldDefinitionRepo.update(remoteItem);
+                } else if (
+                    localItem.updatedAt.getTime() >
+                    remoteItem.updatedAt.getTime()
+                ) {
+                    this.syncStateGateway?.notifyConflict({
+                        entityType: "metafieldDefinition",
+                        entityId: remoteItem.id,
+                        projectId,
+                        entityName:
+                            localItem.name || remoteItem.name || remoteItem.id,
+                        localUpdatedAt: localItem.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteItem.updatedAt.toISOString(),
+                    });
+                }
+            } else {
+                await this.fsMetafieldDefinitionRepo.create(remoteItem);
+            }
+        }
+
+        for (const localItem of local) {
+            if (!remoteMap.has(localItem.id)) {
+                try {
+                    await this.supabaseMetafieldDefinitionRepo.create(
+                        localItem,
+                    );
+                } catch (error) {
+                    logger.warn(
+                        `Skipped metafield definition sync for ${localItem.id} (${localItem.name})`,
+                        error,
+                    );
+                }
+            }
+        }
+    }
+
+    private async syncMetafieldAssignments(
+        projectId: string,
+        mode: "normal" | "reconnect",
+    ) {
+        const remote =
+            await this.supabaseMetafieldAssignmentRepo.findByProjectId(
+                projectId,
+            );
+        const local =
+            await this.fsMetafieldAssignmentRepo.findByProjectId(projectId);
+        const localMap = new Map(local.map((item) => [item.id, item]));
+        const remoteMap = new Map(remote.map((item) => [item.id, item]));
+
+        for (const remoteItem of remote) {
+            if (await deletionLog.isDeleted(remoteItem.id)) continue;
+
+            const localItem = localMap.get(remoteItem.id);
+            if (localItem) {
+                if (
+                    remoteItem.updatedAt.getTime() >
+                    localItem.updatedAt.getTime()
+                ) {
+                    await this.fsMetafieldAssignmentRepo.update(remoteItem);
+                } else if (
+                    localItem.updatedAt.getTime() >
+                    remoteItem.updatedAt.getTime()
+                ) {
+                    this.syncStateGateway?.notifyConflict({
+                        entityType: "metafieldAssignment",
+                        entityId: remoteItem.id,
+                        projectId,
+                        entityName: remoteItem.id,
+                        localUpdatedAt: localItem.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteItem.updatedAt.toISOString(),
+                    });
+                }
+            } else {
+                await this.fsMetafieldAssignmentRepo.create(remoteItem);
+            }
+        }
+
+        for (const localItem of local) {
+            if (!remoteMap.has(localItem.id)) {
+                try {
+                    await this.supabaseMetafieldAssignmentRepo.create(
+                        localItem,
+                    );
+                } catch (error) {
+                    logger.warn(
+                        `Skipped metafield assignment sync for ${localItem.id}`,
+                        error,
+                    );
+                }
+            }
+        }
     }
 
     // ========================================================================
@@ -1325,19 +1795,14 @@ export class SynchronizationService extends EventEmitter {
                 } else if (
                     localC.updatedAt.getTime() > remoteC.updatedAt.getTime()
                 ) {
-                    if (mode === "reconnect") {
-                        this.syncStateGateway?.notifyConflict({
-                            entityType: "chapter",
-                            entityId: remoteC.id,
-                            projectId,
-                            entityName:
-                                localC.title || remoteC.title || remoteC.id,
-                            localUpdatedAt: localC.updatedAt.toISOString(),
-                            remoteUpdatedAt: remoteC.updatedAt.toISOString(),
-                        });
-                    } else {
-                        await this.supabaseChapterRepo.update(localC);
-                    }
+                    this.syncStateGateway?.notifyConflict({
+                        entityType: "chapter",
+                        entityId: remoteC.id,
+                        projectId,
+                        entityName: localC.title || remoteC.title || remoteC.id,
+                        localUpdatedAt: localC.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteC.updatedAt.toISOString(),
+                    });
                 }
             } else {
                 await this.fsChapterRepo.create(projectId, remoteC);
@@ -1372,19 +1837,14 @@ export class SynchronizationService extends EventEmitter {
                 } else if (
                     localC.updatedAt.getTime() > remoteC.updatedAt.getTime()
                 ) {
-                    if (mode === "reconnect") {
-                        this.syncStateGateway?.notifyConflict({
-                            entityType: "character",
-                            entityId: remoteC.id,
-                            projectId,
-                            entityName:
-                                localC.name || remoteC.name || remoteC.id,
-                            localUpdatedAt: localC.updatedAt.toISOString(),
-                            remoteUpdatedAt: remoteC.updatedAt.toISOString(),
-                        });
-                    } else {
-                        await this.supabaseCharacterRepo.update(localC);
-                    }
+                    this.syncStateGateway?.notifyConflict({
+                        entityType: "character",
+                        entityId: remoteC.id,
+                        projectId,
+                        entityName: localC.name || remoteC.name || remoteC.id,
+                        localUpdatedAt: localC.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteC.updatedAt.toISOString(),
+                    });
                 }
             } else {
                 await this.fsCharacterRepo.create(projectId, remoteC);
@@ -1418,19 +1878,14 @@ export class SynchronizationService extends EventEmitter {
                 } else if (
                     localL.updatedAt.getTime() > remoteL.updatedAt.getTime()
                 ) {
-                    if (mode === "reconnect") {
-                        this.syncStateGateway?.notifyConflict({
-                            entityType: "location",
-                            entityId: remoteL.id,
-                            projectId,
-                            entityName:
-                                localL.name || remoteL.name || remoteL.id,
-                            localUpdatedAt: localL.updatedAt.toISOString(),
-                            remoteUpdatedAt: remoteL.updatedAt.toISOString(),
-                        });
-                    } else {
-                        await this.supabaseLocationRepo.update(localL);
-                    }
+                    this.syncStateGateway?.notifyConflict({
+                        entityType: "location",
+                        entityId: remoteL.id,
+                        projectId,
+                        entityName: localL.name || remoteL.name || remoteL.id,
+                        localUpdatedAt: localL.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteL.updatedAt.toISOString(),
+                    });
                 }
             } else {
                 await this.fsLocationRepo.create(projectId, remoteL);
@@ -1464,19 +1919,14 @@ export class SynchronizationService extends EventEmitter {
                 } else if (
                     localO.updatedAt.getTime() > remoteO.updatedAt.getTime()
                 ) {
-                    if (mode === "reconnect") {
-                        this.syncStateGateway?.notifyConflict({
-                            entityType: "organization",
-                            entityId: remoteO.id,
-                            projectId,
-                            entityName:
-                                localO.name || remoteO.name || remoteO.id,
-                            localUpdatedAt: localO.updatedAt.toISOString(),
-                            remoteUpdatedAt: remoteO.updatedAt.toISOString(),
-                        });
-                    } else {
-                        await this.supabaseOrganizationRepo.update(localO);
-                    }
+                    this.syncStateGateway?.notifyConflict({
+                        entityType: "organization",
+                        entityId: remoteO.id,
+                        projectId,
+                        entityName: localO.name || remoteO.name || remoteO.id,
+                        localUpdatedAt: localO.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteO.updatedAt.toISOString(),
+                    });
                 }
             } else {
                 await this.fsOrganizationRepo.create(projectId, remoteO);
@@ -1510,22 +1960,18 @@ export class SynchronizationService extends EventEmitter {
                 } else if (
                     localN.updatedAt.getTime() > remoteN.updatedAt.getTime()
                 ) {
-                    if (mode === "reconnect") {
-                        const localTitle =
-                            typeof localN.title === "string"
-                                ? localN.title
-                                : remoteN.id;
-                        this.syncStateGateway?.notifyConflict({
-                            entityType: "scrapNote",
-                            entityId: remoteN.id,
-                            projectId,
-                            entityName: localTitle,
-                            localUpdatedAt: localN.updatedAt.toISOString(),
-                            remoteUpdatedAt: remoteN.updatedAt.toISOString(),
-                        });
-                    } else {
-                        await this.supabaseScrapNoteRepo.update(localN);
-                    }
+                    const localTitle =
+                        typeof localN.title === "string"
+                            ? localN.title
+                            : remoteN.id;
+                    this.syncStateGateway?.notifyConflict({
+                        entityType: "scrapNote",
+                        entityId: remoteN.id,
+                        projectId,
+                        entityName: localTitle,
+                        localUpdatedAt: localN.updatedAt.toISOString(),
+                        remoteUpdatedAt: remoteN.updatedAt.toISOString(),
+                    });
                 }
             } else {
                 await this.fsScrapNoteRepo.create(projectId, remoteN);
@@ -1798,7 +2244,12 @@ export class SynchronizationService extends EventEmitter {
                             deletion.entity_type as EntityType,
                             deletion.entity_id,
                         );
+                        await this.supabaseDeletionLogRepo.delete(deletion.id);
                     }
+                } else {
+                    // Entity already absent locally. Mark remote deletion log consumed
+                    // to avoid reprocessing this same deletion on every sync cycle.
+                    await this.supabaseDeletionLogRepo.delete(deletion.id);
                 }
             } catch (error) {
                 logger.warn(
@@ -1832,6 +2283,14 @@ export class SynchronizationService extends EventEmitter {
                     break;
                 case "scrapNote":
                     entity = await this.supabaseScrapNoteRepo.findById(id);
+                    break;
+                case "metafieldDefinition":
+                    entity =
+                        await this.supabaseMetafieldDefinitionRepo.findById(id);
+                    break;
+                case "metafieldAssignment":
+                    entity =
+                        await this.supabaseMetafieldAssignmentRepo.findById(id);
                     break;
                 case "image":
                     entity = await this.supabaseAssetRepo.findImageById(id);
@@ -1873,6 +2332,12 @@ export class SynchronizationService extends EventEmitter {
                 case "scrapNote":
                     entity = await this.fsScrapNoteRepo.findById(id);
                     break;
+                case "metafieldDefinition":
+                    entity = await this.fsMetafieldDefinitionRepo.findById(id);
+                    break;
+                case "metafieldAssignment":
+                    entity = await this.fsMetafieldAssignmentRepo.findById(id);
+                    break;
                 case "image":
                     entity = await this.fsAssetRepo.findImageById(id);
                     break;
@@ -1910,6 +2375,12 @@ export class SynchronizationService extends EventEmitter {
             case "scrapNote":
                 await this.supabaseScrapNoteRepo.delete(id);
                 break;
+            case "metafieldDefinition":
+                await this.supabaseMetafieldDefinitionRepo.delete(id);
+                break;
+            case "metafieldAssignment":
+                await this.supabaseMetafieldAssignmentRepo.delete(id);
+                break;
             case "image":
                 await this.deleteRemoteAssetFile(type, id);
                 await this.supabaseAssetRepo.deleteImage(id);
@@ -1944,6 +2415,12 @@ export class SynchronizationService extends EventEmitter {
                 break;
             case "scrapNote":
                 await this.fsScrapNoteRepo.delete(id);
+                break;
+            case "metafieldDefinition":
+                await this.fsMetafieldDefinitionRepo.delete(id);
+                break;
+            case "metafieldAssignment":
+                await this.fsMetafieldAssignmentRepo.delete(id);
                 break;
             case "image":
                 await this.deleteLocalAssetFile(type, id);

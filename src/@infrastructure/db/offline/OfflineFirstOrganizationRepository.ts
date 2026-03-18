@@ -10,12 +10,10 @@ import { deletionLog } from "./DeletionLog";
  * Offline-first organization repository that uses local filesystem as primary storage
  * and syncs with Supabase when online. Uses "most recent wins" for conflict resolution.
  */
-export class OfflineFirstOrganizationRepository
-    implements IOrganizationRepository
-{
+export class OfflineFirstOrganizationRepository implements IOrganizationRepository {
     constructor(
         private supabaseRepo: SupabaseOrganizationRepository,
-        private fsRepo: FileSystemOrganizationRepository
+        private fsRepo: FileSystemOrganizationRepository,
     ) {}
 
     async create(projectId: string, organization: Organization): Promise<void> {
@@ -25,7 +23,7 @@ export class OfflineFirstOrganizationRepository
         } catch (error) {
             console.warn(
                 "Failed to create organization in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -89,11 +87,10 @@ export class OfflineFirstOrganizationRepository
     }
 
     async getOrganizationProfiles(
-        projectId: string
-    ): Promise<{ id: string; name: string; description: string }[]> {
+        projectId: string,
+    ): Promise<{ name: string; description: string }[]> {
         const orgs = await this.findByProjectId(projectId);
         return orgs.map((o) => ({
-            id: o.id,
             name: o.name,
             description: o.description,
         }));
@@ -106,7 +103,7 @@ export class OfflineFirstOrganizationRepository
         } catch (error) {
             console.warn(
                 "Failed to update organization in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -128,7 +125,7 @@ export class OfflineFirstOrganizationRepository
         } catch (error) {
             console.warn(
                 "Failed to delete organization in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -158,7 +155,7 @@ export class OfflineFirstOrganizationRepository
         } catch (error) {
             console.warn(
                 "Failed to delete organizations in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -172,7 +169,7 @@ export class OfflineFirstOrganizationRepository
      */
     private pickMostRecent(
         local: Organization | null,
-        remote: Organization | null
+        remote: Organization | null,
     ): Organization | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
@@ -185,7 +182,7 @@ export class OfflineFirstOrganizationRepository
      */
     private mergeByMostRecent(
         local: Organization[],
-        remote: Organization[]
+        remote: Organization[],
     ): Organization[] {
         const map = new Map<string, Organization>();
 

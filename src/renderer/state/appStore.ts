@@ -1,6 +1,7 @@
 import { create } from "zustand";
 
 import type { RendererApi } from "../../@interface-adapters/controllers/contracts";
+import type { ConflictPayload } from "../../@interface-adapters/controllers/sync/SyncStateGateway";
 import { globalSearchEngine } from "./globalSearchEngine";
 import type {
     GlobalFindAndReplaceRequest,
@@ -27,12 +28,15 @@ import type {
     WorkspaceScrapNote,
     WorkspaceAssets,
     WorkspaceAssetBundle,
+    WorkspaceDocumentKind,
     WorkspaceImageAsset,
     WorkspaceBGMAsset,
     WorkspacePlaylistAsset,
     WorkspaceTimeline,
     WorkspaceEvent,
     WorkspaceViewMode,
+    WorkspaceMetafieldDefinition,
+    WorkspaceMetafieldAssignment,
 } from "../types";
 import { normalizeUserFacingError } from "../utils/userFacingError";
 
@@ -79,7 +83,63 @@ const rendererApi = getRendererApi();
 const authEvents = getAuthEvents();
 const syncEvents = getSyncEvents();
 let unsubscribeAuthState: (() => void) | null = null;
-let unsubscribeSyncState: (() => void) | null = null;
+const unsubscribeSyncListeners: Array<() => void> = [];
+const recentlyResolvedConflicts = new Map<string, number>();
+const recentLocalMetafieldWrites = new Map<string, number>();
+const acceptedConflictOverwrites = new Set<string>();
+const CONFLICT_SUPPRESSION_MS = 15000;
+const LOCAL_METAFIELD_CONFLICT_SUPPRESSION_MS = 4000;
+
+const getConflictKey = (
+    entityType: ConflictPayload["entityType"],
+    entityId: string,
+) => `${entityType}:${entityId}`;
+
+const getConflictEventKey = (payload: ConflictPayload): string =>
+    `${payload.entityType}:${payload.entityId}:${payload.localUpdatedAt}:${payload.remoteUpdatedAt}`;
+
+const getConflictEntityKey = (
+    entityType: ConflictPayload["entityType"],
+    entityId: string,
+): string => `${entityType}:${entityId}`;
+
+const markLocalMetafieldWrite = (assignmentId: string): void => {
+    recentLocalMetafieldWrites.set(assignmentId, Date.now());
+};
+
+const markAcceptedConflictOverwrite = (
+    entityType: ConflictPayload["entityType"],
+    entityId: string,
+): void => {
+    acceptedConflictOverwrites.add(getConflictEntityKey(entityType, entityId));
+};
+
+const consumeAcceptedConflictOverwrite = (
+    entityType: ConflictPayload["entityType"],
+    entityId: string,
+): boolean => {
+    const key = getConflictEntityKey(entityType, entityId);
+    if (!acceptedConflictOverwrites.has(key)) {
+        return false;
+    }
+
+    acceptedConflictOverwrites.delete(key);
+    return true;
+};
+
+const hasRecentLocalMetafieldWrite = (assignmentId: string): boolean => {
+    const timestamp = recentLocalMetafieldWrites.get(assignmentId);
+    if (!timestamp) {
+        return false;
+    }
+
+    if (Date.now() - timestamp > LOCAL_METAFIELD_CONFLICT_SUPPRESSION_MS) {
+        recentLocalMetafieldWrites.delete(assignmentId);
+        return false;
+    }
+
+    return true;
+};
 
 const omitKey = <T extends Record<string, unknown>>(
     record: T,
@@ -90,9 +150,41 @@ const omitKey = <T extends Record<string, unknown>>(
     return next;
 };
 
+const toWorkspaceDocumentKind = (
+    entityType: ConflictPayload["entityType"],
+): WorkspaceDocumentKind | null => {
+    if (
+        entityType === "chapter" ||
+        entityType === "scrapNote" ||
+        entityType === "character" ||
+        entityType === "location" ||
+        entityType === "organization"
+    ) {
+        return entityType;
+    }
+
+    return null;
+};
+
+const isOpenDocumentTarget = (
+    activeDocument: WorkspaceDocumentRef | null,
+    openTabs: WorkspaceDocumentRef[],
+    kind: WorkspaceDocumentKind,
+    id: string,
+): boolean => {
+    if (activeDocument?.kind === kind && activeDocument.id === id) {
+        return true;
+    }
+
+    return openTabs.some((tab) => tab.kind === kind && tab.id === id);
+};
+
 const createErrorMessage = (error: unknown, fallback: string): string => {
     return normalizeUserFacingError(error, fallback);
 };
+
+const toWorkspaceDocumentKey = (selection: WorkspaceDocumentRef): string =>
+    `${selection.kind}:${selection.id}`;
 
 const generateOptimisticId = (): string => {
     // Electron renderer supports Web Crypto in modern versions.
@@ -104,6 +196,24 @@ const generateOptimisticId = (): string => {
     // Fallback: keep collision probability extremely low.
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
+
+const normalizeOptimisticMetafieldName = (name: string): string =>
+    name.trim().replace(/\s+/g, " ").toLowerCase();
+
+const CHARACTER_DEFAULT_METAFIELDS = [
+    { name: "Race", valueType: "string" as const, initialValue: "" },
+    { name: "Age", valueType: "string" as const, initialValue: "" },
+    {
+        name: "Personality",
+        valueType: "string[]" as const,
+        initialValue: [] as string[],
+    },
+    {
+        name: "Powers & Abilities",
+        valueType: "string[]" as const,
+        initialValue: [] as string[],
+    },
+];
 
 const runInBackground = (
     promise: Promise<unknown>,
@@ -248,6 +358,8 @@ type AppStore = {
     timelines: WorkspaceTimeline[];
     selectedTimelineId: string | null;
     events: WorkspaceEvent[];
+    metafieldDefinitions: WorkspaceMetafieldDefinition[];
+    metafieldAssignments: WorkspaceMetafieldAssignment[];
     assets: WorkspaceAssets;
     activeDocument: WorkspaceDocumentRef | null;
     openTabs: WorkspaceDocumentRef[];
@@ -259,7 +371,7 @@ type AppStore = {
     syncStatus: "online" | "offline" | "syncing";
     lastSyncedAt: string | null;
     pendingConflict: {
-        entityType: string;
+        entityType: ConflictPayload["entityType"];
         entityId: string;
         projectId: string;
         entityName: string;
@@ -282,6 +394,7 @@ type AppStore = {
     >;
     pendingEditsById: Record<string, PendingChapterEdit>;
     archivedEditsById: Record<string, PendingChapterEdit>;
+    dirtyDocumentEditors: Record<string, WorkspaceDocumentRef>;
 
     currentSelection: {
         text: string;
@@ -290,6 +403,8 @@ type AppStore = {
     setCurrentSelection: (
         selection: { text: string; range: string } | null,
     ) => void;
+    markDocumentEditorDirty: (selection: WorkspaceDocumentRef) => void;
+    clearDocumentEditorDirty: (selection: WorkspaceDocumentRef) => void;
 
     addPendingEdits: (payload: {
         comments: {
@@ -355,6 +470,18 @@ type AppStore = {
         organizationId: string,
         patch: Partial<WorkspaceOrganization>,
     ) => void;
+    addOrUpdateMetafieldDefinitionLocally: (
+        definition: WorkspaceMetafieldDefinition,
+    ) => void;
+    addOrUpdateMetafieldAssignmentLocally: (
+        assignment: WorkspaceMetafieldAssignment,
+    ) => void;
+    updateMetafieldAssignmentLocally: (
+        assignmentId: string,
+        patch: Partial<WorkspaceMetafieldAssignment>,
+    ) => void;
+    removeMetafieldAssignmentLocally: (assignmentId: string) => void;
+    removeMetafieldDefinitionLocally: (definitionId: string) => void;
     createChapterEntry: (order?: number) => Promise<void>;
     createScrapNoteEntry: () => Promise<void>;
     createCharacterEntry: () => Promise<void>;
@@ -413,6 +540,12 @@ type AppStore = {
     saveCharacterInfo: RendererApi["logistics"]["saveCharacterInfo"];
     saveLocationInfo: RendererApi["logistics"]["saveLocationInfo"];
     saveOrganizationInfo: RendererApi["logistics"]["saveOrganizationInfo"];
+    listProjectMetafields: RendererApi["metafield"]["listProjectMetafields"];
+    createOrReuseMetafieldDefinition: RendererApi["metafield"]["createOrReuseMetafieldDefinition"];
+    assignMetafieldToEntity: RendererApi["metafield"]["assignMetafieldToEntity"];
+    saveMetafieldValue: RendererApi["metafield"]["saveMetafieldValue"];
+    removeMetafieldFromEntity: RendererApi["metafield"]["removeMetafieldFromEntity"];
+    deleteMetafieldDefinitionGlobal: RendererApi["metafield"]["deleteMetafieldDefinitionGlobal"];
     importAsset: RendererApi["asset"]["importAsset"];
     generateCharacterImage: RendererApi["generation"]["generateCharacterImage"];
     generateCharacterSong: RendererApi["generation"]["generateCharacterSong"];
@@ -486,6 +619,8 @@ export const useAppStore = create<AppStore>((set, get) => {
         | "timelines"
         | "selectedTimelineId"
         | "events"
+        | "metafieldDefinitions"
+        | "metafieldAssignments"
         | "workspaceViewMode"
         | "assets"
         | "activeDocument"
@@ -497,6 +632,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         | "pendingEditsByChapterId"
         | "pendingEditsById"
         | "archivedEditsById"
+        | "dirtyDocumentEditors"
         | "pendingTitleFocusDocument"
     > => ({
         projectId: "",
@@ -510,6 +646,8 @@ export const useAppStore = create<AppStore>((set, get) => {
         timelines: [] as WorkspaceTimeline[],
         selectedTimelineId: null as string | null,
         events: [] as WorkspaceEvent[],
+        metafieldDefinitions: [] as WorkspaceMetafieldDefinition[],
+        metafieldAssignments: [] as WorkspaceMetafieldAssignment[],
         workspaceViewMode: "manuscript",
         assets: emptyAssets,
         activeDocument: null as WorkspaceDocumentRef | null,
@@ -521,6 +659,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         pendingEditsByChapterId: {},
         pendingEditsById: {},
         archivedEditsById: {},
+        dirtyDocumentEditors: {},
         pendingTitleFocusDocument: null,
     });
 
@@ -539,13 +678,25 @@ export const useAppStore = create<AppStore>((set, get) => {
     };
 
     const confirmDiscardPendingEdits = (): boolean => {
-        const pendingCount = Object.keys(get().pendingEditsById).length;
-        if (pendingCount === 0) {
+        const pendingChapterEditCount = Object.keys(
+            get().pendingEditsById,
+        ).length;
+        const dirtyEditorCount = Object.keys(get().dirtyDocumentEditors).length;
+
+        if (pendingChapterEditCount === 0 && dirtyEditorCount === 0) {
             return true;
         }
 
+        const pendingParts: string[] = [];
+        if (pendingChapterEditCount > 0) {
+            pendingParts.push("pending chapter edits");
+        }
+        if (dirtyEditorCount > 0) {
+            pendingParts.push("unsaved editor changes");
+        }
+
         return window.confirm(
-            "You have pending chapter edits that are not saved and will be lost. Continue?",
+            `You have ${pendingParts.join(" and ")} that will be lost. Continue?`,
         );
     };
 
@@ -585,7 +736,7 @@ export const useAppStore = create<AppStore>((set, get) => {
     };
 
     const ensureSyncSubscription = () => {
-        if (unsubscribeSyncState) {
+        if (unsubscribeSyncListeners.length > 0) {
             return;
         }
 
@@ -602,258 +753,477 @@ export const useAppStore = create<AppStore>((set, get) => {
         );
 
         // Subscribe to sync state changes (online/offline/syncing)
-        unsubscribeSyncState = syncEvents.onStateChanged((payload) => {
-            set({
-                syncStatus: payload.status,
-                lastSyncedAt: payload.lastSyncedAt,
-            });
-        });
+        unsubscribeSyncListeners.push(
+            syncEvents.onStateChanged((payload) => {
+                set({
+                    syncStatus: payload.status,
+                    lastSyncedAt: payload.lastSyncedAt,
+                });
+            }),
+        );
 
         // Subscribe to remote changes - log only, actual updates come via entity events
-        syncEvents.onRemoteChange(() => undefined);
+        unsubscribeSyncListeners.push(
+            syncEvents.onRemoteChange(() => undefined),
+        );
 
         // Subscribe to conflicts - show conflict resolution dialog
-        syncEvents.onConflict((payload) => {
-            const { projectId, stage } = get();
+        unsubscribeSyncListeners.push(
+            syncEvents.onConflict((payload) => {
+                const { projectId, stage } = get();
 
-            // Only show conflicts for the currently open project
-            if (stage === "workspace" && payload.projectId === projectId) {
-                set({ pendingConflict: payload });
-            }
-        });
+                if (
+                    payload.entityType === "metafieldAssignment" &&
+                    hasRecentLocalMetafieldWrite(payload.entityId)
+                ) {
+                    return;
+                }
+
+                const conflictKey = getConflictKey(
+                    payload.entityType,
+                    payload.entityId,
+                );
+                const conflictEventKey = getConflictEventKey(payload);
+                const resolvedAt = recentlyResolvedConflicts.get(conflictKey);
+                if (
+                    resolvedAt &&
+                    Date.now() - resolvedAt < CONFLICT_SUPPRESSION_MS
+                ) {
+                    return;
+                }
+
+                // Only show conflicts for the currently open project
+                if (stage === "workspace" && payload.projectId === projectId) {
+                    const current = get().pendingConflict;
+                    if (
+                        current &&
+                        current.projectId === payload.projectId &&
+                        current.entityType === payload.entityType &&
+                        current.entityId === payload.entityId &&
+                        getConflictEventKey(current) === conflictEventKey
+                    ) {
+                        return;
+                    }
+
+                    set({ pendingConflict: payload });
+                }
+            }),
+        );
 
         // Subscribe to incremental entity updates - update state in place
-        syncEvents.onEntityUpdated((payload) => {
-            const { projectId, stage, assets } = get();
+        unsubscribeSyncListeners.push(
+            syncEvents.onEntityUpdated((payload) => {
+                const { projectId, stage, assets, activeDocument, openTabs } =
+                    get();
 
-            // Only handle updates for the currently open project
-            if (stage !== "workspace" || payload.projectId !== projectId) {
-                return;
-            }
+                // Only handle updates for the currently open project
+                if (stage !== "workspace" || payload.projectId !== projectId) {
+                    return;
+                }
 
-            const data = payload.data;
+                const documentKind = toWorkspaceDocumentKind(
+                    payload.entityType,
+                );
+                const allowAcceptedConflictOverwrite =
+                    consumeAcceptedConflictOverwrite(
+                        payload.entityType,
+                        payload.entityId,
+                    );
+                if (
+                    !allowAcceptedConflictOverwrite &&
+                    documentKind &&
+                    isOpenDocumentTarget(
+                        activeDocument,
+                        openTabs,
+                        documentKind,
+                        payload.entityId,
+                    )
+                ) {
+                    return;
+                }
 
-            switch (payload.entityType) {
-                case "project": {
-                    set({
-                        workspaceProject: data as unknown as WorkspaceProject,
-                    });
-                    break;
-                }
-                case "chapter": {
-                    const chapter = data as unknown as WorkspaceChapter;
-                    set((state) => ({
-                        chapters: state.chapters.some(
-                            (c) => c.id === chapter.id,
+                const data = payload.data;
+
+                if (payload.entityType === "metafieldAssignment") {
+                    const assignment =
+                        data as unknown as WorkspaceMetafieldAssignment & {
+                            entityType?: WorkspaceDocumentKind;
+                            entityId?: string;
+                        };
+                    const targetKind = assignment.entityType;
+                    const targetId = assignment.entityId;
+
+                    if (
+                        !allowAcceptedConflictOverwrite &&
+                        targetKind &&
+                        targetId &&
+                        isOpenDocumentTarget(
+                            activeDocument,
+                            openTabs,
+                            targetKind,
+                            targetId,
                         )
-                            ? state.chapters.map((c) =>
-                                  c.id === chapter.id ? chapter : c,
-                              )
-                            : [...state.chapters, chapter].sort(
-                                  (a, b) => a.order - b.order,
-                              ),
-                    }));
-                    break;
+                    ) {
+                        return;
+                    }
                 }
-                case "character": {
-                    const character = data as unknown as WorkspaceCharacter;
-                    set((state) => ({
-                        characters: state.characters.some(
-                            (c) => c.id === character.id,
-                        )
-                            ? state.characters.map((c) =>
-                                  c.id === character.id ? character : c,
-                              )
-                            : [...state.characters, character],
-                    }));
-                    break;
-                }
-                case "location": {
-                    const location = data as unknown as WorkspaceLocation;
-                    set((state) => ({
-                        locations: state.locations.some(
-                            (l) => l.id === location.id,
-                        )
-                            ? state.locations.map((l) =>
-                                  l.id === location.id ? location : l,
-                              )
-                            : [...state.locations, location],
-                    }));
-                    break;
-                }
-                case "organization": {
-                    const organization =
-                        data as unknown as WorkspaceOrganization;
-                    set((state) => ({
-                        organizations: state.organizations.some(
-                            (o) => o.id === organization.id,
-                        )
-                            ? state.organizations.map((o) =>
-                                  o.id === organization.id ? organization : o,
-                              )
-                            : [...state.organizations, organization],
-                    }));
-                    break;
-                }
-                case "scrapNote": {
-                    const scrapNote = data as unknown as WorkspaceScrapNote;
-                    set((state) => ({
-                        scrapNotes: state.scrapNotes.some(
-                            (s) => s.id === scrapNote.id,
-                        )
-                            ? state.scrapNotes.map((s) =>
-                                  s.id === scrapNote.id ? scrapNote : s,
-                              )
-                            : [...state.scrapNotes, scrapNote],
-                    }));
-                    break;
-                }
-                case "image": {
-                    const image = data as unknown as WorkspaceImageAsset;
-                    set({
-                        assets: {
-                            ...assets,
-                            images: { ...assets.images, [image.id]: image },
-                        },
-                    });
-                    break;
-                }
-                case "bgm": {
-                    const bgm = data as unknown as WorkspaceBGMAsset;
-                    set({
-                        assets: {
-                            ...assets,
-                            bgms: { ...assets.bgms, [bgm.id]: bgm },
-                        },
-                    });
-                    break;
-                }
-                case "playlist": {
-                    const playlist = data as unknown as WorkspacePlaylistAsset;
-                    set({
-                        assets: {
-                            ...assets,
-                            playlists: {
-                                ...assets.playlists,
-                                [playlist.id]: playlist,
+
+                switch (payload.entityType) {
+                    case "project": {
+                        set({
+                            workspaceProject:
+                                data as unknown as WorkspaceProject,
+                        });
+                        break;
+                    }
+                    case "chapter": {
+                        const chapter = data as unknown as WorkspaceChapter;
+                        set((state) => ({
+                            chapters: state.chapters.some(
+                                (c) => c.id === chapter.id,
+                            )
+                                ? state.chapters.map((c) =>
+                                      c.id === chapter.id ? chapter : c,
+                                  )
+                                : [...state.chapters, chapter].sort(
+                                      (a, b) => a.order - b.order,
+                                  ),
+                        }));
+                        break;
+                    }
+                    case "character": {
+                        const character = data as unknown as WorkspaceCharacter;
+                        set((state) => ({
+                            characters: state.characters.some(
+                                (c) => c.id === character.id,
+                            )
+                                ? state.characters.map((c) =>
+                                      c.id === character.id ? character : c,
+                                  )
+                                : [...state.characters, character],
+                        }));
+                        break;
+                    }
+                    case "location": {
+                        const location = data as unknown as WorkspaceLocation;
+                        set((state) => ({
+                            locations: state.locations.some(
+                                (l) => l.id === location.id,
+                            )
+                                ? state.locations.map((l) =>
+                                      l.id === location.id ? location : l,
+                                  )
+                                : [...state.locations, location],
+                        }));
+                        break;
+                    }
+                    case "organization": {
+                        const organization =
+                            data as unknown as WorkspaceOrganization;
+                        set((state) => ({
+                            organizations: state.organizations.some(
+                                (o) => o.id === organization.id,
+                            )
+                                ? state.organizations.map((o) =>
+                                      o.id === organization.id
+                                          ? organization
+                                          : o,
+                                  )
+                                : [...state.organizations, organization],
+                        }));
+                        break;
+                    }
+                    case "scrapNote": {
+                        const scrapNote = data as unknown as WorkspaceScrapNote;
+                        set((state) => ({
+                            scrapNotes: state.scrapNotes.some(
+                                (s) => s.id === scrapNote.id,
+                            )
+                                ? state.scrapNotes.map((s) =>
+                                      s.id === scrapNote.id ? scrapNote : s,
+                                  )
+                                : [...state.scrapNotes, scrapNote],
+                        }));
+                        break;
+                    }
+                    case "metafieldDefinition": {
+                        const definition =
+                            data as unknown as WorkspaceMetafieldDefinition;
+                        set((state) => ({
+                            metafieldDefinitions:
+                                state.metafieldDefinitions.some(
+                                    (d) => d.id === definition.id,
+                                )
+                                    ? state.metafieldDefinitions.map((d) =>
+                                          d.id === definition.id
+                                              ? definition
+                                              : d,
+                                      )
+                                    : [
+                                          ...state.metafieldDefinitions,
+                                          definition,
+                                      ],
+                        }));
+                        break;
+                    }
+                    case "metafieldAssignment": {
+                        const assignment =
+                            data as unknown as WorkspaceMetafieldAssignment;
+                        set((state) => ({
+                            metafieldAssignments:
+                                state.metafieldAssignments.some(
+                                    (a) => a.id === assignment.id,
+                                )
+                                    ? state.metafieldAssignments.map((a) =>
+                                          a.id === assignment.id
+                                              ? assignment
+                                              : a,
+                                      )
+                                    : [
+                                          ...state.metafieldAssignments,
+                                          assignment,
+                                      ],
+                        }));
+                        break;
+                    }
+                    case "image": {
+                        const image = data as unknown as WorkspaceImageAsset;
+                        set({
+                            assets: {
+                                ...assets,
+                                images: { ...assets.images, [image.id]: image },
                             },
-                        },
-                    });
-                    break;
+                        });
+                        break;
+                    }
+                    case "bgm": {
+                        const bgm = data as unknown as WorkspaceBGMAsset;
+                        set({
+                            assets: {
+                                ...assets,
+                                bgms: { ...assets.bgms, [bgm.id]: bgm },
+                            },
+                        });
+                        break;
+                    }
+                    case "playlist": {
+                        const playlist =
+                            data as unknown as WorkspacePlaylistAsset;
+                        set({
+                            assets: {
+                                ...assets,
+                                playlists: {
+                                    ...assets.playlists,
+                                    [playlist.id]: playlist,
+                                },
+                            },
+                        });
+                        break;
+                    }
                 }
-            }
-        });
+            }),
+        );
 
         // Subscribe to entity deletions - remove from state
-        syncEvents.onEntityDeleted((payload) => {
-            const { projectId, stage, assets, activeDocument, openTabs } =
-                get();
+        unsubscribeSyncListeners.push(
+            syncEvents.onEntityDeleted((payload) => {
+                const { projectId, stage, assets, activeDocument, openTabs } =
+                    get();
 
-            // Only handle deletions for the currently open project
-            if (stage !== "workspace" || payload.projectId !== projectId) {
-                return;
-            }
+                if (stage !== "workspace") {
+                    return;
+                }
 
-            const entityId = payload.entityId;
+                // For child entities/assets, allow project-less deletes and trust globally unique IDs.
+                // For project deletes, keep strict project matching.
+                const isCurrentProjectDelete =
+                    payload.entityType === "project" &&
+                    payload.entityId === projectId;
+                const isCurrentWorkspaceEntityDelete =
+                    payload.entityType !== "project" &&
+                    (!payload.projectId || payload.projectId === projectId);
 
-            // Helper to clean up tabs and active document if needed
-            const cleanupDocumentRefs = (
-                kind: string,
-            ): {
-                activeDocument: WorkspaceDocumentRef | null;
-                openTabs: WorkspaceDocumentRef[];
-            } => {
-                const newTabs = openTabs.filter(
-                    (t) => !(t.kind === kind && t.id === entityId),
-                );
-                const newActive =
-                    activeDocument?.kind === kind &&
-                    activeDocument?.id === entityId
-                        ? (newTabs[0] ?? null)
-                        : activeDocument;
-                return { activeDocument: newActive, openTabs: newTabs };
-            };
+                if (
+                    !isCurrentProjectDelete &&
+                    !isCurrentWorkspaceEntityDelete
+                ) {
+                    return;
+                }
 
-            switch (payload.entityType) {
-                case "project": {
-                    // If current project is deleted, go back to project selection
-                    set({
-                        ...resetWorkspaceState(),
-                        stage: "projectSelect",
-                    });
-                    break;
-                }
-                case "chapter": {
-                    set((state) => ({
-                        chapters: state.chapters.filter(
-                            (c) => c.id !== entityId,
-                        ),
-                        ...cleanupDocumentRefs("chapter"),
-                    }));
-                    break;
-                }
-                case "character": {
-                    set((state) => ({
-                        characters: state.characters.filter(
-                            (c) => c.id !== entityId,
-                        ),
-                        ...cleanupDocumentRefs("character"),
-                    }));
-                    break;
-                }
-                case "location": {
-                    set((state) => ({
-                        locations: state.locations.filter(
-                            (l) => l.id !== entityId,
-                        ),
-                        ...cleanupDocumentRefs("location"),
-                    }));
-                    break;
-                }
-                case "organization": {
-                    set((state) => ({
-                        organizations: state.organizations.filter(
-                            (o) => o.id !== entityId,
-                        ),
-                        ...cleanupDocumentRefs("organization"),
-                    }));
-                    break;
-                }
-                case "scrapNote": {
-                    set((state) => ({
-                        scrapNotes: state.scrapNotes.filter(
-                            (s) => s.id !== entityId,
-                        ),
-                        ...cleanupDocumentRefs("scrapNote"),
-                    }));
-                    break;
-                }
-                case "image": {
-                    const remainingImages = omitKey(assets.images, entityId);
-                    set({
-                        assets: { ...assets, images: remainingImages },
-                    });
-                    break;
-                }
-                case "bgm": {
-                    const remainingBgms = omitKey(assets.bgms, entityId);
-                    set({
-                        assets: { ...assets, bgms: remainingBgms },
-                    });
-                    break;
-                }
-                case "playlist": {
-                    const remainingPlaylists = omitKey(
-                        assets.playlists,
-                        entityId,
+                const entityId = payload.entityId;
+
+                // Helper to clean up tabs and active document if needed
+                const cleanupDocumentRefs = (
+                    kind: string,
+                ): {
+                    activeDocument: WorkspaceDocumentRef | null;
+                    openTabs: WorkspaceDocumentRef[];
+                } => {
+                    const newTabs = openTabs.filter(
+                        (t) => !(t.kind === kind && t.id === entityId),
                     );
-                    set({
-                        assets: { ...assets, playlists: remainingPlaylists },
-                    });
-                    break;
+                    const newActive =
+                        activeDocument?.kind === kind &&
+                        activeDocument?.id === entityId
+                            ? (newTabs[0] ?? null)
+                            : activeDocument;
+                    return { activeDocument: newActive, openTabs: newTabs };
+                };
+
+                switch (payload.entityType) {
+                    case "project": {
+                        // If current project is deleted, go back to project selection
+                        set({
+                            ...resetWorkspaceState(),
+                            stage: "projectSelect",
+                        });
+                        break;
+                    }
+                    case "chapter": {
+                        set((state) => ({
+                            workspaceProject: state.workspaceProject
+                                ? {
+                                      ...state.workspaceProject,
+                                      chapterIds:
+                                          state.workspaceProject.chapterIds.filter(
+                                              (id) => id !== entityId,
+                                          ),
+                                  }
+                                : state.workspaceProject,
+                            chapters: state.chapters.filter(
+                                (c) => c.id !== entityId,
+                            ),
+                            ...cleanupDocumentRefs("chapter"),
+                        }));
+                        break;
+                    }
+                    case "character": {
+                        set((state) => ({
+                            workspaceProject: state.workspaceProject
+                                ? {
+                                      ...state.workspaceProject,
+                                      characterIds:
+                                          state.workspaceProject.characterIds.filter(
+                                              (id) => id !== entityId,
+                                          ),
+                                  }
+                                : state.workspaceProject,
+                            characters: state.characters.filter(
+                                (c) => c.id !== entityId,
+                            ),
+                            ...cleanupDocumentRefs("character"),
+                        }));
+                        break;
+                    }
+                    case "location": {
+                        set((state) => ({
+                            workspaceProject: state.workspaceProject
+                                ? {
+                                      ...state.workspaceProject,
+                                      locationIds:
+                                          state.workspaceProject.locationIds.filter(
+                                              (id) => id !== entityId,
+                                          ),
+                                  }
+                                : state.workspaceProject,
+                            locations: state.locations.filter(
+                                (l) => l.id !== entityId,
+                            ),
+                            ...cleanupDocumentRefs("location"),
+                        }));
+                        break;
+                    }
+                    case "organization": {
+                        set((state) => ({
+                            workspaceProject: state.workspaceProject
+                                ? {
+                                      ...state.workspaceProject,
+                                      organizationIds:
+                                          state.workspaceProject.organizationIds.filter(
+                                              (id) => id !== entityId,
+                                          ),
+                                  }
+                                : state.workspaceProject,
+                            organizations: state.organizations.filter(
+                                (o) => o.id !== entityId,
+                            ),
+                            ...cleanupDocumentRefs("organization"),
+                        }));
+                        break;
+                    }
+                    case "scrapNote": {
+                        set((state) => ({
+                            workspaceProject: state.workspaceProject
+                                ? {
+                                      ...state.workspaceProject,
+                                      scrapNoteIds:
+                                          state.workspaceProject.scrapNoteIds.filter(
+                                              (id) => id !== entityId,
+                                          ),
+                                  }
+                                : state.workspaceProject,
+                            scrapNotes: state.scrapNotes.filter(
+                                (s) => s.id !== entityId,
+                            ),
+                            ...cleanupDocumentRefs("scrapNote"),
+                        }));
+                        break;
+                    }
+                    case "metafieldDefinition": {
+                        set((state) => ({
+                            metafieldDefinitions:
+                                state.metafieldDefinitions.filter(
+                                    (d) => d.id !== entityId,
+                                ),
+                            metafieldAssignments:
+                                state.metafieldAssignments.filter(
+                                    (a) => a.definitionId !== entityId,
+                                ),
+                        }));
+                        break;
+                    }
+                    case "metafieldAssignment": {
+                        set((state) => ({
+                            metafieldAssignments:
+                                state.metafieldAssignments.filter(
+                                    (a) => a.id !== entityId,
+                                ),
+                        }));
+                        break;
+                    }
+                    case "image": {
+                        const remainingImages = omitKey(
+                            assets.images,
+                            entityId,
+                        );
+                        set({
+                            assets: { ...assets, images: remainingImages },
+                        });
+                        break;
+                    }
+                    case "bgm": {
+                        const remainingBgms = omitKey(assets.bgms, entityId);
+                        set({
+                            assets: { ...assets, bgms: remainingBgms },
+                        });
+                        break;
+                    }
+                    case "playlist": {
+                        const remainingPlaylists = omitKey(
+                            assets.playlists,
+                            entityId,
+                        );
+                        set({
+                            assets: {
+                                ...assets,
+                                playlists: remainingPlaylists,
+                            },
+                        });
+                        break;
+                    }
                 }
-            }
-        });
+            }),
+        );
     };
 
     const loadProjectWorkspace = async (
@@ -882,6 +1252,8 @@ export const useAppStore = create<AppStore>((set, get) => {
             timelines: payload.timelines,
             selectedTimelineId: mainTimeline?.id ?? null,
             events: payload.events,
+            metafieldDefinitions: payload.metafieldDefinitions,
+            metafieldAssignments: payload.metafieldAssignments,
             assets: indexedAssets,
             activeDocument: nextSelection,
             openTabs: nextSelection ? [nextSelection] : [],
@@ -922,6 +1294,8 @@ export const useAppStore = create<AppStore>((set, get) => {
         timelines: [],
         selectedTimelineId: null,
         events: [],
+        metafieldDefinitions: [],
+        metafieldAssignments: [],
         workspaceViewMode: "manuscript",
         assets: emptyAssets,
         activeDocument: null,
@@ -1323,6 +1697,62 @@ export const useAppStore = create<AppStore>((set, get) => {
                 ),
             }));
         },
+        addOrUpdateMetafieldDefinitionLocally: (definition) => {
+            set((state) => ({
+                metafieldDefinitions: state.metafieldDefinitions.some(
+                    (item) => item.id === definition.id,
+                )
+                    ? state.metafieldDefinitions.map((item) =>
+                          item.id === definition.id ? definition : item,
+                      )
+                    : [...state.metafieldDefinitions, definition],
+            }));
+        },
+        addOrUpdateMetafieldAssignmentLocally: (assignment) => {
+            markLocalMetafieldWrite(assignment.id);
+            set((state) => ({
+                metafieldAssignments: state.metafieldAssignments.some(
+                    (item) => item.id === assignment.id,
+                )
+                    ? state.metafieldAssignments.map((item) =>
+                          item.id === assignment.id ? assignment : item,
+                      )
+                    : [...state.metafieldAssignments, assignment],
+            }));
+        },
+        updateMetafieldAssignmentLocally: (assignmentId, patch) => {
+            if (
+                Object.prototype.hasOwnProperty.call(patch, "valueJson") ||
+                Object.prototype.hasOwnProperty.call(patch, "orderIndex")
+            ) {
+                markLocalMetafieldWrite(assignmentId);
+            }
+
+            set((state) => ({
+                metafieldAssignments: patchEntity(
+                    state.metafieldAssignments,
+                    assignmentId,
+                    patch,
+                ),
+            }));
+        },
+        removeMetafieldAssignmentLocally: (assignmentId) => {
+            set((state) => ({
+                metafieldAssignments: state.metafieldAssignments.filter(
+                    (item) => item.id !== assignmentId,
+                ),
+            }));
+        },
+        removeMetafieldDefinitionLocally: (definitionId) => {
+            set((state) => ({
+                metafieldDefinitions: state.metafieldDefinitions.filter(
+                    (item) => item.id !== definitionId,
+                ),
+                metafieldAssignments: state.metafieldAssignments.filter(
+                    (item) => item.definitionId !== definitionId,
+                ),
+            }));
+        },
         createChapterEntry: async (order) => {
             const projectId = get().projectId.trim();
             if (!projectId) {
@@ -1477,6 +1907,36 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             const now = new Date();
             const id = generateOptimisticId();
+            const optimisticDefinitions: WorkspaceMetafieldDefinition[] =
+                CHARACTER_DEFAULT_METAFIELDS.map((seed) => {
+                    const definitionId = generateOptimisticId();
+                    return {
+                        id: definitionId,
+                        projectId,
+                        name: seed.name,
+                        nameNormalized: normalizeOptimisticMetafieldName(
+                            seed.name,
+                        ),
+                        scope: "character" as const,
+                        valueType: seed.valueType,
+                        targetEntityKind:
+                            null as WorkspaceMetafieldDefinition["targetEntityKind"],
+                        createdAt: now,
+                        updatedAt: now,
+                    };
+                });
+            const optimisticAssignments: WorkspaceMetafieldAssignment[] =
+                optimisticDefinitions.map((definition, index) => ({
+                    id: generateOptimisticId(),
+                    projectId,
+                    definitionId: definition.id,
+                    entityType: "character" as const,
+                    entityId: id,
+                    valueJson: CHARACTER_DEFAULT_METAFIELDS[index].initialValue,
+                    orderIndex: index,
+                    createdAt: now,
+                    updatedAt: now,
+                }));
 
             set((state) => {
                 const nextCharacters = [
@@ -1484,17 +1944,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                     {
                         id,
                         name: "",
-                        race: "",
-                        age: null,
                         description: "",
                         currentLocationId: null,
                         backgroundLocationId: null,
                         organizationId: null,
-                        traits: [],
-                        goals: [],
-                        secrets: [],
-                        powers: [],
-                        tags: [],
                         bgmId: null,
                         playlistId: null,
                         galleryImageIds: [],
@@ -1527,6 +1980,14 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {
                     workspaceProject: nextProject,
                     characters: nextCharacters,
+                    metafieldDefinitions: [
+                        ...state.metafieldDefinitions,
+                        ...optimisticDefinitions,
+                    ],
+                    metafieldAssignments: [
+                        ...state.metafieldAssignments,
+                        ...optimisticAssignments,
+                    ],
                     activeDocument: nextTab,
                     openTabs: nextTabs,
                     pendingTitleFocusDocument: nextTab,
@@ -1534,7 +1995,21 @@ export const useAppStore = create<AppStore>((set, get) => {
             });
 
             runInBackground(
-                rendererApi.world.createCharacter({ projectId, id }),
+                (async () => {
+                    await rendererApi.world.createCharacter({ projectId, id });
+
+                    const metafields =
+                        await rendererApi.metafield.listProjectMetafields({
+                            projectId,
+                        });
+
+                    if (get().projectId === projectId) {
+                        set({
+                            metafieldDefinitions: metafields.definitions,
+                            metafieldAssignments: metafields.assignments,
+                        });
+                    }
+                })(),
                 (error) => {
                     const message =
                         createErrorMessage(
@@ -1563,10 +2038,6 @@ export const useAppStore = create<AppStore>((set, get) => {
                         id,
                         name: "",
                         description: "",
-                        culture: "",
-                        history: "",
-                        conflicts: [],
-                        tags: [],
                         createdAt: now,
                         updatedAt: now,
                         bgmId: null,
@@ -1639,8 +2110,6 @@ export const useAppStore = create<AppStore>((set, get) => {
                         id,
                         name: "",
                         description: "",
-                        mission: "",
-                        tags: [],
                         locationIds: [],
                         galleryImageIds: [],
                         playlistId: null,
@@ -1745,11 +2214,6 @@ export const useAppStore = create<AppStore>((set, get) => {
                 throw new Error("Open a project before deleting chapters.");
             }
 
-            await rendererApi.manuscript.deleteChapter({
-                projectId,
-                chapterId,
-            });
-
             set((state) => {
                 const filtered = state.chapters.filter(
                     (c) => c.id !== chapterId,
@@ -1774,23 +2238,47 @@ export const useAppStore = create<AppStore>((set, get) => {
                             ? nextTabs[nextTabs.length - 1]
                             : null;
                 }
+
+                const nextProject = state.workspaceProject
+                    ? {
+                          ...state.workspaceProject,
+                          chapterIds: state.workspaceProject.chapterIds.filter(
+                              (id) => id !== chapterId,
+                          ),
+                          updatedAt: new Date(),
+                      }
+                    : state.workspaceProject;
+
                 return {
+                    workspaceProject: nextProject,
                     chapters: nextChapters,
                     activeDocument: nextActive,
                     openTabs: nextTabs,
                 };
             });
+
+            runInBackground(
+                rendererApi.manuscript.deleteChapter({
+                    projectId,
+                    chapterId,
+                }),
+                (error) => {
+                    const message =
+                        createErrorMessage(
+                            error,
+                            "Failed to delete chapter in the cloud.",
+                        ) +
+                        "\n\nThe chapter was deleted locally, but was NOT deleted in the cloud. Please resolve sync conflicts or retry online.";
+                    set({ cloudSyncError: message });
+                    alert(message);
+                },
+            );
         },
         deleteScrapNote: async (scrapNoteId) => {
             const projectId = get().projectId.trim();
             if (!projectId) {
                 throw new Error("Open a project before deleting scrap notes.");
             }
-
-            await rendererApi.manuscript.deleteScrapNote({
-                projectId,
-                scrapNoteId,
-            });
 
             set((state) => {
                 const nextNotes = state.scrapNotes.filter(
@@ -1809,23 +2297,48 @@ export const useAppStore = create<AppStore>((set, get) => {
                             ? nextTabs[nextTabs.length - 1]
                             : null;
                 }
+
+                const nextProject = state.workspaceProject
+                    ? {
+                          ...state.workspaceProject,
+                          scrapNoteIds:
+                              state.workspaceProject.scrapNoteIds.filter(
+                                  (id) => id !== scrapNoteId,
+                              ),
+                          updatedAt: new Date(),
+                      }
+                    : state.workspaceProject;
+
                 return {
+                    workspaceProject: nextProject,
                     scrapNotes: nextNotes,
                     activeDocument: nextActive,
                     openTabs: nextTabs,
                 };
             });
+
+            runInBackground(
+                rendererApi.manuscript.deleteScrapNote({
+                    projectId,
+                    scrapNoteId,
+                }),
+                (error) => {
+                    const message =
+                        createErrorMessage(
+                            error,
+                            "Failed to delete scrap note in the cloud.",
+                        ) +
+                        "\n\nThe scrap note was deleted locally, but was NOT deleted in the cloud. Please resolve sync conflicts or retry online.";
+                    set({ cloudSyncError: message });
+                    alert(message);
+                },
+            );
         },
         deleteCharacter: async (characterId) => {
             const projectId = get().projectId.trim();
             if (!projectId) {
                 throw new Error("Open a project before deleting characters.");
             }
-
-            await rendererApi.world.deleteCharacter({
-                projectId,
-                characterId,
-            });
 
             set((state) => {
                 const nextCharacters = state.characters.filter(
@@ -1844,23 +2357,48 @@ export const useAppStore = create<AppStore>((set, get) => {
                             ? nextTabs[nextTabs.length - 1]
                             : null;
                 }
+
+                const nextProject = state.workspaceProject
+                    ? {
+                          ...state.workspaceProject,
+                          characterIds:
+                              state.workspaceProject.characterIds.filter(
+                                  (id) => id !== characterId,
+                              ),
+                          updatedAt: new Date(),
+                      }
+                    : state.workspaceProject;
+
                 return {
+                    workspaceProject: nextProject,
                     characters: nextCharacters,
                     activeDocument: nextActive,
                     openTabs: nextTabs,
                 };
             });
+
+            runInBackground(
+                rendererApi.world.deleteCharacter({
+                    projectId,
+                    characterId,
+                }),
+                (error) => {
+                    const message =
+                        createErrorMessage(
+                            error,
+                            "Failed to delete character in the cloud.",
+                        ) +
+                        "\n\nThe character was deleted locally, but was NOT deleted in the cloud. Please resolve sync conflicts or retry online.";
+                    set({ cloudSyncError: message });
+                    alert(message);
+                },
+            );
         },
         deleteLocation: async (locationId) => {
             const projectId = get().projectId.trim();
             if (!projectId) {
                 throw new Error("Open a project before deleting locations.");
             }
-
-            await rendererApi.world.deleteLocation({
-                projectId,
-                locationId,
-            });
 
             set((state) => {
                 const nextLocations = state.locations.filter(
@@ -1879,12 +2417,42 @@ export const useAppStore = create<AppStore>((set, get) => {
                             ? nextTabs[nextTabs.length - 1]
                             : null;
                 }
+
+                const nextProject = state.workspaceProject
+                    ? {
+                          ...state.workspaceProject,
+                          locationIds:
+                              state.workspaceProject.locationIds.filter(
+                                  (id) => id !== locationId,
+                              ),
+                          updatedAt: new Date(),
+                      }
+                    : state.workspaceProject;
+
                 return {
+                    workspaceProject: nextProject,
                     locations: nextLocations,
                     activeDocument: nextActive,
                     openTabs: nextTabs,
                 };
             });
+
+            runInBackground(
+                rendererApi.world.deleteLocation({
+                    projectId,
+                    locationId,
+                }),
+                (error) => {
+                    const message =
+                        createErrorMessage(
+                            error,
+                            "Failed to delete location in the cloud.",
+                        ) +
+                        "\n\nThe location was deleted locally, but was NOT deleted in the cloud. Please resolve sync conflicts or retry online.";
+                    set({ cloudSyncError: message });
+                    alert(message);
+                },
+            );
         },
         deleteOrganization: async (organizationId) => {
             const projectId = get().projectId.trim();
@@ -1893,11 +2461,6 @@ export const useAppStore = create<AppStore>((set, get) => {
                     "Open a project before deleting organizations.",
                 );
             }
-
-            await rendererApi.world.deleteOrganization({
-                projectId,
-                organizationId,
-            });
 
             set((state) => {
                 const nextOrgs = state.organizations.filter(
@@ -1917,12 +2480,42 @@ export const useAppStore = create<AppStore>((set, get) => {
                             ? nextTabs[nextTabs.length - 1]
                             : null;
                 }
+
+                const nextProject = state.workspaceProject
+                    ? {
+                          ...state.workspaceProject,
+                          organizationIds:
+                              state.workspaceProject.organizationIds.filter(
+                                  (id) => id !== organizationId,
+                              ),
+                          updatedAt: new Date(),
+                      }
+                    : state.workspaceProject;
+
                 return {
+                    workspaceProject: nextProject,
                     organizations: nextOrgs,
                     activeDocument: nextActive,
                     openTabs: nextTabs,
                 };
             });
+
+            runInBackground(
+                rendererApi.world.deleteOrganization({
+                    projectId,
+                    organizationId,
+                }),
+                (error) => {
+                    const message =
+                        createErrorMessage(
+                            error,
+                            "Failed to delete organization in the cloud.",
+                        ) +
+                        "\n\nThe organization was deleted locally, but was NOT deleted in the cloud. Please resolve sync conflicts or retry online.";
+                    set({ cloudSyncError: message });
+                    alert(message);
+                },
+            );
         },
         reorderChapters: async (newOrder) => {
             const projectId = get().projectId.trim();
@@ -2166,29 +2759,38 @@ export const useAppStore = create<AppStore>((set, get) => {
             set({ pendingConflict: conflict });
         },
         resolveConflict: async (resolution) => {
-            const { pendingConflict, projectId } = get();
+            const { pendingConflict } = get();
             if (!pendingConflict) return;
 
+            const conflictKey = getConflictKey(
+                pendingConflict.entityType,
+                pendingConflict.entityId,
+            );
+
             try {
+                if (resolution === "accept-remote") {
+                    markAcceptedConflictOverwrite(
+                        pendingConflict.entityType,
+                        pendingConflict.entityId,
+                    );
+                }
+
                 await syncEvents.resolveConflict(
                     pendingConflict.entityType,
                     pendingConflict.entityId,
                     pendingConflict.projectId,
                     resolution,
                 );
-
-                // If we accepted remote changes and this is the current project, reload
-                if (
-                    resolution === "accept-remote" &&
-                    pendingConflict.projectId === projectId
-                ) {
-                    // Reload the project to get fresh data
-                    const { reloadActiveProject } = get();
-                    await reloadActiveProject();
-                }
             } catch (error) {
+                acceptedConflictOverwrites.delete(
+                    getConflictEntityKey(
+                        pendingConflict.entityType,
+                        pendingConflict.entityId,
+                    ),
+                );
                 console.error("Failed to resolve conflict:", error);
             } finally {
+                recentlyResolvedConflicts.set(conflictKey, Date.now());
                 set({ pendingConflict: null });
             }
         },
@@ -2214,6 +2816,36 @@ export const useAppStore = create<AppStore>((set, get) => {
         currentSelection: null,
         setCurrentSelection: (selection) =>
             set({ currentSelection: selection }),
+        markDocumentEditorDirty: (selection) => {
+            const key = toWorkspaceDocumentKey(selection);
+            set((state) => {
+                if (state.dirtyDocumentEditors[key]) {
+                    return state;
+                }
+
+                return {
+                    dirtyDocumentEditors: {
+                        ...state.dirtyDocumentEditors,
+                        [key]: selection,
+                    },
+                };
+            });
+        },
+        clearDocumentEditorDirty: (selection) => {
+            const key = toWorkspaceDocumentKey(selection);
+            set((state) => {
+                if (!state.dirtyDocumentEditors[key]) {
+                    return state;
+                }
+
+                const next = { ...state.dirtyDocumentEditors };
+                delete next[key];
+
+                return {
+                    dirtyDocumentEditors: next,
+                };
+            });
+        },
         setDraggedDocument: (doc) => {
             set({ draggedDocument: doc });
         },
@@ -2247,6 +2879,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         pendingEditsByChapterId: {},
         pendingEditsById: {},
         archivedEditsById: {},
+        dirtyDocumentEditors: {},
         addPendingEdits: (payload) => {
             const createdAt = Date.now();
             const pendingById: Record<string, PendingChapterEdit> = {};
@@ -2544,6 +3177,28 @@ export const useAppStore = create<AppStore>((set, get) => {
         saveOrganizationInfo: async (request) => {
             return rendererApi.logistics.saveOrganizationInfo(request);
         },
+        listProjectMetafields: async (request) => {
+            return rendererApi.metafield.listProjectMetafields(request);
+        },
+        createOrReuseMetafieldDefinition: async (request) => {
+            return rendererApi.metafield.createOrReuseMetafieldDefinition(
+                request,
+            );
+        },
+        assignMetafieldToEntity: async (request) => {
+            return rendererApi.metafield.assignMetafieldToEntity(request);
+        },
+        saveMetafieldValue: async (request) => {
+            return rendererApi.metafield.saveMetafieldValue(request);
+        },
+        removeMetafieldFromEntity: async (request) => {
+            return rendererApi.metafield.removeMetafieldFromEntity(request);
+        },
+        deleteMetafieldDefinitionGlobal: async (request) => {
+            return rendererApi.metafield.deleteMetafieldDefinitionGlobal(
+                request,
+            );
+        },
         importAsset: async (request) => {
             return rendererApi.asset.importAsset(request);
         },
@@ -2770,16 +3425,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 kind: "character" as const,
                 id: character.id,
                 title: normalizeLabel(character.name, "Untitled Character"),
-                content: joinParts([
-                    character.name,
-                    character.race,
-                    character.age != null ? String(character.age) : "",
-                    character.description,
-                    ...(character.traits ?? []),
-                    ...(character.goals ?? []),
-                    ...(character.secrets ?? []),
-                    ...(character.tags ?? []),
-                ]),
+                content: joinParts([character.name, character.description]),
                 contentFormat: "plain" as const,
                 binderIndex: index,
             }));
@@ -2788,14 +3434,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 kind: "location" as const,
                 id: location.id,
                 title: normalizeLabel(location.name, "Untitled Location"),
-                content: joinParts([
-                    location.name,
-                    location.description,
-                    location.culture,
-                    location.history,
-                    ...(location.conflicts ?? []),
-                    ...(location.tags ?? []),
-                ]),
+                content: joinParts([location.name, location.description]),
                 contentFormat: "plain" as const,
                 binderIndex: index,
             }));
@@ -2804,12 +3443,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 kind: "organization" as const,
                 id: org.id,
                 title: normalizeLabel(org.name, "Untitled Organization"),
-                content: joinParts([
-                    org.name,
-                    org.description,
-                    org.mission,
-                    ...(org.tags ?? []),
-                ]),
+                content: joinParts([org.name, org.description]),
                 contentFormat: "plain" as const,
                 binderIndex: index,
             }));

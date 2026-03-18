@@ -32,10 +32,16 @@ import { FileSystemScrapNoteRepository } from "../@infrastructure/db/filesystem/
 import { OfflineFirstScrapNoteRepository } from "../@infrastructure/db/offline/OfflineFirstScrapNoteRepository";
 import { FileSystemAssetRepository } from "../@infrastructure/db/filesystem/FileSystemAssetRepository";
 import { OfflineFirstAssetRepository } from "../@infrastructure/db/offline/OfflineFirstAssetRepository";
+import { FileSystemMetafieldDefinitionRepository } from "../@infrastructure/db/filesystem/FileSystemMetafieldDefinitionRepository";
+import { FileSystemMetafieldAssignmentRepository } from "../@infrastructure/db/filesystem/FileSystemMetafieldAssignmentRepository";
+import { OfflineFirstMetafieldDefinitionRepository } from "../@infrastructure/db/offline/OfflineFirstMetafieldDefinitionRepository";
+import { OfflineFirstMetafieldAssignmentRepository } from "../@infrastructure/db/offline/OfflineFirstMetafieldAssignmentRepository";
 import { SynchronizationService } from "../@infrastructure/services/SynchronizationService";
 import { SupabaseDeletionLogRepository } from "../@infrastructure/db/SupabaseDeletionLogRepository";
 import { SupabaseTimelineRepository } from "../@infrastructure/db/SupabaseTimelineRepository";
 import { SupabaseEventRepository } from "../@infrastructure/db/SupabaseEventRepository";
+import { SupabaseMetafieldDefinitionRepository } from "../@infrastructure/db/SupabaseMetafieldDefinitionRepository";
+import { SupabaseMetafieldAssignmentRepository } from "../@infrastructure/db/SupabaseMetafieldAssignmentRepository";
 
 export function resolveDependencies(): AppBuilderDependencies {
     const supabaseProjectRepo = new SupabaseProjectRepository();
@@ -127,6 +133,24 @@ export function resolveDependencies(): AppBuilderDependencies {
 
     const supabaseTimelineRepo = new SupabaseTimelineRepository();
     const supabaseEventRepo = new SupabaseEventRepository();
+    const supabaseMetafieldDefinitionRepo =
+        new SupabaseMetafieldDefinitionRepository();
+    const supabaseMetafieldAssignmentRepo =
+        new SupabaseMetafieldAssignmentRepository();
+    const fsMetafieldDefinitionRepo =
+        new FileSystemMetafieldDefinitionRepository();
+    const fsMetafieldAssignmentRepo =
+        new FileSystemMetafieldAssignmentRepository();
+    const metafieldDefinitionRepository =
+        new OfflineFirstMetafieldDefinitionRepository(
+            supabaseMetafieldDefinitionRepo,
+            fsMetafieldDefinitionRepo,
+        );
+    const metafieldAssignmentRepository =
+        new OfflineFirstMetafieldAssignmentRepository(
+            supabaseMetafieldAssignmentRepo,
+            fsMetafieldAssignmentRepo,
+        );
 
     const syncService = new SynchronizationService(
         supabaseProjectRepo,
@@ -143,6 +167,10 @@ export function resolveDependencies(): AppBuilderDependencies {
         fsScrapNoteRepo,
         supabaseAssetRepo,
         fsAssetRepo,
+        supabaseMetafieldDefinitionRepo,
+        fsMetafieldDefinitionRepo,
+        supabaseMetafieldAssignmentRepo,
+        fsMetafieldAssignmentRepo,
         supabaseDeletionLogRepo,
     );
 
@@ -156,6 +184,8 @@ export function resolveDependencies(): AppBuilderDependencies {
             organization: organizationRepository,
             timeline: supabaseTimelineRepo,
             event: supabaseEventRepo,
+            metafieldDefinition: metafieldDefinitionRepository,
+            metafieldAssignment: metafieldAssignmentRepository,
             project: projectRepository,
             scrapNote: scrapNoteRepository,
             user: userRepository,

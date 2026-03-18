@@ -1,72 +1,24 @@
 import { Character } from "../../@core/domain/entities/story/world/Character";
 import { ICharacterRepository } from "../../@core/domain/repositories/ICharacterRepository";
 import { SupabaseService } from "./SupabaseService";
+import {
+    CharacterDbInsert,
+    CharacterDbRow,
+    CharacterDbUpdate,
+} from "./contracts/schema";
+import { asStringArray } from "./contracts/json";
 
-type CharacterRow = {
-    id: string;
-    project_id: string;
-    name: string;
-    race: string | null;
-    age: number | null;
-    description: string | null;
-    current_location_id: string | null;
-    background_location_id: string | null;
-    organization_id: string | null;
-    traits: string[] | null;
-    goals: string[] | null;
-    secrets: string[] | null;
-    powers: { title: string; description: string }[] | null;
-    tags: string[] | null;
-    bgm_id: string | null;
-    playlist_id: string | null;
-    gallery_image_ids: string[] | null;
-    created_at: string;
-    updated_at: string;
-};
-
-const parseStringArray = (value: string[] | null | undefined): string[] =>
-    Array.isArray(value)
-        ? value.map((entry) => entry ?? "").filter(Boolean)
-        : [];
-
-const parsePowers = (
-    value: unknown,
-): { title: string; description: string }[] => {
-    if (!Array.isArray(value)) return [];
-    return value.map((entry) => ({
-        title:
-            typeof entry === "object" &&
-            entry !== null &&
-            typeof (entry as { title?: unknown }).title === "string"
-                ? ((entry as { title: string }).title as string)
-                : "",
-        description:
-            typeof entry === "object" &&
-            entry !== null &&
-            typeof (entry as { description?: unknown }).description === "string"
-                ? ((entry as { description: string }).description as string)
-                : "",
-    }));
-};
-
-const mapRowToCharacter = (row: CharacterRow): Character =>
+const mapRowToCharacter = (row: CharacterDbRow): Character =>
     new Character(
         row.id,
         row.name,
-        row.race ?? "",
-        row.age,
         row.description ?? "",
         row.current_location_id,
         row.background_location_id,
         row.organization_id,
-        parseStringArray(row.traits),
-        parseStringArray(row.goals),
-        parseStringArray(row.secrets),
-        parsePowers(row.powers),
-        parseStringArray(row.tags),
         row.bgm_id,
         row.playlist_id,
-        parseStringArray(row.gallery_image_ids),
+        asStringArray(row.gallery_image_ids),
         new Date(row.created_at),
         new Date(row.updated_at),
     );
@@ -74,27 +26,22 @@ const mapRowToCharacter = (row: CharacterRow): Character =>
 export class SupabaseCharacterRepository implements ICharacterRepository {
     async create(projectId: string, character: Character): Promise<void> {
         const client = SupabaseService.getClient();
-        const { error } = await client.from("characters").insert({
+        const insertPayload = {
             id: character.id,
             project_id: projectId,
             name: character.name,
-            race: character.race,
-            age: character.age,
             description: character.description,
             current_location_id: character.currentLocationId,
             background_location_id: character.backgroundLocationId,
             organization_id: character.organizationId,
-            traits: character.traits,
-            goals: character.goals,
-            secrets: character.secrets,
-            powers: character.powers,
-            tags: character.tags,
             bgm_id: character.bgmId,
             playlist_id: character.playlistId,
             gallery_image_ids: character.galleryImageIds,
             created_at: character.createdAt.toISOString(),
             updated_at: character.updatedAt.toISOString(),
-        });
+        } satisfies CharacterDbInsert;
+
+        const { error } = await client.from("characters").insert(insertPayload);
 
         if (error) throw new Error(error.message);
     }
@@ -109,7 +56,7 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
 
         if (error || !data) return null;
 
-        return mapRowToCharacter(data as CharacterRow);
+        return mapRowToCharacter(data as CharacterDbRow);
     }
 
     async findByProjectId(projectId: string): Promise<Character[]> {
@@ -123,31 +70,26 @@ export class SupabaseCharacterRepository implements ICharacterRepository {
         if (error) throw new Error(error.message);
         if (!data) return [];
 
-        return (data as CharacterRow[]).map(mapRowToCharacter);
+        return (data as CharacterDbRow[]).map(mapRowToCharacter);
     }
 
     async update(character: Character): Promise<void> {
         const client = SupabaseService.getClient();
+        const updatePayload = {
+            name: character.name,
+            description: character.description,
+            current_location_id: character.currentLocationId,
+            background_location_id: character.backgroundLocationId,
+            organization_id: character.organizationId,
+            bgm_id: character.bgmId,
+            playlist_id: character.playlistId,
+            gallery_image_ids: character.galleryImageIds,
+            updated_at: character.updatedAt.toISOString(),
+        } satisfies CharacterDbUpdate;
+
         const { error } = await client
             .from("characters")
-            .update({
-                name: character.name,
-                race: character.race,
-                age: character.age,
-                description: character.description,
-                current_location_id: character.currentLocationId,
-                background_location_id: character.backgroundLocationId,
-                organization_id: character.organizationId,
-                traits: character.traits,
-                goals: character.goals,
-                secrets: character.secrets,
-                powers: character.powers,
-                tags: character.tags,
-                bgm_id: character.bgmId,
-                playlist_id: character.playlistId,
-                gallery_image_ids: character.galleryImageIds,
-                updated_at: character.updatedAt.toISOString(),
-            })
+            .update(updatePayload)
             .eq("id", character.id);
 
         if (error) throw new Error(error.message);

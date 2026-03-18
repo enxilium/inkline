@@ -6,9 +6,7 @@ import lineOnceAnimation from "../../../assets/line-once.json";
 import lineLoopAnimation from "../../../assets/line-loop.json";
 
 import { Button } from "../components/ui/Button";
-import {
-    MoreVerticalIcon,
-} from "../components/ui/Icons";
+import { MoreVerticalIcon } from "../components/ui/Icons";
 import { Input } from "../components/ui/Input";
 import { Label } from "../components/ui/Label";
 import type {
@@ -327,15 +325,17 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                     {localError ? (
                         <span className="card-hint is-error">{localError}</span>
                     ) : null}
-                    <div className="project-grid">
-                        {status === "loading" ? (
+                    {status === "loading" ? (
+                        <div className="project-grid">
                             <div className="project-card is-placeholder">
                                 <p className="panel-subtitle">
                                     Loading your projects…
                                 </p>
                             </div>
-                        ) : projects.length ? (
-                            projects.map((project) => (
+                        </div>
+                    ) : projects.length ? (
+                        <div className="project-grid">
+                            {projects.map((project) => (
                                 <div
                                     key={project.id}
                                     className="project-card"
@@ -365,8 +365,12 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setOpenMenuProjectId(null);
-                                                    setRenameValue(project.title);
-                                                    setRenamingProjectId(project.id);
+                                                    setRenameValue(
+                                                        project.title,
+                                                    );
+                                                    setRenamingProjectId(
+                                                        project.id,
+                                                    );
                                                 }}
                                             >
                                                 Rename Project
@@ -499,13 +503,13 @@ export const ProjectSelectionView: React.FC<ProjectSelectionViewProps> = ({
                                         </p>
                                     </div>
                                 </div>
-                            ))
-                        ) : (
-                            <p className="empty-hint">
-                                No projects yet. Create one to begin writing.
-                            </p>
-                        )}
-                    </div>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="empty-hint">
+                            No projects yet. Create one to begin writing.
+                        </p>
+                    )}
                 </div>
             </div>
             {selectionError ? (
