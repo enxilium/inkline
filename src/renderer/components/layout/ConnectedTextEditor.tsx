@@ -146,6 +146,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     ]);
 
     const autosaveTimerRef = React.useRef<NodeJS.Timeout | null>(null);
+    const hydratedDocumentIdRef = React.useRef<string | null>(null);
 
     const pendingEditsByChapterId = useAppStore(
         (state) => state.pendingEditsByChapterId,
@@ -488,46 +489,36 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         }
     }, [editor, kind, documentId, pendingEditsByChapterId]);
 
-    // 4. Sync Content (One-way: Store -> Editor)
-    // We only sync if the editor is empty, if we just mounted, OR if an external update occurred.
+    // 4. Hydrate content only on document switch.
+    // Active editor state is authoritative while staying on the same document.
     React.useEffect(() => {
         if (!editor || !documentData) return;
+
+        if (hydratedDocumentIdRef.current === documentId) {
+            return;
+        }
 
         const contentStr = documentData.content;
         const currentJSON = JSON.stringify(editor.getJSON());
         const targetContent =
             contentStr || JSON.stringify({ type: "doc", content: [] });
 
-        const docTime = new Date(documentData.updatedAt).getTime();
-        const lastSave = lastSavedAt || 0;
-        // If the document is newer than our last save, treat as external update
-        // We use a small buffer to avoid race conditions with local autosave
-        const isExternalUpdate = docTime > lastSave + 50;
-        const isInitialLoad =
-            editor.isEmpty ||
-            currentJSON === '{"type":"doc","content":[{"type":"paragraph"}]}';
-
-        if (isExternalUpdate || isInitialLoad) {
-            try {
-                const json = JSON.parse(targetContent);
-                // Only set if significantly different
-                if (JSON.stringify(json) !== currentJSON) {
-                    editor.commands.setContent(json, { emitUpdate: false });
-                    if (isExternalUpdate) {
-                        setLastSavedAt(docTime);
-                    }
-                }
-            } catch (e) {
-                const html = contentStr || "<p></p>";
-                if (editor.getHTML() !== html) {
-                    editor.commands.setContent(html, { emitUpdate: false });
-                    if (isExternalUpdate) {
-                        setLastSavedAt(docTime);
-                    }
-                }
+        try {
+            const json = JSON.parse(targetContent);
+            // Only set if significantly different
+            if (JSON.stringify(json) !== currentJSON) {
+                editor.commands.setContent(json, { emitUpdate: false });
+            }
+        } catch (e) {
+            const html = contentStr || "<p></p>";
+            if (editor.getHTML() !== html) {
+                editor.commands.setContent(html, { emitUpdate: false });
             }
         }
-    }, [editor, documentId, documentData?.updatedAt]); // Run on external updates too
+
+        hydratedDocumentIdRef.current = documentId;
+        setLastSavedAt(new Date(documentData.updatedAt).getTime());
+    }, [editor, documentData, documentId, setLastSavedAt]);
 
     // 5. Autosave Logic
     const flushAutosave = React.useCallback(async () => {

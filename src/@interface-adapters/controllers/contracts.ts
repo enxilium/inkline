@@ -63,6 +63,12 @@ import type { CreateEventController } from "./timeline/CreateEventController";
 import type { UpdateEventController } from "./timeline/UpdateEventController";
 import type { DeleteEventController } from "./timeline/DeleteEventController";
 import type { GetSyncStateController } from "./sync/GetSyncStateController";
+import type { ListProjectMetafieldsController } from "./metafield/ListProjectMetafieldsController";
+import type { CreateOrReuseMetafieldDefinitionController } from "./metafield/CreateOrReuseMetafieldDefinitionController";
+import type { AssignMetafieldToEntityController } from "./metafield/AssignMetafieldToEntityController";
+import type { SaveMetafieldValueController } from "./metafield/SaveMetafieldValueController";
+import type { RemoveMetafieldFromEntityController } from "./metafield/RemoveMetafieldFromEntityController";
+import type { DeleteMetafieldDefinitionGlobalController } from "./metafield/DeleteMetafieldDefinitionGlobalController";
 
 type Handler<T> = T extends {
     handle: (...args: infer P) => Promise<infer R>;
@@ -136,6 +142,14 @@ export interface ControllerInstanceMap {
     };
     sync: {
         getSyncState: GetSyncStateController;
+    };
+    metafield: {
+        listProjectMetafields: ListProjectMetafieldsController;
+        createOrReuseMetafieldDefinition: CreateOrReuseMetafieldDefinitionController;
+        assignMetafieldToEntity: AssignMetafieldToEntityController;
+        saveMetafieldValue: SaveMetafieldValueController;
+        removeMetafieldFromEntity: RemoveMetafieldFromEntityController;
+        deleteMetafieldDefinitionGlobal: DeleteMetafieldDefinitionGlobalController;
     };
     world: {
         createCharacter: CreateCharacterController;
@@ -240,6 +254,16 @@ export const controllerChannels: ControllerChannelMap = {
     },
     sync: {
         getSyncState: "sync:getSyncState",
+    },
+    metafield: {
+        listProjectMetafields: "metafield:listProjectMetafields",
+        createOrReuseMetafieldDefinition:
+            "metafield:createOrReuseMetafieldDefinition",
+        assignMetafieldToEntity: "metafield:assignMetafieldToEntity",
+        saveMetafieldValue: "metafield:saveMetafieldValue",
+        removeMetafieldFromEntity: "metafield:removeMetafieldFromEntity",
+        deleteMetafieldDefinitionGlobal:
+            "metafield:deleteMetafieldDefinitionGlobal",
     },
     world: {
         createCharacter: "world:createCharacter",

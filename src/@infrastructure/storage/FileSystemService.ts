@@ -20,14 +20,10 @@ export class FileSystemService {
 
     async writeJson<T>(filePath: string, data: T): Promise<void> {
         const fullPath = path.join(this.basePath, filePath);
-        const tempPath = fullPath + ".tmp";
+        const tempPath = this.createTempPath(fullPath);
         const dir = path.dirname(fullPath);
 
-        try {
-            await fs.access(dir);
-        } catch {
-            await fs.mkdir(dir, { recursive: true });
-        }
+        await fs.mkdir(dir, { recursive: true });
 
         await fs.writeFile(tempPath, JSON.stringify(data, null, 2), "utf-8");
         await fs.rename(tempPath, fullPath);
@@ -35,20 +31,23 @@ export class FileSystemService {
 
     async writeFile(
         filePath: string,
-        data: Buffer | Uint8Array
+        data: Buffer | Uint8Array,
     ): Promise<void> {
         const fullPath = path.join(this.basePath, filePath);
-        const tempPath = fullPath + ".tmp";
+        const tempPath = this.createTempPath(fullPath);
         const dir = path.dirname(fullPath);
 
-        try {
-            await fs.access(dir);
-        } catch {
-            await fs.mkdir(dir, { recursive: true });
-        }
+        await fs.mkdir(dir, { recursive: true });
 
         await fs.writeFile(tempPath, data);
         await fs.rename(tempPath, fullPath);
+    }
+
+    private createTempPath(fullPath: string): string {
+        const uniqueSuffix = `${Date.now()}-${process.pid}-${Math.random()
+            .toString(16)
+            .slice(2)}`;
+        return `${fullPath}.${uniqueSuffix}.tmp`;
     }
 
     async readJson<T>(filePath: string): Promise<T | null> {

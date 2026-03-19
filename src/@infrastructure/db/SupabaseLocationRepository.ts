@@ -25,16 +25,18 @@ const parseStringArray = (value: string[] | null | undefined): string[] =>
     Array.isArray(value)
         ? value.map((entry) => entry ?? "").filter(Boolean)
         : [];
+import {
+    LocationDbInsert,
+    LocationDbRow,
+    LocationDbUpdate,
+} from "./contracts/schema";
+import { asStringArray } from "./contracts/json";
 
-const mapRowToLocation = (row: LocationRow): Location =>
+const mapRowToLocation = (row: LocationDbRow): Location =>
     new Location(
         row.id,
         row.name,
         row.description ?? "",
-        row.culture ?? "",
-        row.history ?? "",
-        parseStringArray(row.conflicts),
-        parseStringArray(row.tags),
         new Date(row.created_at),
         new Date(row.updated_at),
         row.bgm_id,
@@ -43,20 +45,19 @@ const mapRowToLocation = (row: LocationRow): Location =>
         parseStringArray(row.sublocation_ids),
         parseStringArray(row.character_ids),
         parseStringArray(row.organization_ids),
+        asStringArray(row.gallery_image_ids),
+        asStringArray(row.character_ids),
+        asStringArray(row.organization_ids),
     );
 
 export class SupabaseLocationRepository implements ILocationRepository {
     async create(projectId: string, location: Location): Promise<void> {
         const client = SupabaseService.getClient();
-        const { error } = await client.from("locations").insert({
+        const insertPayload = {
             id: location.id,
             project_id: projectId,
             name: location.name,
             description: location.description,
-            culture: location.culture,
-            history: location.history,
-            conflicts: location.conflicts,
-            tags: location.tags,
             bgm_id: location.bgmId,
             playlist_id: location.playlistId,
             gallery_image_ids: location.galleryImageIds,
@@ -65,7 +66,9 @@ export class SupabaseLocationRepository implements ILocationRepository {
             organization_ids: location.organizationIds,
             created_at: location.createdAt.toISOString(),
             updated_at: location.updatedAt.toISOString(),
-        });
+        } satisfies LocationDbInsert;
+
+        const { error } = await client.from("locations").insert(insertPayload);
 
         if (error) throw new Error(error.message);
     }
@@ -80,7 +83,7 @@ export class SupabaseLocationRepository implements ILocationRepository {
 
         if (error || !data) return null;
 
-        return mapRowToLocation(data as LocationRow);
+        return mapRowToLocation(data as LocationDbRow);
     }
 
     async findByProjectId(projectId: string): Promise<Location[]> {
@@ -94,28 +97,25 @@ export class SupabaseLocationRepository implements ILocationRepository {
         if (error) throw new Error(error.message);
         if (!data) return [];
 
-        return (data as LocationRow[]).map(mapRowToLocation);
+        return (data as LocationDbRow[]).map(mapRowToLocation);
     }
 
     async update(location: Location): Promise<void> {
         const client = SupabaseService.getClient();
+        const updatePayload = {
+            name: location.name,
+            description: location.description,
+            bgm_id: location.bgmId,
+            playlist_id: location.playlistId,
+            gallery_image_ids: location.galleryImageIds,
+            character_ids: location.characterIds,
+            organization_ids: location.organizationIds,
+            updated_at: location.updatedAt.toISOString(),
+        } satisfies LocationDbUpdate;
+
         const { error } = await client
             .from("locations")
-            .update({
-                name: location.name,
-                description: location.description,
-                culture: location.culture,
-                history: location.history,
-                conflicts: location.conflicts,
-                tags: location.tags,
-                bgm_id: location.bgmId,
-                playlist_id: location.playlistId,
-                gallery_image_ids: location.galleryImageIds,
-                sublocation_ids: location.sublocationIds,
-                character_ids: location.characterIds,
-                organization_ids: location.organizationIds,
-                updated_at: location.updatedAt.toISOString(),
-            })
+            .update(updatePayload)
             .eq("id", location.id);
 
         if (error) throw new Error(error.message);

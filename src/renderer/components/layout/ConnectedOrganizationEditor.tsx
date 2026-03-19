@@ -22,10 +22,21 @@ export const ConnectedOrganizationEditor: React.FC<
         chapters,
         scrapNotes,
         assets,
+        metafieldDefinitions,
+        metafieldAssignments,
         activeDocument,
         updateOrganizationLocally,
-        reloadActiveProject,
+        addOrUpdateMetafieldDefinitionLocally,
+        addOrUpdateMetafieldAssignmentLocally,
+        updateMetafieldAssignmentLocally,
+        removeMetafieldAssignmentLocally,
+        removeMetafieldDefinitionLocally,
         saveOrganizationInfo,
+        createOrReuseMetafieldDefinition,
+        assignMetafieldToEntity,
+        saveMetafieldValue,
+        removeMetafieldFromEntity,
+        deleteMetafieldDefinitionGlobal,
         generateOrganizationImage,
         generateOrganizationSong,
         generateOrganizationPlaylist,
@@ -33,8 +44,15 @@ export const ConnectedOrganizationEditor: React.FC<
         setActiveDocument,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
+        markDocumentEditorDirty,
+        clearDocumentEditorDirty,
         consumePendingTitleFocus,
     } = useAppStore();
+
+    const editorSelection = React.useMemo(
+        () => ({ kind: "organization", id: organizationId }) as const,
+        [organizationId],
+    );
 
     const [autosaveStatus, setAutosaveStatus] =
         React.useState<AutosaveStatus>("idle");
@@ -67,7 +85,7 @@ export const ConnectedOrganizationEditor: React.FC<
 
     const organization = React.useMemo(
         () => organizations.find((o) => o.id === organizationId),
-        [organizations, organizationId]
+        [organizations, organizationId],
     );
 
     const resolveStoredImageUrls = React.useCallback(
@@ -75,7 +93,7 @@ export const ConnectedOrganizationEditor: React.FC<
             galleryIds
                 .map((id) => assets.images[id]?.url)
                 .filter((url): url is string => Boolean(url)),
-        [assets.images]
+        [assets.images],
     );
 
     const gallerySources = React.useMemo(
@@ -83,7 +101,7 @@ export const ConnectedOrganizationEditor: React.FC<
             organization
                 ? resolveStoredImageUrls(organization.galleryImageIds ?? [])
                 : [],
-        [organization, resolveStoredImageUrls]
+        [organization, resolveStoredImageUrls],
     );
 
     const songUrl = React.useMemo(
@@ -91,7 +109,26 @@ export const ConnectedOrganizationEditor: React.FC<
             organization?.bgmId
                 ? assets.bgms[organization.bgmId]?.url
                 : undefined,
-        [organization, assets.bgms]
+        [organization, assets.bgms],
+    );
+
+    const imageOptions = React.useMemo(
+        () =>
+            Object.values(assets.images).map((image) => ({
+                id: image.id,
+                label: image.id.slice(0, 8),
+            })),
+        [assets.images],
+    );
+
+    const organizationMetafieldAssignments = React.useMemo(
+        () =>
+            metafieldAssignments.filter(
+                (assignment) =>
+                    assignment.entityType === "organization" &&
+                    assignment.entityId === organizationId,
+            ),
+        [metafieldAssignments, organizationId],
     );
 
     const handleSubmit = React.useCallback(
@@ -102,9 +139,7 @@ export const ConnectedOrganizationEditor: React.FC<
 
             const payload = {
                 name: values.name,
-                description: values.description.join("\n"),
-                mission: values.mission.join("\n"),
-                tags: values.tags,
+                description: values.description,
                 locationIds: values.locationIds,
             };
 
@@ -122,7 +157,7 @@ export const ConnectedOrganizationEditor: React.FC<
                 setAutosaveStatus("saved");
                 setTimeout(() => {
                     setAutosaveStatus((prev) =>
-                        prev === "saved" ? "idle" : prev
+                        prev === "saved" ? "idle" : prev,
                     );
                 }, 2000);
             } catch (error) {
@@ -130,9 +165,8 @@ export const ConnectedOrganizationEditor: React.FC<
                 setGlobalAutosaveError("Failed to save organization");
                 updateOrganizationLocally(
                     organization.id,
-                    originalOrganization
+                    originalOrganization,
                 );
-                await reloadActiveProject();
                 throw error;
             }
         },
@@ -140,26 +174,121 @@ export const ConnectedOrganizationEditor: React.FC<
             organization,
             projectId,
             updateOrganizationLocally,
-            reloadActiveProject,
             saveOrganizationInfo,
             setGlobalAutosaveError,
-        ]
+        ],
+    );
+
+    const handleDirtyStateChange = React.useCallback(
+        (isDirty: boolean) => {
+            if (isDirty) {
+                markDocumentEditorDirty(editorSelection);
+                return;
+            }
+
+            clearDocumentEditorDirty(editorSelection);
+        },
+        [clearDocumentEditorDirty, editorSelection, markDocumentEditorDirty],
+    );
+
+    React.useEffect(
+        () => () => {
+            clearDocumentEditorDirty(editorSelection);
+        },
+        [clearDocumentEditorDirty, editorSelection],
+    );
+
+    const addImageLocally = React.useCallback(
+        (image: { id: string }) => {
+            if (!organization) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    images: {
+                        ...state.assets.images,
+                        [image.id]: image as never,
+                    },
+                },
+            }));
+
+            if (!organization.galleryImageIds.includes(image.id)) {
+                updateOrganizationLocally(organization.id, {
+                    galleryImageIds: [
+                        ...organization.galleryImageIds,
+                        image.id,
+                    ],
+                    updatedAt: new Date(),
+                });
+            }
+        },
+        [organization, updateOrganizationLocally],
+    );
+
+    const setBgmLocally = React.useCallback(
+        (bgm: { id: string }) => {
+            if (!organization) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    bgms: {
+                        ...state.assets.bgms,
+                        [bgm.id]: bgm as never,
+                    },
+                },
+            }));
+
+            updateOrganizationLocally(organization.id, {
+                bgmId: bgm.id,
+                updatedAt: new Date(),
+            });
+        },
+        [organization, updateOrganizationLocally],
+    );
+
+    const setPlaylistLocally = React.useCallback(
+        (playlist: { id: string }) => {
+            if (!organization) {
+                return;
+            }
+
+            useAppStore.setState((state) => ({
+                assets: {
+                    ...state.assets,
+                    playlists: {
+                        ...state.assets.playlists,
+                        [playlist.id]: playlist as never,
+                    },
+                },
+            }));
+
+            updateOrganizationLocally(organization.id, {
+                playlistId: playlist.id,
+                updatedAt: new Date(),
+            });
+        },
+        [organization, updateOrganizationLocally],
     );
 
     const handleGeneratePortrait = async () => {
         if (!projectId || !organization) return;
-        await generateOrganizationImage({
+        const response = await generateOrganizationImage({
             projectId,
             organizationId: organization.id,
         });
-        await reloadActiveProject();
+        addImageLocally(response.image);
     };
 
     const handleImportPortrait = async (file: File) => {
         if (!projectId || !organization) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "image",
@@ -169,23 +298,26 @@ export const ConnectedOrganizationEditor: React.FC<
                 extension,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "image") {
+            addImageLocally(response.image);
+        }
     };
 
     const handleGenerateSong = async () => {
         if (!projectId || !organization) return;
-        await generateOrganizationSong({
+        const response = await generateOrganizationSong({
             projectId,
             organizationId: organization.id,
         });
-        await reloadActiveProject();
+        setBgmLocally(response.track);
     };
 
     const handleImportSong = async (file: File) => {
         if (!projectId || !organization) return;
         const buffer = await file.arrayBuffer();
         const extension = file.name.split(".").pop();
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "bgm",
@@ -197,16 +329,19 @@ export const ConnectedOrganizationEditor: React.FC<
                 extension,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "bgm") {
+            setBgmLocally(response.track);
+        }
     };
 
     const handleGeneratePlaylist = async () => {
         if (!projectId || !organization) return;
-        await generateOrganizationPlaylist({
+        const response = await generateOrganizationPlaylist({
             projectId,
             organizationId: organization.id,
         });
-        await reloadActiveProject();
+        setPlaylistLocally(response.playlist);
     };
 
     const handleImportPlaylist = async (file: File) => {
@@ -219,7 +354,7 @@ export const ConnectedOrganizationEditor: React.FC<
             throw new Error("Invalid playlist JSON.");
         }
 
-        await importAsset({
+        const response = await importAsset({
             projectId,
             payload: {
                 kind: "playlist",
@@ -231,8 +366,126 @@ export const ConnectedOrganizationEditor: React.FC<
                 subjectId: organization.id,
             },
         });
-        await reloadActiveProject();
+
+        if (response.kind === "playlist") {
+            setPlaylistLocally(response.playlist);
+        }
     };
+
+    const handleCreateOrReuseMetafieldDefinition = React.useCallback(
+        async (
+            request: Parameters<typeof createOrReuseMetafieldDefinition>[0],
+        ) => {
+            const response = await createOrReuseMetafieldDefinition(request);
+            addOrUpdateMetafieldDefinitionLocally(response.definition);
+            return response;
+        },
+        [
+            createOrReuseMetafieldDefinition,
+            addOrUpdateMetafieldDefinitionLocally,
+        ],
+    );
+
+    const handleAssignMetafieldToEntity = React.useCallback(
+        async (request: Parameters<typeof assignMetafieldToEntity>[0]) => {
+            const response = await assignMetafieldToEntity(request);
+            addOrUpdateMetafieldAssignmentLocally(response.assignment);
+            return response;
+        },
+        [assignMetafieldToEntity, addOrUpdateMetafieldAssignmentLocally],
+    );
+
+    const handleSaveMetafieldValue = React.useCallback(
+        async (request: Parameters<typeof saveMetafieldValue>[0]) => {
+            const original = organizationMetafieldAssignments.find(
+                (item) => item.id === request.assignmentId,
+            );
+
+            updateMetafieldAssignmentLocally(request.assignmentId, {
+                valueJson: request.value,
+                ...(request.orderIndex !== undefined
+                    ? { orderIndex: request.orderIndex }
+                    : {}),
+                updatedAt: new Date(),
+            });
+
+            try {
+                await saveMetafieldValue(request);
+            } catch (error) {
+                if (original) {
+                    updateMetafieldAssignmentLocally(request.assignmentId, {
+                        valueJson: original.valueJson,
+                        orderIndex: original.orderIndex,
+                        updatedAt: original.updatedAt,
+                    });
+                }
+                throw error;
+            }
+        },
+        [
+            organizationMetafieldAssignments,
+            saveMetafieldValue,
+            updateMetafieldAssignmentLocally,
+        ],
+    );
+
+    const handleRemoveMetafieldFromEntity = React.useCallback(
+        async (request: Parameters<typeof removeMetafieldFromEntity>[0]) => {
+            const existing = organizationMetafieldAssignments.find(
+                (assignment) =>
+                    assignment.definitionId === request.definitionId,
+            );
+
+            await removeMetafieldFromEntity(request);
+
+            if (existing) {
+                removeMetafieldAssignmentLocally(existing.id);
+            }
+        },
+        [
+            organizationMetafieldAssignments,
+            removeMetafieldFromEntity,
+            removeMetafieldAssignmentLocally,
+        ],
+    );
+
+    const handleDeleteMetafieldDefinitionGlobal = React.useCallback(
+        async (
+            request: Parameters<typeof deleteMetafieldDefinitionGlobal>[0],
+        ) => {
+            await deleteMetafieldDefinitionGlobal(request);
+            removeMetafieldDefinitionLocally(request.definitionId);
+        },
+        [deleteMetafieldDefinitionGlobal, removeMetafieldDefinitionLocally],
+    );
+
+    const handleImportMetafieldImage = React.useCallback(
+        async (file: File): Promise<string> => {
+            if (!projectId || !organization) {
+                throw new Error("Project or organization is missing.");
+            }
+
+            const buffer = await file.arrayBuffer();
+            const extension = file.name.split(".").pop();
+            const response = await importAsset({
+                projectId,
+                payload: {
+                    kind: "image",
+                    subjectType: "organization",
+                    subjectId: organization.id,
+                    fileData: buffer,
+                    extension,
+                },
+            });
+
+            if (response.kind !== "image") {
+                throw new Error("Imported asset is not an image.");
+            }
+
+            return response.image.id;
+        },
+        [importAsset, organization, projectId],
+    );
 
     const availableDocuments: DocumentRef[] = React.useMemo(() => {
         const docs: DocumentRef[] = [];
@@ -287,7 +540,7 @@ export const ConnectedOrganizationEditor: React.FC<
         (ref: DocumentRef) => {
             setActiveDocument({ kind: ref.kind, id: ref.id });
         },
-        [setActiveDocument]
+        [setActiveDocument],
     );
 
     if (!organization) {
@@ -296,8 +549,15 @@ export const ConnectedOrganizationEditor: React.FC<
 
     return (
         <OrganizationEditor
+            projectId={projectId}
             organization={organization}
             locations={locations}
+            allCharacters={characters}
+            allLocations={locations}
+            allOrganizations={organizations}
+            metafieldDefinitions={metafieldDefinitions}
+            metafieldAssignments={organizationMetafieldAssignments}
+            imageOptions={imageOptions}
             gallerySources={gallerySources}
             songUrl={songUrl}
             availableDocuments={availableDocuments}
@@ -309,6 +569,17 @@ export const ConnectedOrganizationEditor: React.FC<
             onImportSong={handleImportSong}
             onGeneratePlaylist={handleGeneratePlaylist}
             onImportPlaylist={handleImportPlaylist}
+            onCreateOrReuseMetafieldDefinition={
+                handleCreateOrReuseMetafieldDefinition
+            }
+            onAssignMetafieldToEntity={handleAssignMetafieldToEntity}
+            onSaveMetafieldValue={handleSaveMetafieldValue}
+            onRemoveMetafieldFromEntity={handleRemoveMetafieldFromEntity}
+            onDeleteMetafieldDefinitionGlobal={
+                handleDeleteMetafieldDefinitionGlobal
+            }
+            onImportMetafieldImage={handleImportMetafieldImage}
+            onDirtyStateChange={handleDirtyStateChange}
             focusTitleOnMount={focusTitleOnMount}
         />
     );

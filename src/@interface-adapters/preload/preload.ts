@@ -21,6 +21,7 @@ import {
     type ConflictPayload,
     type EntityUpdatedPayload,
     type EntityDeletedPayload,
+    type EntityType as SyncEntityType,
 } from "../controllers/sync/SyncStateGateway";
 
 type AsyncHandler = (...args: unknown[]) => Promise<unknown>;
@@ -180,7 +181,7 @@ const createSyncEvents = () => {
     };
 
     const resolveConflict = (
-        entityType: string,
+        entityType: SyncEntityType,
         entityId: string,
         projectId: string,
         resolution: "accept-remote" | "keep-local",

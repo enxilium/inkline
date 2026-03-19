@@ -6,17 +6,10 @@ export interface SaveCharacterInfoRequest {
     characterId: string;
     payload: {
         name?: string;
-        race?: string;
-        age?: number | null;
         description?: string;
-        traits?: string[];
-        goals?: string[];
-        secrets?: string[];
-        powers?: { title: string; description: string }[];
         currentLocationId?: string | null;
         backgroundLocationId?: string | null;
         organizationId?: string | null;
-        tags?: string[];
     };
 }
 
@@ -24,7 +17,7 @@ export class SaveCharacterInfo {
     constructor(
         private readonly characterRepository: ICharacterRepository,
         private readonly locationRepository: ILocationRepository,
-        private readonly organizationRepository: IOrganizationRepository
+        private readonly organizationRepository: IOrganizationRepository,
     ) {}
 
     async execute(request: SaveCharacterInfoRequest): Promise<void> {
@@ -48,14 +41,6 @@ export class SaveCharacterInfo {
             character.name = payload.name;
             hasChanges = true;
         }
-        if (payload.race !== undefined && character.race !== payload.race) {
-            character.race = payload.race;
-            hasChanges = true;
-        }
-        if (payload.age !== undefined && character.age !== payload.age) {
-            character.age = payload.age;
-            hasChanges = true;
-        }
         if (
             payload.description !== undefined &&
             character.description !== payload.description
@@ -63,46 +48,10 @@ export class SaveCharacterInfo {
             character.description = payload.description;
             hasChanges = true;
         }
-        if (
-            payload.traits !== undefined &&
-            JSON.stringify(character.traits) !== JSON.stringify(payload.traits)
-        ) {
-            character.traits = payload.traits;
-            hasChanges = true;
-        }
-        if (
-            payload.goals !== undefined &&
-            JSON.stringify(character.goals) !== JSON.stringify(payload.goals)
-        ) {
-            character.goals = payload.goals;
-            hasChanges = true;
-        }
-        if (
-            payload.secrets !== undefined &&
-            JSON.stringify(character.secrets) !==
-                JSON.stringify(payload.secrets)
-        ) {
-            character.secrets = payload.secrets;
-            hasChanges = true;
-        }
-        if (
-            payload.powers !== undefined &&
-            JSON.stringify(character.powers) !== JSON.stringify(payload.powers)
-        ) {
-            character.powers = payload.powers;
-            hasChanges = true;
-        }
-        if (
-            payload.tags !== undefined &&
-            JSON.stringify(character.tags) !== JSON.stringify(payload.tags)
-        ) {
-            character.tags = payload.tags;
-            hasChanges = true;
-        }
 
         if (payload.currentLocationId !== undefined) {
             const newLocationId = await this.resolveLocationId(
-                payload.currentLocationId
+                payload.currentLocationId,
             );
             if (character.currentLocationId !== newLocationId) {
                 character.currentLocationId = newLocationId;
@@ -112,7 +61,7 @@ export class SaveCharacterInfo {
 
         if (payload.backgroundLocationId !== undefined) {
             const newBackgroundId = await this.resolveLocationId(
-                payload.backgroundLocationId
+                payload.backgroundLocationId,
             );
             if (character.backgroundLocationId !== newBackgroundId) {
                 character.backgroundLocationId = newBackgroundId;
@@ -122,7 +71,7 @@ export class SaveCharacterInfo {
 
         if (payload.organizationId !== undefined) {
             const newOrgId = await this.resolveOrganizationId(
-                payload.organizationId
+                payload.organizationId,
             );
             if (character.organizationId !== newOrgId) {
                 character.organizationId = newOrgId;
@@ -140,12 +89,12 @@ export class SaveCharacterInfo {
             previousCurrentLocationId,
             previousBackgroundLocationId,
             character.currentLocationId,
-            character.backgroundLocationId
+            character.backgroundLocationId,
         );
     }
 
     private async resolveLocationId(
-        locationId: string | null
+        locationId: string | null,
     ): Promise<string | null> {
         if (locationId === null) {
             return null;
@@ -164,7 +113,7 @@ export class SaveCharacterInfo {
     }
 
     private async resolveOrganizationId(
-        organizationId: string | null
+        organizationId: string | null,
     ): Promise<string | null> {
         if (organizationId === null) {
             return null;
@@ -188,39 +137,39 @@ export class SaveCharacterInfo {
         prevCurrent: string | null,
         prevBackground: string | null,
         nextCurrent: string | null,
-        nextBackground: string | null
+        nextBackground: string | null,
     ): Promise<void> {
         const previousLocations = new Set(
             [prevCurrent, prevBackground].filter(
-                (value): value is string => !!value
-            )
+                (value): value is string => !!value,
+            ),
         );
         const nextLocations = new Set(
             [nextCurrent, nextBackground].filter(
-                (value): value is string => !!value
-            )
+                (value): value is string => !!value,
+            ),
         );
 
         const locationsToAdd = [...nextLocations].filter(
-            (id) => !previousLocations.has(id)
+            (id) => !previousLocations.has(id),
         );
         const locationsToRemove = [...previousLocations].filter(
-            (id) => !nextLocations.has(id)
+            (id) => !nextLocations.has(id),
         );
 
         await Promise.all([
             ...locationsToAdd.map((locationId) =>
-                this.addCharacterToLocation(characterId, locationId)
+                this.addCharacterToLocation(characterId, locationId),
             ),
             ...locationsToRemove.map((locationId) =>
-                this.removeCharacterFromLocation(characterId, locationId)
+                this.removeCharacterFromLocation(characterId, locationId),
             ),
         ]);
     }
 
     private async addCharacterToLocation(
         characterId: string,
-        locationId: string
+        locationId: string,
     ): Promise<void> {
         const location = await this.locationRepository.findById(locationId);
         if (!location) {
@@ -236,7 +185,7 @@ export class SaveCharacterInfo {
 
     private async removeCharacterFromLocation(
         characterId: string,
-        locationId: string
+        locationId: string,
     ): Promise<void> {
         const location = await this.locationRepository.findById(locationId);
         if (!location) {
@@ -245,7 +194,7 @@ export class SaveCharacterInfo {
 
         if (location.characterIds.includes(characterId)) {
             location.characterIds = location.characterIds.filter(
-                (id) => id !== characterId
+                (id) => id !== characterId,
             );
             location.updatedAt = new Date();
             await this.locationRepository.update(location);

@@ -16,17 +16,17 @@ export interface CreateOrganizationResponse {
 export class CreateOrganization {
     constructor(
         private readonly organizationRepository: IOrganizationRepository,
-        private readonly projectRepository: IProjectRepository
+        private readonly projectRepository: IProjectRepository,
     ) {}
 
     async execute(
-        request: CreateOrganizationRequest
+        request: CreateOrganizationRequest,
     ): Promise<CreateOrganizationResponse> {
         const projectId = request.projectId.trim();
 
         if (!projectId) {
             throw new Error(
-                "Project ID is required for organization creation."
+                "Project ID is required for organization creation.",
             );
         }
 
@@ -41,14 +41,12 @@ export class CreateOrganization {
             id,
             "",
             "",
-            "",
-            [],
             [],
             [],
             null,
             null,
             now,
-            now
+            now,
         );
 
         await this.organizationRepository.create(projectId, organization);

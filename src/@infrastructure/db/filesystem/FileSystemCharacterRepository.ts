@@ -7,17 +7,10 @@ type FileSystemCharacter = {
     id: string;
     projectId: string;
     name: string;
-    race: string;
-    age: number | null;
     description: string;
     currentLocationId: string | null;
     backgroundLocationId: string | null;
     organizationId: string | null;
-    traits: string[];
-    goals: string[];
-    secrets: string[];
-    powers: { title: string; description: string }[];
-    tags: string[];
     bgmId: string | null;
     playlistId: string | null;
     galleryImageIds: string[];
@@ -29,7 +22,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
     private getFilePath(
         userId: string,
         projectId: string,
-        characterId: string
+        characterId: string,
     ): string {
         return path.join(
             "users",
@@ -37,7 +30,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
             "projects",
             projectId,
             "characters",
-            `${characterId}.json`
+            `${characterId}.json`,
         );
     }
 
@@ -53,17 +46,10 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
             id: character.id,
             projectId: projectId,
             name: character.name,
-            race: character.race,
-            age: character.age,
             description: character.description,
             currentLocationId: character.currentLocationId,
             backgroundLocationId: character.backgroundLocationId,
             organizationId: character.organizationId,
-            traits: character.traits,
-            goals: character.goals,
-            secrets: character.secrets,
-            powers: character.powers,
-            tags: character.tags,
             bgmId: character.bgmId,
             playlistId: character.playlistId,
             galleryImageIds: character.galleryImageIds,
@@ -72,7 +58,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
         };
         await fileSystemService.writeJson(
             this.getFilePath(ownerId, projectId, character.id),
-            dto
+            dto,
         );
     }
 
@@ -80,7 +66,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
         const location = await this.findFileLocation(id);
         if (location) {
             const dto = await fileSystemService.readJson<FileSystemCharacter>(
-                location.path
+                location.path,
             );
             if (dto) return this.mapToEntity(dto);
         }
@@ -99,7 +85,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
             if (file.endsWith(".json")) {
                 const dto =
                     await fileSystemService.readJson<FileSystemCharacter>(
-                        path.join(dirPath, file)
+                        path.join(dirPath, file),
                     );
                 if (dto) characters.push(this.mapToEntity(dto));
             }
@@ -114,17 +100,10 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
                 id: character.id,
                 projectId: location.projectId,
                 name: character.name,
-                race: character.race,
-                age: character.age,
                 description: character.description,
                 currentLocationId: character.currentLocationId,
                 backgroundLocationId: character.backgroundLocationId,
                 organizationId: character.organizationId,
-                traits: character.traits,
-                goals: character.goals,
-                powers: character.powers,
-                secrets: character.secrets,
-                tags: character.tags,
                 bgmId: character.bgmId,
                 playlistId: character.playlistId,
                 galleryImageIds: character.galleryImageIds,
@@ -153,7 +132,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
     }
 
     async getCharacterProfiles(
-        projectId: string
+        projectId: string,
     ): Promise<{ name: string; description: string }[]> {
         const characters = await this.findByProjectId(projectId);
         return characters.map((c) => ({
@@ -163,7 +142,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
     }
 
     private async findOwnerIdByProjectId(
-        projectId: string
+        projectId: string,
     ): Promise<string | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
@@ -171,7 +150,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
                 "users",
                 user,
                 "projects",
-                `${projectId}.json`
+                `${projectId}.json`,
             );
             if (await fileSystemService.exists(projectPath)) {
                 return user;
@@ -181,7 +160,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
     }
 
     private async findFileLocation(
-        characterId: string
+        characterId: string,
     ): Promise<{ userId: string; projectId: string; path: string } | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
@@ -193,7 +172,7 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
                     const charPath = this.getFilePath(
                         user,
                         projectId,
-                        characterId
+                        characterId,
                     );
                     if (await fileSystemService.exists(charPath)) {
                         return { userId: user, projectId, path: charPath };
@@ -208,22 +187,15 @@ export class FileSystemCharacterRepository implements ICharacterRepository {
         return new Character(
             dto.id,
             dto.name,
-            dto.race,
-            dto.age,
             dto.description,
             dto.currentLocationId,
             dto.backgroundLocationId,
             dto.organizationId,
-            dto.traits,
-            dto.goals,
-            dto.secrets,
-            dto.powers || [],
-            dto.tags,
             dto.bgmId,
             dto.playlistId,
             dto.galleryImageIds,
             new Date(dto.createdAt),
-            new Date(dto.updatedAt)
+            new Date(dto.updatedAt),
         );
     }
 }

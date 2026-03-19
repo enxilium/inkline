@@ -9,6 +9,6 @@ export interface IOrganizationRepository {
     delete(id: string): Promise<void>;
     deleteByProjectId(projectId: string): Promise<void>;
     getOrganizationProfiles(
-        projectId: string
-    ): Promise<{ name: string; description: string; mission?: string }[]>;
+        projectId: string,
+    ): Promise<{ name: string; description: string }[]>;
 }

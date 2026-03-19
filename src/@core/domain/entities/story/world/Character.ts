@@ -5,21 +5,14 @@ export class Character {
     constructor(
         public id: string,
         public name: string,
-        public race: string,
-        public age: number | null,
         public description: string,
         public currentLocationId: string | null,
         public backgroundLocationId: string | null,
         public organizationId: string | null,
-        public traits: string[],
-        public goals: string[],
-        public secrets: string[],
-        public powers: { title: string; description: string }[],
-        public tags: string[],
         public bgmId: string | null,
         public playlistId: string | null,
         public galleryImageIds: string[],
         public createdAt: Date,
-        public updatedAt: Date
+        public updatedAt: Date,
     ) {}
 }

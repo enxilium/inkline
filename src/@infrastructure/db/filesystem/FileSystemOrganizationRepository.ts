@@ -8,8 +8,6 @@ type FileSystemOrganization = {
     projectId: string;
     name: string;
     description: string;
-    mission: string;
-    tags: string[];
     createdAt: string;
     updatedAt: string;
     bgmId: string | null;
@@ -18,13 +16,11 @@ type FileSystemOrganization = {
     locationIds: string[];
 };
 
-export class FileSystemOrganizationRepository
-    implements IOrganizationRepository
-{
+export class FileSystemOrganizationRepository implements IOrganizationRepository {
     private getFilePath(
         userId: string,
         projectId: string,
-        orgId: string
+        orgId: string,
     ): string {
         return path.join(
             "users",
@@ -32,7 +28,7 @@ export class FileSystemOrganizationRepository
             "projects",
             projectId,
             "organizations",
-            `${orgId}.json`
+            `${orgId}.json`,
         );
     }
 
@@ -42,7 +38,7 @@ export class FileSystemOrganizationRepository
             userId,
             "projects",
             projectId,
-            "organizations"
+            "organizations",
         );
     }
 
@@ -55,8 +51,6 @@ export class FileSystemOrganizationRepository
             projectId: projectId,
             name: organization.name,
             description: organization.description,
-            mission: organization.mission,
-            tags: organization.tags,
             createdAt: organization.createdAt.toISOString(),
             updatedAt: organization.updatedAt.toISOString(),
             bgmId: organization.bgmId,
@@ -66,7 +60,7 @@ export class FileSystemOrganizationRepository
         };
         await fileSystemService.writeJson(
             this.getFilePath(ownerId, projectId, organization.id),
-            dto
+            dto,
         );
     }
 
@@ -75,7 +69,7 @@ export class FileSystemOrganizationRepository
         if (loc) {
             const dto =
                 await fileSystemService.readJson<FileSystemOrganization>(
-                    loc.path
+                    loc.path,
                 );
             if (dto) return this.mapToEntity(dto);
         }
@@ -94,7 +88,7 @@ export class FileSystemOrganizationRepository
             if (file.endsWith(".json")) {
                 const dto =
                     await fileSystemService.readJson<FileSystemOrganization>(
-                        path.join(dirPath, file)
+                        path.join(dirPath, file),
                     );
                 if (dto) orgs.push(this.mapToEntity(dto));
             }
@@ -129,11 +123,10 @@ export class FileSystemOrganizationRepository
     }
 
     async getOrganizationProfiles(
-        projectId: string
-    ): Promise<{ id: string; name: string; description: string }[]> {
+        projectId: string,
+    ): Promise<{ name: string; description: string }[]> {
         const orgs = await this.findByProjectId(projectId);
         return orgs.map((o) => ({
-            id: o.id,
             name: o.name,
             description: o.description,
         }));
@@ -147,8 +140,6 @@ export class FileSystemOrganizationRepository
                 projectId: loc.projectId,
                 name: organization.name,
                 description: organization.description,
-                mission: organization.mission,
-                tags: organization.tags,
                 createdAt: organization.createdAt.toISOString(),
                 updatedAt: organization.updatedAt.toISOString(),
                 bgmId: organization.bgmId,
@@ -176,7 +167,7 @@ export class FileSystemOrganizationRepository
     }
 
     private async findOwnerIdByProjectId(
-        projectId: string
+        projectId: string,
     ): Promise<string | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
@@ -184,7 +175,7 @@ export class FileSystemOrganizationRepository
                 "users",
                 user,
                 "projects",
-                `${projectId}.json`
+                `${projectId}.json`,
             );
             if (await fileSystemService.exists(projectPath)) {
                 return user;
@@ -194,7 +185,7 @@ export class FileSystemOrganizationRepository
     }
 
     private async findFileLocation(
-        orgId: string
+        orgId: string,
     ): Promise<{ userId: string; projectId: string; path: string } | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
@@ -218,14 +209,12 @@ export class FileSystemOrganizationRepository
             dto.id,
             dto.name,
             dto.description,
-            dto.mission,
-            dto.tags,
             dto.locationIds,
             dto.galleryImageIds,
             dto.playlistId,
             dto.bgmId,
             new Date(dto.createdAt),
-            new Date(dto.updatedAt)
+            new Date(dto.updatedAt),
         );
     }
 }

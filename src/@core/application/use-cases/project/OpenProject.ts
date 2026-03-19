@@ -18,6 +18,10 @@ import { ITimelineRepository } from "../../../domain/repositories/ITimelineRepos
 import { IEventRepository } from "../../../domain/repositories/IEventRepository";
 import { Timeline } from "../../../domain/entities/story/timeline/Timeline";
 import { Event } from "../../../domain/entities/story/timeline/Event";
+import { IMetafieldDefinitionRepository } from "../../../domain/repositories/IMetafieldDefinitionRepository";
+import { IMetafieldAssignmentRepository } from "../../../domain/repositories/IMetafieldAssignmentRepository";
+import { MetafieldDefinition } from "../../../domain/entities/story/world/MetafieldDefinition";
+import { MetafieldAssignment } from "../../../domain/entities/story/world/MetafieldAssignment";
 
 export interface OpenProjectRequest {
     projectId: string;
@@ -32,6 +36,8 @@ export interface OpenProjectResponse {
     scrapNotes: ScrapNote[];
     timelines: Timeline[];
     events: Event[];
+    metafieldDefinitions: MetafieldDefinition[];
+    metafieldAssignments: MetafieldAssignment[];
     assets: ProjectAssetBundle;
 }
 
@@ -51,7 +57,9 @@ export class OpenProject {
         private readonly organizationRepository: IOrganizationRepository,
         private readonly assetRepository: IAssetRepository,
         private readonly timelineRepository: ITimelineRepository,
-        private readonly eventRepository: IEventRepository
+        private readonly eventRepository: IEventRepository,
+        private readonly metafieldDefinitionRepository: IMetafieldDefinitionRepository,
+        private readonly metafieldAssignmentRepository: IMetafieldAssignmentRepository,
     ) {}
 
     async execute(request: OpenProjectRequest): Promise<OpenProjectResponse> {
@@ -72,6 +80,8 @@ export class OpenProject {
             rawScrapNotes,
             rawOrganizations,
             timelines,
+            metafieldDefinitions,
+            metafieldAssignments,
         ] = await Promise.all([
             this.chapterRepository.findByProjectId(projectId),
             this.characterRepository.findByProjectId(projectId),
@@ -79,13 +89,15 @@ export class OpenProject {
             this.scrapNoteRepository.findByProjectId(projectId),
             this.organizationRepository.findByProjectId(projectId),
             this.timelineRepository.findByProjectId(projectId),
+            this.metafieldDefinitionRepository.findByProjectId(projectId),
+            this.metafieldAssignmentRepository.findByProjectId(projectId),
         ]);
 
         chapters.sort((a, b) => a.order - b.order);
 
         const sortByIds = <T extends { id: string }>(
             items: T[],
-            ids: string[]
+            ids: string[],
         ): T[] => {
             const map = new Map(items.map((i) => [i.id, i]));
             const sorted: T[] = [];
@@ -105,13 +117,13 @@ export class OpenProject {
         const scrapNotes = sortByIds(rawScrapNotes, project.scrapNoteIds);
         const organizations = sortByIds(
             rawOrganizations,
-            project.organizationIds
+            project.organizationIds,
         );
 
         const charactersByLocation = new Map<string, string[]>();
         const trackCharacter = (
             locationId: string | null,
-            characterId: string
+            characterId: string,
         ) => {
             if (!locationId) {
                 return;
@@ -146,12 +158,12 @@ export class OpenProject {
             projectId,
             characters,
             locations,
-            organizations
+            organizations,
         );
 
         // Fetch events for all timelines
         const eventPromises = timelines.map((timeline) =>
-            this.eventRepository.findByTimelineId(timeline.id)
+            this.eventRepository.findByTimelineId(timeline.id),
         );
         const eventsArrays = await Promise.all(eventPromises);
         const events = eventsArrays.flat();
@@ -165,6 +177,8 @@ export class OpenProject {
             scrapNotes,
             timelines,
             events,
+            metafieldDefinitions,
+            metafieldAssignments,
             assets: assetBundle,
         };
     }
@@ -173,7 +187,7 @@ export class OpenProject {
         projectId: string,
         characters: Character[],
         locations: Location[],
-        organizations: Organization[]
+        organizations: Organization[],
     ): Promise<ProjectAssetBundle> {
         const imageIds = new Set<string>();
         const bgmIds = new Set<string>();
@@ -189,7 +203,7 @@ export class OpenProject {
 
         const collectAudioIds = (
             bgmId: string | null,
-            playlistId: string | null
+            playlistId: string | null,
         ) => {
             if (bgmId) {
                 bgmIds.add(bgmId);
@@ -223,7 +237,7 @@ export class OpenProject {
                 : Promise.resolve([] as BGM[]),
             playlistIds.size
                 ? this.assetRepository.findPlaylistsByIds(
-                      Array.from(playlistIds)
+                      Array.from(playlistIds),
                   )
                 : Promise.resolve([] as Playlist[]),
         ]);

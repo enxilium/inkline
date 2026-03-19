@@ -1,59 +1,45 @@
 import { Organization } from "../../@core/domain/entities/story/world/Organization";
 import { IOrganizationRepository } from "../../@core/domain/repositories/IOrganizationRepository";
 import { SupabaseService } from "./SupabaseService";
+import {
+    OrganizationDbInsert,
+    OrganizationDbRow,
+    OrganizationDbUpdate,
+} from "./contracts/schema";
+import { asStringArray } from "./contracts/json";
 
-type OrganizationRow = {
-    id: string;
-    project_id: string;
-    name: string;
-    description: string | null;
-    mission: string | null;
-    tags: string[] | null;
-    location_ids: string[] | null;
-    gallery_image_ids: string[] | null;
-    playlist_id: string | null;
-    bgm_id: string | null;
-    created_at: string;
-    updated_at: string;
-};
-
-const parseStringArray = (value: string[] | null | undefined): string[] =>
-    Array.isArray(value)
-        ? value.map((entry) => entry ?? "").filter(Boolean)
-        : [];
-
-const mapRowToOrganization = (row: OrganizationRow): Organization =>
+const mapRowToOrganization = (row: OrganizationDbRow): Organization =>
     new Organization(
         row.id,
         row.name,
         row.description ?? "",
-        row.mission ?? "",
-        parseStringArray(row.tags),
-        parseStringArray(row.location_ids),
-        parseStringArray(row.gallery_image_ids),
+        asStringArray(row.location_ids),
+        asStringArray(row.gallery_image_ids),
         row.playlist_id,
         row.bgm_id,
         new Date(row.created_at),
-        new Date(row.updated_at)
+        new Date(row.updated_at),
     );
 
 export class SupabaseOrganizationRepository implements IOrganizationRepository {
     async create(projectId: string, organization: Organization): Promise<void> {
         const client = SupabaseService.getClient();
-        const { error } = await client.from("organizations").insert({
+        const insertPayload = {
             id: organization.id,
             project_id: projectId,
             name: organization.name,
             description: organization.description,
-            mission: organization.mission,
-            tags: organization.tags,
             location_ids: organization.locationIds,
             gallery_image_ids: organization.galleryImageIds,
             playlist_id: organization.playlistId,
             bgm_id: organization.bgmId,
             created_at: organization.createdAt.toISOString(),
             updated_at: organization.updatedAt.toISOString(),
-        });
+        } satisfies OrganizationDbInsert;
+
+        const { error } = await client
+            .from("organizations")
+            .insert(insertPayload);
 
         if (error) throw new Error(error.message);
     }
@@ -68,7 +54,7 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
 
         if (error || !data) return null;
 
-        return mapRowToOrganization(data as OrganizationRow);
+        return mapRowToOrganization(data as OrganizationDbRow);
     }
 
     async findByProjectId(projectId: string): Promise<Organization[]> {
@@ -82,7 +68,7 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
         if (error) throw new Error(error.message);
         if (!data) return [];
 
-        return (data as OrganizationRow[]).map(mapRowToOrganization);
+        return (data as OrganizationDbRow[]).map(mapRowToOrganization);
     }
 
     async findByLocationId(locationId: string): Promise<Organization[]> {
@@ -96,24 +82,24 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
         if (error) throw new Error(error.message);
         if (!data) return [];
 
-        return (data as OrganizationRow[]).map(mapRowToOrganization);
+        return (data as OrganizationDbRow[]).map(mapRowToOrganization);
     }
 
     async update(organization: Organization): Promise<void> {
         const client = SupabaseService.getClient();
+        const updatePayload = {
+            name: organization.name,
+            description: organization.description,
+            location_ids: organization.locationIds,
+            gallery_image_ids: organization.galleryImageIds,
+            playlist_id: organization.playlistId,
+            bgm_id: organization.bgmId,
+            updated_at: organization.updatedAt.toISOString(),
+        } satisfies OrganizationDbUpdate;
+
         const { error } = await client
             .from("organizations")
-            .update({
-                name: organization.name,
-                description: organization.description,
-                mission: organization.mission,
-                tags: organization.tags,
-                location_ids: organization.locationIds,
-                gallery_image_ids: organization.galleryImageIds,
-                playlist_id: organization.playlistId,
-                bgm_id: organization.bgmId,
-                updated_at: organization.updatedAt.toISOString(),
-            })
+            .update(updatePayload)
             .eq("id", organization.id);
 
         if (error) throw new Error(error.message);
@@ -138,12 +124,12 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
     }
 
     async getOrganizationProfiles(
-        projectId: string
-    ): Promise<{ name: string; description: string; mission?: string }[]> {
+        projectId: string,
+    ): Promise<{ name: string; description: string }[]> {
         const client = SupabaseService.getClient();
         const { data, error } = await client
             .from("organizations")
-            .select("name, description, mission")
+            .select("name, description")
             .eq("project_id", projectId)
             .order("updated_at", { ascending: false });
 
@@ -151,15 +137,10 @@ export class SupabaseOrganizationRepository implements IOrganizationRepository {
         if (!data) return [];
 
         return (
-            data as Array<{
-                name: string | null;
-                description: string | null;
-                mission: string | null;
-            }>
+            data as Array<{ name: string | null; description: string | null }>
         ).map((row) => ({
             name: row.name ?? "",
             description: row.description ?? "",
-            mission: row.mission ?? undefined,
         }));
     }
 }

@@ -71,11 +71,6 @@ export class PlaylistGenerationService implements IPlaylistGenerationService {
         let description = `Type: ${subject.constructor.name}\nName: ${subject.name}\nDescription: ${subject.description}`;
 
         if (subject instanceof Character) {
-            description += `\nRace: ${subject.race || "Unknown"}`;
-            if (subject.age) {
-                description += `\nAge: ${subject.age}`;
-            }
-
             if (subject.currentLocationId) {
                 const location = await this.locationRepository.findById(
                     subject.currentLocationId,

@@ -79,12 +79,36 @@ export const WorkspaceLayout: React.FC = () => {
 
     // Sync: Store Data -> Layout Tab Names
     React.useEffect(() => {
+        const entityExists = (kind: string, id: string): boolean => {
+            if (kind === "chapter") {
+                return chapters.some((c) => c.id === id);
+            }
+            if (kind === "scrapNote") {
+                return scrapNotes.some((n) => n.id === id);
+            }
+            if (kind === "character") {
+                return characters.some((c) => c.id === id);
+            }
+            if (kind === "location") {
+                return locations.some((l) => l.id === id);
+            }
+            if (kind === "organization") {
+                return organizations.some((o) => o.id === id);
+            }
+            return false;
+        };
+
         model.visitNodes((node) => {
             if (node.getType() === "tab") {
                 const tabNode = node as TabNode;
                 if (tabNode.getComponent() === "editor") {
                     const config = tabNode.getConfig();
                     if (config && config.id && config.kind) {
+                        if (!entityExists(config.kind, config.id)) {
+                            model.doAction(Actions.deleteTab(tabNode.getId()));
+                            return;
+                        }
+
                         let newName = "";
                         if (config.kind === "chapter") {
                             newName =
