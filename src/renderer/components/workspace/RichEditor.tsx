@@ -1376,20 +1376,20 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 ) {
                     content = (
                         <ParagraphRichField
-                                syncSourceKey={`${entityType}:${entityId}:description`}
-                                id={`${entityType}-description`}
-                                value={values.description}
-                                rows={4}
-                                placeholder="Describe this entity... (use / to reference)"
-                                onChange={(val) =>
-                                    handleChange(
-                                        "description",
-                                        val as TValues["description"],
-                                    )
-                                }
-                                availableDocuments={availableDocuments}
-                                onNavigateToDocument={onNavigateToDocument}
-                            />
+                            syncSourceKey={`${entityType}:${entityId}:description`}
+                            id={`${entityType}-description`}
+                            value={values.description}
+                            rows={4}
+                            placeholder="Describe this entity... (use / to reference)"
+                            onChange={(val) =>
+                                handleChange(
+                                    "description",
+                                    val as TValues["description"],
+                                )
+                            }
+                            availableDocuments={availableDocuments}
+                            onNavigateToDocument={onNavigateToDocument}
+                        />
                     );
                 } else if (
                     fixedCard.source === "core" &&
