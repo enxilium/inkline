@@ -271,7 +271,10 @@ const App: React.FC = () => {
         const healStuckPointerLock = () => {
             const hasDialogOverlay =
                 document.querySelector(".dialog-overlay") !== null;
-            if (!hasDialogOverlay && document.body.style.pointerEvents === "none") {
+            if (
+                !hasDialogOverlay &&
+                document.body.style.pointerEvents === "none"
+            ) {
                 document.body.style.pointerEvents = "";
             }
         };
@@ -435,7 +438,14 @@ const App: React.FC = () => {
                 );
             case "auth":
                 return (
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            height: "100%",
+                        }}
+                    >
                         <AuthView
                             mode={authMode}
                             form={authForm}
