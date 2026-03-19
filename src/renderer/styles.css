@@ -2806,6 +2806,37 @@ input.toolbar-color:focus {
     position: relative;
 }
 
+.binder-item-reveal {
+    animation: binder-item-reveal 220ms var(--ease-out);
+}
+
+.binder-item-collapse {
+    animation: binder-item-collapse 220ms var(--ease-out);
+    pointer-events: none;
+}
+
+@keyframes binder-item-reveal {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes binder-item-collapse {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+}
+
 .binder-list li:hover .binder-item,
 .binder-item.is-active {
     padding-right: 1.8rem;
@@ -2901,6 +2932,11 @@ input.toolbar-color:focus {
 .binder-list li:hover .binder-item-delete {
     opacity: 1;
     pointer-events: auto;
+}
+
+.binder-list li.is-drag-active .binder-item-delete {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .binder-item-delete:hover {

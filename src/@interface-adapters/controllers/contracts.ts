@@ -26,6 +26,7 @@ import type { SaveChapterContentController } from "./logistics/SaveChapterConten
 import type { SaveCharacterInfoController } from "./logistics/SaveCharacterInfoController";
 import type { SaveLocationInfoController } from "./logistics/SaveLocationInfoController";
 import type { SaveManuscriptStructureController } from "./logistics/SaveManuscriptStructureController";
+import type { ReorderLocationChildrenController } from "./logistics/ReorderLocationChildrenController";
 import type { SaveOrganizationInfoController } from "./logistics/SaveOrganizationInfoController";
 import type { SaveProjectSettingsController } from "./logistics/SaveProjectSettingsController";
 import type { SaveUserSettingsController } from "./logistics/SaveUserSettingsController";
@@ -68,6 +69,7 @@ import type { AssignMetafieldToEntityController } from "./metafield/AssignMetafi
 import type { SaveMetafieldValueController } from "./metafield/SaveMetafieldValueController";
 import type { RemoveMetafieldFromEntityController } from "./metafield/RemoveMetafieldFromEntityController";
 import type { DeleteMetafieldDefinitionGlobalController } from "./metafield/DeleteMetafieldDefinitionGlobalController";
+import type { SubmitBugReportController } from "./support/SubmitBugReportController";
 
 type Handler<T> = T extends {
     handle: (...args: infer P) => Promise<infer R>;
@@ -112,6 +114,7 @@ export interface ControllerInstanceMap {
         saveChapterContent: SaveChapterContentController;
         saveCharacterInfo: SaveCharacterInfoController;
         saveLocationInfo: SaveLocationInfoController;
+        reorderLocationChildren: ReorderLocationChildrenController;
         saveManuscriptStructure: SaveManuscriptStructureController;
         saveOrganizationInfo: SaveOrganizationInfoController;
         saveProjectSettings: SaveProjectSettingsController;
@@ -148,6 +151,9 @@ export interface ControllerInstanceMap {
         saveMetafieldValue: SaveMetafieldValueController;
         removeMetafieldFromEntity: RemoveMetafieldFromEntityController;
         deleteMetafieldDefinitionGlobal: DeleteMetafieldDefinitionGlobalController;
+    };
+    support: {
+        submitBugReport: SubmitBugReportController;
     };
     world: {
         createCharacter: CreateCharacterController;
@@ -223,6 +229,7 @@ export const controllerChannels: ControllerChannelMap = {
         saveChapterContent: "logistics:saveChapterContent",
         saveCharacterInfo: "logistics:saveCharacterInfo",
         saveLocationInfo: "logistics:saveLocationInfo",
+        reorderLocationChildren: "logistics:reorderLocationChildren",
         saveManuscriptStructure: "logistics:saveManuscriptStructure",
         saveOrganizationInfo: "logistics:saveOrganizationInfo",
         saveProjectSettings: "logistics:saveProjectSettings",
@@ -261,6 +268,9 @@ export const controllerChannels: ControllerChannelMap = {
         removeMetafieldFromEntity: "metafield:removeMetafieldFromEntity",
         deleteMetafieldDefinitionGlobal:
             "metafield:deleteMetafieldDefinitionGlobal",
+    },
+    support: {
+        submitBugReport: "support:submitBugReport",
     },
     world: {
         createCharacter: "world:createCharacter",

@@ -13,6 +13,7 @@ type FileSystemLocation = {
     bgmId: string | null;
     playlistId: string | null;
     galleryImageIds: string[];
+    sublocationIds: string[];
     characterIds: string[];
     organizationIds: string[];
 };
@@ -51,6 +52,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
             bgmId: location.bgmId,
             playlistId: location.playlistId,
             galleryImageIds: location.galleryImageIds,
+            sublocationIds: location.sublocationIds,
             characterIds: location.characterIds,
             organizationIds: location.organizationIds,
         };
@@ -114,6 +116,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
                 bgmId: location.bgmId,
                 playlistId: location.playlistId,
                 galleryImageIds: location.galleryImageIds,
+                sublocationIds: location.sublocationIds,
                 characterIds: location.characterIds,
                 organizationIds: location.organizationIds,
             };
@@ -190,6 +193,7 @@ export class FileSystemLocationRepository implements ILocationRepository {
             dto.bgmId,
             dto.playlistId,
             dto.galleryImageIds,
+            dto.sublocationIds ?? [],
             dto.characterIds,
             dto.organizationIds,
         );

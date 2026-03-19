@@ -55,6 +55,53 @@ export type Database = {
           },
         ]
       }
+      bug_reports: {
+        Row: {
+          app_version: string | null
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          failure_fingerprint: string
+          id: string
+          note: string | null
+          payload: Json
+          project_id: string | null
+          user_id: string
+        }
+        Insert: {
+          app_version?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          failure_fingerprint: string
+          id?: string
+          note?: string | null
+          payload?: Json
+          project_id?: string | null
+          user_id: string
+        }
+        Update: {
+          app_version?: string | null
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          failure_fingerprint?: string
+          id?: string
+          note?: string | null
+          payload?: Json
+          project_id?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bug_reports_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       chapters: {
         Row: {
           content: Json | null

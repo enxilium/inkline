@@ -14,7 +14,8 @@ export class SupabaseDeletionLogRepository {
         entityId: string,
         entityType: string,
         projectId: string,
-        userId: string
+        userId: string,
+        deletedAt?: string,
     ): Promise<void> {
         const client = SupabaseService.getClient();
         const { error } = await client.from("deletion_logs").insert({
@@ -22,13 +23,13 @@ export class SupabaseDeletionLogRepository {
             entity_type: entityType,
             project_id: projectId,
             user_id: userId,
-            deleted_at: new Date().toISOString(),
+            deleted_at: deletedAt ?? new Date().toISOString(),
         });
 
         if (error) {
-            console.error("Failed to create remote deletion log", error);
-            // We don't throw here because the actual deletion might have succeeded,
-            // and failing here would be annoying. But ideally we want this to succeed.
+            throw new Error(
+                `Failed to create remote deletion log: ${error.message}`,
+            );
         }
     }
 
@@ -65,11 +66,11 @@ export class SupabaseDeletionLogRepository {
      */
     async cleanupOldEntries(
         userId: string,
-        olderThanDays = 30
+        olderThanDays = 30,
     ): Promise<number> {
         const client = SupabaseService.getClient();
         const cutoffDate = new Date(
-            Date.now() - olderThanDays * 24 * 60 * 60 * 1000
+            Date.now() - olderThanDays * 24 * 60 * 60 * 1000,
         ).toISOString();
 
         const { data, error } = await client

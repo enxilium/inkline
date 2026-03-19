@@ -82,6 +82,15 @@ export const ConnectedLocationEditor: React.FC<
         [locations, locationId],
     );
 
+    const parentLocationId = React.useMemo(() => {
+        for (const candidate of locations) {
+            if (candidate.sublocationIds.includes(locationId)) {
+                return candidate.id;
+            }
+        }
+
+        return null;
+    }, [locations, locationId]);
     const resolveStoredImageUrls = React.useCallback(
         (galleryIds: string[]): string[] =>
             galleryIds
@@ -130,6 +139,7 @@ export const ConnectedLocationEditor: React.FC<
 
             const payload = {
                 name: values.name,
+                parentLocationId: values.parentLocationId || null,
                 description: values.description,
             };
 
@@ -141,9 +151,11 @@ export const ConnectedLocationEditor: React.FC<
 
             try {
                 await saveLocationInfo({
+                    projectId,
                     locationId: location.id,
                     payload,
                 });
+
                 setAutosaveStatus("saved");
                 setTimeout(() => {
                     setAutosaveStatus((prev) =>
@@ -159,6 +171,7 @@ export const ConnectedLocationEditor: React.FC<
         },
         [
             location,
+            parentLocationId,
             projectId,
             updateLocationLocally,
             saveLocationInfo,
@@ -542,6 +555,7 @@ export const ConnectedLocationEditor: React.FC<
         <LocationEditor
             projectId={projectId}
             location={location}
+            currentParentLocationId={parentLocationId}
             allCharacters={characters}
             allLocations={locations}
             allOrganizations={organizations}

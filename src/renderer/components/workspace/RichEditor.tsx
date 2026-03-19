@@ -13,8 +13,8 @@ import {
 import {
     SortableContext,
     arrayMove,
+    rectSortingStrategy,
     useSortable,
-    verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 
@@ -26,11 +26,21 @@ import type {
     WorkspaceOrganization,
 } from "../../types";
 import { ActionDropdown } from "../ui/ActionDropdown";
+import { Button } from "../ui/Button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "../ui/Dialog";
 import {
     ChevronLeftIcon,
     ChevronRightIcon,
     GripVerticalIcon,
 } from "../ui/Icons";
+import { Input } from "../ui/Input";
+import { Label } from "../ui/Label";
 import { RichTextAreaInput } from "../ui/RichTextAreaInput";
 import type { DocumentRef } from "../ui/ListInput";
 import { showToast } from "../ui/GenerationProgressToast";
@@ -406,6 +416,15 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     const [optimisticMetafields, setOptimisticMetafields] = React.useState<
         OptimisticMetafieldCard[]
     >([]);
+    const [pendingMetafieldDraft, setPendingMetafieldDraft] = React.useState<{
+        targetColumn: RichEditorColumnId;
+        kind: NewMetafieldKind;
+        name: string;
+    } | null>(null);
+    const [metafieldDraftError, setMetafieldDraftError] = React.useState<
+        string | null
+    >(null);
+    const [isCreatingMetafield, setIsCreatingMetafield] = React.useState(false);
     const [sectionPlacement, setSectionPlacement] =
         React.useState<RichEditorSectionPlacement>(() => {
             const defs = CORE_CARD_CONFIG;
@@ -859,22 +878,14 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     };
 
     const createMetafieldInColumn = React.useCallback(
-        async (targetColumn: RichEditorColumnId, kind: NewMetafieldKind) => {
-            const existingNames = new Set(
-                metafieldDefinitions
-                    .filter(
-                        (definition) =>
-                            definition.scope === entityType &&
-                            !definition.name.startsWith("_sys:"),
-                    )
-                    .map((definition) => definition.name.trim().toLowerCase()),
-            );
-
-            let candidateIndex = metafieldDefinitions.length + 1;
-            let candidateName = `Metafield ${candidateIndex}`;
-            while (existingNames.has(candidateName.toLowerCase())) {
-                candidateIndex += 1;
-                candidateName = `Metafield ${candidateIndex}`;
+        async (
+            targetColumn: RichEditorColumnId,
+            kind: NewMetafieldKind,
+            name: string,
+        ): Promise<boolean> => {
+            const candidateName = name.trim();
+            if (!candidateName) {
+                return false;
             }
 
             const tempAssignmentId = createOptimisticCardId();
@@ -994,6 +1005,7 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                         targetColumn,
                     },
                 });
+                return true;
             } catch (createError) {
                 setOptimisticMetafields((current) =>
                     current.filter(
@@ -1018,6 +1030,7 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                     description: message,
                     durationMs: 6000,
                 });
+                return false;
             }
         },
         [
@@ -1029,33 +1042,113 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             onCreateOrReuseMetafieldDefinition,
             onSaveMetafieldValue,
             onSectionLayoutSync,
-            projectId,
             toFriendlyError,
+            projectId,
         ],
     );
+
+    const getSuggestedMetafieldName = React.useCallback((): string => {
+        const existingNames = new Set(
+            metafieldDefinitions
+                .filter(
+                    (definition) =>
+                        definition.scope === entityType &&
+                        !definition.name.startsWith("_sys:"),
+                )
+                .map((definition) => definition.name.trim().toLowerCase()),
+        );
+
+        optimisticMetafields.forEach((card) => {
+            existingNames.add(card.name.trim().toLowerCase());
+        });
+
+        let candidateIndex = Math.max(1, existingNames.size + 1);
+        let candidateName = `Metafield ${candidateIndex}`;
+        while (existingNames.has(candidateName.toLowerCase())) {
+            candidateIndex += 1;
+            candidateName = `Metafield ${candidateIndex}`;
+        }
+
+        return candidateName;
+    }, [entityType, metafieldDefinitions, optimisticMetafields]);
+
+    const openMetafieldNameDialog = React.useCallback(
+        (targetColumn: RichEditorColumnId, kind: NewMetafieldKind): void => {
+            setMetafieldDraftError(null);
+            setPendingMetafieldDraft({
+                targetColumn,
+                kind,
+                name: getSuggestedMetafieldName(),
+            });
+        },
+        [getSuggestedMetafieldName],
+    );
+
+    const closeMetafieldNameDialog = React.useCallback((): void => {
+        if (isCreatingMetafield) {
+            return;
+        }
+
+        setPendingMetafieldDraft(null);
+        setMetafieldDraftError(null);
+    }, [isCreatingMetafield]);
+
+    const confirmMetafieldCreation =
+        React.useCallback(async (): Promise<void> => {
+            if (!pendingMetafieldDraft || isCreatingMetafield) {
+                return;
+            }
+
+            const name = pendingMetafieldDraft.name.trim();
+            if (!name) {
+                setMetafieldDraftError("Metafield name is required.");
+                return;
+            }
+
+            setIsCreatingMetafield(true);
+            setMetafieldDraftError(null);
+
+            try {
+                const created = await createMetafieldInColumn(
+                    pendingMetafieldDraft.targetColumn,
+                    pendingMetafieldDraft.kind,
+                    name,
+                );
+
+                if (created) {
+                    setPendingMetafieldDraft(null);
+                }
+            } finally {
+                setIsCreatingMetafield(false);
+            }
+        }, [
+            createMetafieldInColumn,
+            isCreatingMetafield,
+            pendingMetafieldDraft,
+        ]);
 
     const buildAddSectionOptions = React.useCallback(
         (targetColumn: RichEditorColumnId) => [
             {
                 label: "Add Field Metafield",
                 onClick: () => {
-                    void createMetafieldInColumn(targetColumn, "field");
+                    openMetafieldNameDialog(targetColumn, "field");
                 },
             },
             {
                 label: "Add Paragraph Metafield",
                 onClick: () => {
-                    void createMetafieldInColumn(targetColumn, "paragraph");
+                    openMetafieldNameDialog(targetColumn, "paragraph");
                 },
             },
             {
                 label: "Add Select Metafield",
                 onClick: () => {
-                    void createMetafieldInColumn(targetColumn, "select");
+                    openMetafieldNameDialog(targetColumn, "select");
                 },
             },
         ],
-        [createMetafieldInColumn],
+        [openMetafieldNameDialog],
     );
 
     const handleSectionDragStart = React.useCallback(
@@ -1661,7 +1754,7 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                             >
                                 <SortableContext
                                     items={sectionPlacement.left}
-                                    strategy={verticalListSortingStrategy}
+                                    strategy={rectSortingStrategy}
                                 >
                                     <div className="entity-column entity-column--sortable">
                                         {sectionPlacement.left.map(
@@ -1684,7 +1777,7 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                             >
                                 <SortableContext
                                     items={sectionPlacement.right}
-                                    strategy={verticalListSortingStrategy}
+                                    strategy={rectSortingStrategy}
                                 >
                                     <div className="entity-column entity-column--sortable">
                                         {sectionPlacement.right.map(
@@ -1706,6 +1799,85 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                     <span className="card-hint is-error">{error}</span>
                 ) : null}
             </form>
+            <Dialog
+                open={Boolean(pendingMetafieldDraft)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        closeMetafieldNameDialog();
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Create Metafield</DialogTitle>
+                        <DialogDescription>
+                            Choose a name for the new metafield.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="dialog-form">
+                        <div className="dialog-field">
+                            <Label htmlFor="metafield-name">Name</Label>
+                            <Input
+                                id="metafield-name"
+                                autoFocus
+                                value={pendingMetafieldDraft?.name ?? ""}
+                                onChange={(event) => {
+                                    const nextName = event.target.value;
+                                    setPendingMetafieldDraft((current) =>
+                                        current
+                                            ? {
+                                                  ...current,
+                                                  name: nextName,
+                                              }
+                                            : current,
+                                    );
+                                    if (metafieldDraftError) {
+                                        setMetafieldDraftError(null);
+                                    }
+                                }}
+                                onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        void confirmMetafieldCreation();
+                                    }
+                                }}
+                                placeholder="Metafield name"
+                                disabled={isCreatingMetafield}
+                            />
+                        </div>
+                        {metafieldDraftError ? (
+                            <span className="card-hint is-error">
+                                {metafieldDraftError}
+                            </span>
+                        ) : null}
+                        <div className="dialog-actions">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={closeMetafieldNameDialog}
+                                disabled={isCreatingMetafield}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                onClick={() => {
+                                    void confirmMetafieldCreation();
+                                }}
+                                disabled={
+                                    isCreatingMetafield ||
+                                    !(pendingMetafieldDraft?.name ?? "").trim()
+                                }
+                            >
+                                {isCreatingMetafield
+                                    ? "Creating..."
+                                    : "Create Metafield"}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

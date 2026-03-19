@@ -5,6 +5,7 @@ import { FileSystemCharacterRepository } from "../filesystem/FileSystemCharacter
 import { SupabaseService } from "../SupabaseService";
 
 import { deletionLog } from "./DeletionLog";
+import { pendingUpdates } from "./PendingUpdates";
 
 /**
  * Offline-first character repository that uses local filesystem as primary storage
@@ -13,7 +14,7 @@ import { deletionLog } from "./DeletionLog";
 export class OfflineFirstCharacterRepository implements ICharacterRepository {
     constructor(
         private supabaseRepo: SupabaseCharacterRepository,
-        private fsRepo: FileSystemCharacterRepository
+        private fsRepo: FileSystemCharacterRepository,
     ) {}
 
     async create(projectId: string, character: Character): Promise<void> {
@@ -21,9 +22,21 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
         try {
             await this.supabaseRepo.create(projectId, character);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "character",
+                entityId: character.id,
+                projectId,
+                operation: "create",
+                payload: character,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to create character in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -79,9 +92,22 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
         try {
             await this.supabaseRepo.update(character);
         } catch (error) {
+            const projectId = (await this.getProjectId(character.id)) || "";
+            await pendingUpdates.add({
+                entityType: "character",
+                entityId: character.id,
+                projectId,
+                operation: "update",
+                payload: character,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to update character in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -103,7 +129,7 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete character in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -133,13 +159,13 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete characters in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
 
     async getCharacterProfiles(
-        projectId: string
+        projectId: string,
     ): Promise<{ name: string; description: string }[]> {
         // Use local for speed since we sync on load
         return this.fsRepo.getCharacterProfiles(projectId);
@@ -154,7 +180,7 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
      */
     private pickMostRecent(
         local: Character | null,
-        remote: Character | null
+        remote: Character | null,
     ): Character | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
@@ -167,7 +193,7 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
      */
     private mergeByMostRecent(
         local: Character[],
-        remote: Character[]
+        remote: Character[],
     ): Character[] {
         const map = new Map<string, Character>();
 
@@ -193,7 +219,7 @@ export class OfflineFirstCharacterRepository implements ICharacterRepository {
     }
 
     private async getRemoteProjectId(
-        characterId: string
+        characterId: string,
     ): Promise<string | null> {
         try {
             const client = SupabaseService.getClient();

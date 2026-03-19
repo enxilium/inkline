@@ -7,6 +7,7 @@ import { normalizeMetafieldName } from "../../../@core/application/utils/normali
 import { SupabaseMetafieldDefinitionRepository } from "../SupabaseMetafieldDefinitionRepository";
 import { FileSystemMetafieldDefinitionRepository } from "../filesystem/FileSystemMetafieldDefinitionRepository";
 import { deletionLog } from "./DeletionLog";
+import { pendingUpdates } from "./PendingUpdates";
 
 export class OfflineFirstMetafieldDefinitionRepository implements IMetafieldDefinitionRepository {
     constructor(
@@ -19,6 +20,18 @@ export class OfflineFirstMetafieldDefinitionRepository implements IMetafieldDefi
         try {
             await this.supabaseRepo.create(definition);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "metafieldDefinition",
+                entityId: definition.id,
+                projectId: definition.projectId,
+                operation: "create",
+                payload: definition,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to create metafield definition in Supabase (Offline?)",
                 error,
@@ -95,6 +108,18 @@ export class OfflineFirstMetafieldDefinitionRepository implements IMetafieldDefi
         try {
             await this.supabaseRepo.update(definition);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "metafieldDefinition",
+                entityId: definition.id,
+                projectId: definition.projectId,
+                operation: "update",
+                payload: definition,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to update metafield definition in Supabase (Offline?)",
                 error,

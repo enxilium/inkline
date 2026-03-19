@@ -16,11 +16,13 @@ import {
     SYNC_CONFLICT_CHANNEL,
     SYNC_ENTITY_UPDATED_CHANNEL,
     SYNC_ENTITY_DELETED_CHANNEL,
+    SYNC_TERMINAL_FAILURE_CHANNEL,
     type SyncStatePayload,
     type RemoteChangePayload,
     type ConflictPayload,
     type EntityUpdatedPayload,
     type EntityDeletedPayload,
+    type SyncTerminalFailurePayload,
     type EntityType as SyncEntityType,
 } from "../controllers/sync/SyncStateGateway";
 
@@ -119,6 +121,9 @@ type RemoteChangeListener = (payload: RemoteChangePayload) => void;
 type ConflictListener = (payload: ConflictPayload) => void;
 type EntityUpdatedListener = (payload: EntityUpdatedPayload) => void;
 type EntityDeletedListener = (payload: EntityDeletedPayload) => void;
+type SyncTerminalFailureListener = (
+    payload: SyncTerminalFailurePayload,
+) => void;
 
 const createSyncEvents = () => {
     const onStateChanged = (listener: SyncStateListener) => {
@@ -180,6 +185,18 @@ const createSyncEvents = () => {
             ipcRenderer.removeListener(SYNC_ENTITY_DELETED_CHANNEL, handler);
     };
 
+    const onTerminalFailure = (listener: SyncTerminalFailureListener) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            payload: SyncTerminalFailurePayload,
+        ) => {
+            listener(payload);
+        };
+        ipcRenderer.on(SYNC_TERMINAL_FAILURE_CHANNEL, handler);
+        return () =>
+            ipcRenderer.removeListener(SYNC_TERMINAL_FAILURE_CHANNEL, handler);
+    };
+
     const resolveConflict = (
         entityType: SyncEntityType,
         entityId: string,
@@ -201,6 +218,7 @@ const createSyncEvents = () => {
         onConflict,
         onEntityUpdated,
         onEntityDeleted,
+        onTerminalFailure,
         resolveConflict,
     };
 };

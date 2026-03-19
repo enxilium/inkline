@@ -7,6 +7,7 @@ import type {
     ConflictPayload,
     EntityUpdatedPayload,
     EntityDeletedPayload,
+    SyncTerminalFailurePayload,
     EntityType as SyncEntityType,
 } from "../../@interface-adapters/controllers/sync/SyncStateGateway";
 
@@ -72,6 +73,9 @@ declare global {
             ): () => IpcRenderer;
             onEntityDeleted(
                 listener: (payload: EntityDeletedPayload) => void,
+            ): () => IpcRenderer;
+            onTerminalFailure(
+                listener: (payload: SyncTerminalFailurePayload) => void,
             ): () => IpcRenderer;
             resolveConflict: (
                 entityType: SyncEntityType,

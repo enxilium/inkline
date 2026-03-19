@@ -5,6 +5,7 @@ import { FileSystemScrapNoteRepository } from "../filesystem/FileSystemScrapNote
 import { SupabaseService } from "../SupabaseService";
 
 import { deletionLog } from "./DeletionLog";
+import { pendingUpdates } from "./PendingUpdates";
 
 /**
  * Offline-first scrap note repository that uses local filesystem as primary storage
@@ -13,7 +14,7 @@ import { deletionLog } from "./DeletionLog";
 export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
     constructor(
         private supabaseRepo: SupabaseScrapNoteRepository,
-        private fsRepo: FileSystemScrapNoteRepository
+        private fsRepo: FileSystemScrapNoteRepository,
     ) {}
 
     async create(projectId: string, note: ScrapNote): Promise<void> {
@@ -21,9 +22,21 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         try {
             await this.supabaseRepo.create(projectId, note);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "scrapNote",
+                entityId: note.id,
+                projectId,
+                operation: "create",
+                payload: note,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to create scrap note in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -77,7 +90,7 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
     async updateContent(
         noteId: string,
         content: string,
-        updatedAt?: Date
+        updatedAt?: Date,
     ): Promise<void> {
         // Check if content actually changed to avoid phantom updates
         const current = await this.fsRepo.findById(noteId);
@@ -93,13 +106,29 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
                 await this.supabaseRepo.updateContent(
                     noteId,
                     content,
-                    timestamp
+                    timestamp,
                 );
             }
         } catch (error) {
+            const projectId = (await this.getProjectId(noteId)) || "";
+            await pendingUpdates.add({
+                entityType: "scrapNote",
+                entityId: noteId,
+                projectId,
+                operation: "updateContent",
+                payload: {
+                    content,
+                    updatedAt: timestamp.toISOString(),
+                },
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to update scrap note content in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -109,9 +138,22 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         try {
             await this.supabaseRepo.update(note);
         } catch (error) {
+            const projectId = (await this.getProjectId(note.id)) || "";
+            await pendingUpdates.add({
+                entityType: "scrapNote",
+                entityId: note.id,
+                projectId,
+                operation: "update",
+                payload: note,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to update scrap note in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -133,7 +175,7 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete scrap note in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -163,7 +205,7 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete scrap notes in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -177,7 +219,7 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
      */
     private pickMostRecent(
         local: ScrapNote | null,
-        remote: ScrapNote | null
+        remote: ScrapNote | null,
     ): ScrapNote | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
@@ -190,7 +232,7 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
      */
     private mergeByMostRecent(
         local: ScrapNote[],
-        remote: ScrapNote[]
+        remote: ScrapNote[],
     ): ScrapNote[] {
         const map = new Map<string, ScrapNote>();
 

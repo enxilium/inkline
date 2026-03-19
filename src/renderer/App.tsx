@@ -267,6 +267,35 @@ const App: React.FC = () => {
         };
     }, []);
 
+    React.useEffect(() => {
+        const healStuckPointerLock = () => {
+            const hasDialogOverlay =
+                document.querySelector(".dialog-overlay") !== null;
+            if (
+                !hasDialogOverlay &&
+                document.body.style.pointerEvents === "none"
+            ) {
+                document.body.style.pointerEvents = "";
+            }
+        };
+
+        const scheduleHeal = () => {
+            window.requestAnimationFrame(healStuckPointerLock);
+        };
+
+        window.addEventListener("focus", scheduleHeal);
+        window.addEventListener("mouseup", scheduleHeal);
+        document.addEventListener("visibilitychange", scheduleHeal);
+
+        scheduleHeal();
+
+        return () => {
+            window.removeEventListener("focus", scheduleHeal);
+            window.removeEventListener("mouseup", scheduleHeal);
+            document.removeEventListener("visibilitychange", scheduleHeal);
+        };
+    }, []);
+
     const handleAuthSubmit = React.useCallback(
         (event: React.FormEvent<HTMLFormElement>) => {
             event.preventDefault();
@@ -409,7 +438,14 @@ const App: React.FC = () => {
                 );
             case "auth":
                 return (
-                    <div style={{ display: "flex", justifyContent: "center", alignItems: "center", height: "100%" }}>
+                    <div
+                        style={{
+                            display: "flex",
+                            justifyContent: "center",
+                            alignItems: "center",
+                            height: "100%",
+                        }}
+                    >
                         <AuthView
                             mode={authMode}
                             form={authForm}

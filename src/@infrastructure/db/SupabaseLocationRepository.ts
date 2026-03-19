@@ -1,6 +1,7 @@
 import { Location } from "../../@core/domain/entities/story/world/Location";
 import { ILocationRepository } from "../../@core/domain/repositories/ILocationRepository";
 import { SupabaseService } from "./SupabaseService";
+
 import {
     LocationDbInsert,
     LocationDbRow,
@@ -18,6 +19,7 @@ const mapRowToLocation = (row: LocationDbRow): Location =>
         row.bgm_id,
         row.playlist_id,
         asStringArray(row.gallery_image_ids),
+        asStringArray(row.sublocation_ids),
         asStringArray(row.character_ids),
         asStringArray(row.organization_ids),
     );
@@ -33,6 +35,7 @@ export class SupabaseLocationRepository implements ILocationRepository {
             bgm_id: location.bgmId,
             playlist_id: location.playlistId,
             gallery_image_ids: location.galleryImageIds,
+            sublocation_ids: location.sublocationIds,
             character_ids: location.characterIds,
             organization_ids: location.organizationIds,
             created_at: location.createdAt.toISOString(),
@@ -79,6 +82,7 @@ export class SupabaseLocationRepository implements ILocationRepository {
             bgm_id: location.bgmId,
             playlist_id: location.playlistId,
             gallery_image_ids: location.galleryImageIds,
+            sublocation_ids: location.sublocationIds,
             character_ids: location.characterIds,
             organization_ids: location.organizationIds,
             updated_at: location.updatedAt.toISOString(),

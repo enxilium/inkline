@@ -30,6 +30,7 @@ import { SaveChapterContent } from "../@core/application/use-cases/logistics/Sav
 import { SaveCharacterInfo } from "../@core/application/use-cases/logistics/SaveCharacterInfo";
 import { SaveLocationInfo } from "../@core/application/use-cases/logistics/SaveLocationInfo";
 import { SaveManuscriptStructure } from "../@core/application/use-cases/logistics/SaveManuscriptStructure";
+import { ReorderLocationChildren } from "../@core/application/use-cases/logistics/ReorderLocationChildren";
 import { SaveOrganizationInfo } from "../@core/application/use-cases/logistics/SaveOrganizationInfo";
 import { SaveProjectSettings } from "../@core/application/use-cases/logistics/SaveProjectSettings";
 import { SaveUserSettings } from "../@core/application/use-cases/logistics/SaveUserSettings";
@@ -73,6 +74,7 @@ import { AssignMetafieldToEntity } from "../@core/application/use-cases/metafiel
 import { SaveMetafieldValue } from "../@core/application/use-cases/metafield/SaveMetafieldValue";
 import { RemoveMetafieldFromEntity } from "../@core/application/use-cases/metafield/RemoveMetafieldFromEntity";
 import { DeleteMetafieldDefinitionGlobal } from "../@core/application/use-cases/metafield/DeleteMetafieldDefinitionGlobal";
+import { SubmitBugReport } from "../@core/application/use-cases/support/SubmitBugReport";
 import { LoadChatHistoryController } from "../@interface-adapters/controllers/analysis/LoadChatHistoryController";
 import { LoadChatMessagesController } from "../@interface-adapters/controllers/analysis/LoadChatMessagesController";
 import { AnalyzeTextController } from "../@interface-adapters/controllers/analysis/AnalyzeTextController";
@@ -101,6 +103,7 @@ import { SaveChapterContentController } from "../@interface-adapters/controllers
 import { SaveCharacterInfoController } from "../@interface-adapters/controllers/logistics/SaveCharacterInfoController";
 import { SaveLocationInfoController } from "../@interface-adapters/controllers/logistics/SaveLocationInfoController";
 import { SaveManuscriptStructureController } from "../@interface-adapters/controllers/logistics/SaveManuscriptStructureController";
+import { ReorderLocationChildrenController } from "../@interface-adapters/controllers/logistics/ReorderLocationChildrenController";
 import { SaveOrganizationInfoController } from "../@interface-adapters/controllers/logistics/SaveOrganizationInfoController";
 import { SaveProjectSettingsController } from "../@interface-adapters/controllers/logistics/SaveProjectSettingsController";
 import { SaveUserSettingsController } from "../@interface-adapters/controllers/logistics/SaveUserSettingsController";
@@ -143,6 +146,7 @@ import { AssignMetafieldToEntityController } from "../@interface-adapters/contro
 import { SaveMetafieldValueController } from "../@interface-adapters/controllers/metafield/SaveMetafieldValueController";
 import { RemoveMetafieldFromEntityController } from "../@interface-adapters/controllers/metafield/RemoveMetafieldFromEntityController";
 import { DeleteMetafieldDefinitionGlobalController } from "../@interface-adapters/controllers/metafield/DeleteMetafieldDefinitionGlobalController";
+import { SubmitBugReportController } from "../@interface-adapters/controllers/support/SubmitBugReportController";
 import type { IAssetRepository } from "../@core/domain/repositories/IAssetRepository";
 import type { IChapterRepository } from "../@core/domain/repositories/IChapterRepository";
 import type { ICharacterRepository } from "../@core/domain/repositories/ICharacterRepository";
@@ -156,6 +160,7 @@ import type { IScrapNoteRepository } from "../@core/domain/repositories/IScrapNo
 import type { IUserRepository } from "../@core/domain/repositories/IUserRepository";
 import type { IMetafieldDefinitionRepository } from "../@core/domain/repositories/IMetafieldDefinitionRepository";
 import type { IMetafieldAssignmentRepository } from "../@core/domain/repositories/IMetafieldAssignmentRepository";
+import type { IBugReportRepository } from "../@core/domain/repositories/IBugReportRepository";
 import type { IAITextService } from "../@core/domain/services/IAITextService";
 import type { ICreativeAssetGenerationService } from "../@core/domain/services/ICreativeAssetGenerationService";
 import type { IAuthService } from "../@core/domain/services/IAuthService";
@@ -182,6 +187,7 @@ export type RepositoryDependencies = {
     event: IEventRepository;
     metafieldDefinition: IMetafieldDefinitionRepository;
     metafieldAssignment: IMetafieldAssignmentRepository;
+    bugReport: IBugReportRepository;
 };
 
 export type ServiceDependencies = {
@@ -234,6 +240,9 @@ type UseCaseMap = {
         removeMetafieldFromEntity: RemoveMetafieldFromEntity;
         deleteMetafieldDefinitionGlobal: DeleteMetafieldDefinitionGlobal;
     };
+    support: {
+        submitBugReport: SubmitBugReport;
+    };
     generation: {
         generateCharacterImage: GenerateCharacterImage;
         generateCharacterPlaylist: GenerateCharacterPlaylist;
@@ -249,6 +258,7 @@ type UseCaseMap = {
         saveChapterContent: SaveChapterContent;
         saveCharacterInfo: SaveCharacterInfo;
         saveLocationInfo: SaveLocationInfo;
+        reorderLocationChildren: ReorderLocationChildren;
         saveManuscriptStructure: SaveManuscriptStructure;
         saveOrganizationInfo: SaveOrganizationInfo;
         saveProjectSettings: SaveProjectSettings;
@@ -337,7 +347,7 @@ export class AppBuilder {
             if (user) {
                 this.dependencies.syncService.startAutoSync(user.id);
             } else {
-                this.dependencies.syncService.stopAutoSync();
+                this.dependencies.syncService.stopAutoSync("logout");
             }
         });
 
@@ -471,6 +481,9 @@ export class AppBuilder {
                         repo.metafieldAssignment,
                     ),
             },
+            support: {
+                submitBugReport: new SubmitBugReport(repo.bugReport),
+            },
             generation: {
                 generateCharacterImage: new GenerateCharacterImage(
                     repo.character,
@@ -534,7 +547,14 @@ export class AppBuilder {
                     repo.location,
                     repo.organization,
                 ),
-                saveLocationInfo: new SaveLocationInfo(repo.location),
+                saveLocationInfo: new SaveLocationInfo(
+                    repo.location,
+                    repo.project,
+                ),
+                reorderLocationChildren: new ReorderLocationChildren(
+                    repo.location,
+                    repo.project,
+                ),
                 saveManuscriptStructure: new SaveManuscriptStructure(
                     repo.project,
                     repo.chapter,
@@ -762,6 +782,11 @@ export class AppBuilder {
                         useCases.metafield.deleteMetafieldDefinitionGlobal,
                     ),
             },
+            support: {
+                submitBugReport: new SubmitBugReportController(
+                    useCases.support.submitBugReport,
+                ),
+            },
             generation: {
                 generateCharacterImage: new GenerateCharacterImageController(
                     useCases.generation.generateCharacterImage,
@@ -805,6 +830,9 @@ export class AppBuilder {
                 ),
                 saveLocationInfo: new SaveLocationInfoController(
                     useCases.logistics.saveLocationInfo,
+                ),
+                reorderLocationChildren: new ReorderLocationChildrenController(
+                    useCases.logistics.reorderLocationChildren,
                 ),
                 saveManuscriptStructure: new SaveManuscriptStructureController(
                     useCases.logistics.saveManuscriptStructure,

@@ -8,15 +8,11 @@ import type {
     WorkspaceOrganization,
 } from "../../types";
 import { type DocumentRef } from "../ui/ListInput";
-import {
-    RichEditor,
-    type RichEditorCustomCard,
-    type RichEditorCardConfig,
-    type RichEditorRenderContext,
-} from "./RichEditor";
+import { RichEditor, type RichEditorCustomCard } from "./RichEditor";
 
 export type LocationEditorValues = {
     name: string;
+    parentLocationId: string;
     description: string;
 };
 
@@ -29,6 +25,7 @@ export type LocationEditorProps = {
     metafieldDefinitions: WorkspaceMetafieldDefinition[];
     metafieldAssignments: WorkspaceMetafieldAssignment[];
     imageOptions: { id: string; label: string }[];
+    currentParentLocationId: string | null;
     gallerySources: string[];
     songUrl?: string;
     availableDocuments?: DocumentRef[];
@@ -76,8 +73,12 @@ export type LocationEditorProps = {
     focusTitleOnMount?: boolean;
 };
 
-const defaultValues = (location: WorkspaceLocation): LocationEditorValues => ({
+const defaultValues = (
+    location: WorkspaceLocation,
+    currentParentLocationId: string | null,
+): LocationEditorValues => ({
     name: location.name ?? "",
+    parentLocationId: currentParentLocationId ?? "",
     description: location.description ?? "",
 });
 
@@ -90,6 +91,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     metafieldDefinitions,
     metafieldAssignments,
     imageOptions,
+    currentParentLocationId,
     gallerySources,
     songUrl,
     availableDocuments = [],
@@ -111,8 +113,8 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     focusTitleOnMount = false,
 }) => {
     const initialValues = React.useMemo(
-        () => defaultValues(location),
-        [location.name, location.description],
+        () => defaultValues(location, currentParentLocationId),
+        [location, currentParentLocationId],
     );
 
     const runtimeCharactersPresent = React.useMemo(
@@ -166,10 +168,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     );
 
     const renderDefaultCard = React.useCallback(
-        (
-            _card: RichEditorCardConfig,
-            _context: RichEditorRenderContext<LocationEditorValues>,
-        ): React.ReactNode => null,
+        (): React.ReactNode => null,
         [],
     );
 

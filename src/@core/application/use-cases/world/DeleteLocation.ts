@@ -39,14 +39,44 @@ export class DeleteLocation {
             throw new Error("Location not found for this project.");
         }
 
-        // 1. Detach from Project (Parent)
-        if (project.locationIds.includes(locationId)) {
-            project.locationIds = project.locationIds.filter(
-                (id) => id !== locationId,
+        const projectLocations =
+            await this.locationRepository.findByProjectId(projectId);
+        const locationsById = new Map(
+            projectLocations.map((entry) => [entry.id, entry]),
+        );
+
+        const subtreeIds = this.collectSubtreeIds(locationId, locationsById);
+        const subtreeIdSet = new Set(subtreeIds);
+
+        // Detach subtree from root list.
+        project.locationIds = project.locationIds.filter(
+            (id) => !subtreeIdSet.has(id),
+        );
+
+        // Detach subtree from all parent location references.
+        const parentUpdates: Promise<void>[] = [];
+        for (const existingLocation of projectLocations) {
+            if (subtreeIdSet.has(existingLocation.id)) {
+                continue;
+            }
+
+            const nextChildren = existingLocation.sublocationIds.filter(
+                (childId) => !subtreeIdSet.has(childId),
             );
-            project.updatedAt = new Date();
-            await this.projectRepository.update(project);
+            if (
+                nextChildren.length !== existingLocation.sublocationIds.length
+            ) {
+                existingLocation.sublocationIds = nextChildren;
+                existingLocation.updatedAt = new Date();
+                parentUpdates.push(
+                    this.locationRepository.update(existingLocation),
+                );
+            }
         }
+        await Promise.all(parentUpdates);
+
+        project.updatedAt = new Date();
+        await this.projectRepository.update(project);
 
         const characters =
             await this.characterRepository.findByProjectId(projectId);
@@ -55,14 +85,22 @@ export class DeleteLocation {
         const characterUpdates = characters
             .filter(
                 (character) =>
-                    character.currentLocationId === locationId ||
-                    character.backgroundLocationId === locationId,
+                    (character.currentLocationId !== null &&
+                        subtreeIdSet.has(character.currentLocationId)) ||
+                    (character.backgroundLocationId !== null &&
+                        subtreeIdSet.has(character.backgroundLocationId)),
             )
             .map((character) => {
-                if (character.currentLocationId === locationId) {
+                if (
+                    character.currentLocationId &&
+                    subtreeIdSet.has(character.currentLocationId)
+                ) {
                     character.currentLocationId = null;
                 }
-                if (character.backgroundLocationId === locationId) {
+                if (
+                    character.backgroundLocationId &&
+                    subtreeIdSet.has(character.backgroundLocationId)
+                ) {
                     character.backgroundLocationId = null;
                 }
                 character.updatedAt = new Date();
@@ -72,21 +110,64 @@ export class DeleteLocation {
 
         // 3. Detach from Organizations (Dependents)
         const organizations =
-            await this.organizationRepository.findByLocationId(locationId);
+            await this.organizationRepository.findByProjectId(projectId);
         const organizationUpdates = organizations.map((organization) => {
-            organization.locationIds = organization.locationIds.filter(
+            const nextLocationIds = organization.locationIds.filter(
                 (id) => id !== locationId,
             );
+            const filteredLocationIds = nextLocationIds.filter(
+                (id) => !subtreeIdSet.has(id),
+            );
+            if (
+                filteredLocationIds.length === organization.locationIds.length
+            ) {
+                return null;
+            }
+            organization.locationIds = filteredLocationIds;
             organization.updatedAt = new Date();
             return this.organizationRepository.update(organization);
         });
-        await Promise.all(organizationUpdates);
+        await Promise.all(
+            organizationUpdates.filter(
+                (update): update is Promise<void> => update !== null,
+            ),
+        );
 
-        // 4. Delete Assets (Children)
-        await this.deleteLocationAssets(location);
+        // 4. Delete Assets + Locations (subtree)
+        for (const subtreeLocationId of subtreeIds) {
+            const subtreeLocation = locationsById.get(subtreeLocationId);
+            if (!subtreeLocation) {
+                continue;
+            }
+            await this.deleteLocationAssets(subtreeLocation);
+            await this.locationRepository.delete(subtreeLocationId);
+        }
+    }
 
-        // 5. Delete Location (Self)
-        await this.locationRepository.delete(locationId);
+    private collectSubtreeIds(
+        rootLocationId: string,
+        locationsById: Map<string, Location>,
+    ): string[] {
+        const collected: string[] = [];
+        const visited = new Set<string>();
+
+        const visit = (locationId: string) => {
+            if (visited.has(locationId)) {
+                return;
+            }
+
+            visited.add(locationId);
+            const location = locationsById.get(locationId);
+            if (!location) {
+                return;
+            }
+
+            location.sublocationIds.forEach((childId) => visit(childId));
+            collected.push(locationId);
+        };
+
+        visit(rootLocationId);
+        return collected;
     }
 
     private async deleteLocationAssets(location: Location): Promise<void> {

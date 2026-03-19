@@ -10,6 +10,7 @@ import * as path from "path";
 import * as fs from "fs/promises";
 
 import { deletionLog } from "./DeletionLog";
+import { pendingUpdates } from "./PendingUpdates";
 
 /**
  * Offline-first asset repository that uses local filesystem as primary storage
@@ -18,7 +19,7 @@ import { deletionLog } from "./DeletionLog";
 export class OfflineFirstAssetRepository implements IAssetRepository {
     constructor(
         private supabaseRepo: SupabaseAssetRepository,
-        private fsRepo: FileSystemAssetRepository
+        private fsRepo: FileSystemAssetRepository,
     ) {}
 
     // ========================================================================
@@ -30,6 +31,18 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         try {
             await this.supabaseRepo.saveImage(projectId, image);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "image",
+                entityId: image.id,
+                projectId,
+                operation: "save",
+                payload: image,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn("Failed to save image to Supabase (Offline?)", error);
         }
     }
@@ -107,7 +120,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete image in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -137,7 +150,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete images in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -151,6 +164,18 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         try {
             await this.supabaseRepo.saveBGM(projectId, bgm);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "bgm",
+                entityId: bgm.id,
+                projectId,
+                operation: "save",
+                payload: bgm,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn("Failed to save BGM in Supabase (Offline?)", error);
         }
     }
@@ -264,9 +289,21 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         try {
             await this.supabaseRepo.savePlaylist(projectId, playlist);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "playlist",
+                entityId: playlist.id,
+                projectId,
+                operation: "save",
+                payload: playlist,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to save Playlist in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -336,7 +373,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete Playlist in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -364,7 +401,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete Playlists in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -379,7 +416,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
      */
     private pickMostRecent<T extends { id: string; updatedAt: Date }>(
         local: T | null,
-        remote: T | null
+        remote: T | null,
     ): T | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
@@ -392,7 +429,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
      */
     private mergeByMostRecent<T extends { id: string; updatedAt: Date }>(
         local: T[],
-        remote: T[]
+        remote: T[],
     ): T[] {
         const map = new Map<string, T>();
 
@@ -438,7 +475,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
      * Get projectId by scanning for the asset file location.
      */
     private async getProjectIdFromFileLocation(
-        assetId: string
+        assetId: string,
     ): Promise<string | null> {
         const users = await fileSystemService.listFiles("users");
         for (const user of users) {
@@ -453,7 +490,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
                         "projects",
                         projectId,
                         "assets",
-                        `${assetId}.json`
+                        `${assetId}.json`,
                     );
                     if (await fileSystemService.exists(assetPath)) {
                         return projectId;
@@ -474,7 +511,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         const localPath = path.join(
             fileSystemService.getBasePath(),
             "assets",
-            asset.storagePath
+            asset.storagePath,
         );
 
         try {

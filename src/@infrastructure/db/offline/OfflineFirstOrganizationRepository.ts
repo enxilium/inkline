@@ -5,6 +5,7 @@ import { FileSystemOrganizationRepository } from "../filesystem/FileSystemOrgani
 import { SupabaseService } from "../SupabaseService";
 
 import { deletionLog } from "./DeletionLog";
+import { pendingUpdates } from "./PendingUpdates";
 
 /**
  * Offline-first organization repository that uses local filesystem as primary storage
@@ -21,6 +22,18 @@ export class OfflineFirstOrganizationRepository implements IOrganizationReposito
         try {
             await this.supabaseRepo.create(projectId, organization);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "organization",
+                entityId: organization.id,
+                projectId,
+                operation: "create",
+                payload: organization,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to create organization in Supabase (Offline?)",
                 error,
@@ -101,6 +114,19 @@ export class OfflineFirstOrganizationRepository implements IOrganizationReposito
         try {
             await this.supabaseRepo.update(organization);
         } catch (error) {
+            const projectId = (await this.getProjectId(organization.id)) || "";
+            await pendingUpdates.add({
+                entityType: "organization",
+                entityId: organization.id,
+                projectId,
+                operation: "update",
+                payload: organization,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to update organization in Supabase (Offline?)",
                 error,

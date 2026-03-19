@@ -5,6 +5,7 @@ import { FileSystemLocationRepository } from "../filesystem/FileSystemLocationRe
 import { SupabaseService } from "../SupabaseService";
 
 import { deletionLog } from "./DeletionLog";
+import { pendingUpdates } from "./PendingUpdates";
 
 /**
  * Offline-first location repository that uses local filesystem as primary storage
@@ -21,6 +22,18 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
         try {
             await this.supabaseRepo.create(projectId, location);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "location",
+                entityId: location.id,
+                projectId,
+                operation: "create",
+                payload: location,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to create location in Supabase (Offline?)",
                 error,
@@ -89,6 +102,19 @@ export class OfflineFirstLocationRepository implements ILocationRepository {
         try {
             await this.supabaseRepo.update(location);
         } catch (error) {
+            const projectId = (await this.getProjectId(location.id)) || "";
+            await pendingUpdates.add({
+                entityType: "location",
+                entityId: location.id,
+                projectId,
+                operation: "update",
+                payload: location,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to update location in Supabase (Offline?)",
                 error,

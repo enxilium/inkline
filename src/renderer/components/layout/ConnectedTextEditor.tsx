@@ -104,7 +104,6 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         updateScrapNoteLocally,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
-        lastSavedAt,
         setLastSavedAt,
         setCurrentSelection,
         saveChapterContent,
