@@ -23,7 +23,6 @@ export class FileSystemLocationRepository implements ILocationRepository {
         userId: string,
         projectId: string,
         locationId: string,
-        locationId: string,
     ): string {
         return path.join(
             "users",

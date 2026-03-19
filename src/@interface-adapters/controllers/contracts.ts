@@ -69,6 +69,7 @@ import type { AssignMetafieldToEntityController } from "./metafield/AssignMetafi
 import type { SaveMetafieldValueController } from "./metafield/SaveMetafieldValueController";
 import type { RemoveMetafieldFromEntityController } from "./metafield/RemoveMetafieldFromEntityController";
 import type { DeleteMetafieldDefinitionGlobalController } from "./metafield/DeleteMetafieldDefinitionGlobalController";
+import type { SubmitBugReportController } from "./support/SubmitBugReportController";
 
 type Handler<T> = T extends {
     handle: (...args: infer P) => Promise<infer R>;
@@ -150,6 +151,9 @@ export interface ControllerInstanceMap {
         saveMetafieldValue: SaveMetafieldValueController;
         removeMetafieldFromEntity: RemoveMetafieldFromEntityController;
         deleteMetafieldDefinitionGlobal: DeleteMetafieldDefinitionGlobalController;
+    };
+    support: {
+        submitBugReport: SubmitBugReportController;
     };
     world: {
         createCharacter: CreateCharacterController;
@@ -264,6 +268,9 @@ export const controllerChannels: ControllerChannelMap = {
         removeMetafieldFromEntity: "metafield:removeMetafieldFromEntity",
         deleteMetafieldDefinitionGlobal:
             "metafield:deleteMetafieldDefinitionGlobal",
+    },
+    support: {
+        submitBugReport: "support:submitBugReport",
     },
     world: {
         createCharacter: "world:createCharacter",

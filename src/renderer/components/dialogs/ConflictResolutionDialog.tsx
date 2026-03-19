@@ -30,6 +30,10 @@ const getEntityTypeLabel = (entityType: string): string => {
             return "Organization";
         case "scrapNote":
             return "Scrap Note";
+        case "metafieldDefinition":
+            return "Metafield Definition";
+        case "metafieldAssignment":
+            return "Metafield Value";
         case "image":
             return "Image";
         case "bgm":
@@ -44,7 +48,8 @@ const getEntityTypeLabel = (entityType: string): string => {
 };
 
 export const ConflictResolutionDialog: React.FC = () => {
-    const { pendingConflict, resolveConflict } = useAppStore();
+    const { pendingConflict, pendingConflictQueue, resolveConflict } =
+        useAppStore();
     const [isResolving, setIsResolving] = React.useState(false);
 
     // Handler that does nothing - dialog can only be closed by resolving
@@ -92,6 +97,16 @@ export const ConflictResolutionDialog: React.FC = () => {
                         {entityTypeLabel}).
                         <br />
                         Please choose which version to keep.
+                        {pendingConflictQueue.length > 1 ? (
+                            <>
+                                <br />
+                                {pendingConflictQueue.length - 1} more conflict
+                                {pendingConflictQueue.length - 1 > 1
+                                    ? "s"
+                                    : ""}{" "}
+                                waiting.
+                            </>
+                        ) : null}
                     </DialogDescription>
                 </DialogHeader>
 

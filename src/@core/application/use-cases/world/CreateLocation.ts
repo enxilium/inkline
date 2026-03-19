@@ -49,6 +49,7 @@ export class CreateLocation {
             [],
             [],
             [],
+            [],
         );
 
         await this.locationRepository.create(projectId, location);

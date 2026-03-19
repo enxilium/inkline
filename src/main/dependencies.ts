@@ -42,6 +42,7 @@ import { SupabaseTimelineRepository } from "../@infrastructure/db/SupabaseTimeli
 import { SupabaseEventRepository } from "../@infrastructure/db/SupabaseEventRepository";
 import { SupabaseMetafieldDefinitionRepository } from "../@infrastructure/db/SupabaseMetafieldDefinitionRepository";
 import { SupabaseMetafieldAssignmentRepository } from "../@infrastructure/db/SupabaseMetafieldAssignmentRepository";
+import { SupabaseBugReportRepository } from "../@infrastructure/db/SupabaseBugReportRepository";
 
 export function resolveDependencies(): AppBuilderDependencies {
     const supabaseProjectRepo = new SupabaseProjectRepository();
@@ -137,6 +138,7 @@ export function resolveDependencies(): AppBuilderDependencies {
         new SupabaseMetafieldDefinitionRepository();
     const supabaseMetafieldAssignmentRepo =
         new SupabaseMetafieldAssignmentRepository();
+    const supabaseBugReportRepo = new SupabaseBugReportRepository();
     const fsMetafieldDefinitionRepo =
         new FileSystemMetafieldDefinitionRepository();
     const fsMetafieldAssignmentRepo =
@@ -186,6 +188,7 @@ export function resolveDependencies(): AppBuilderDependencies {
             event: supabaseEventRepo,
             metafieldDefinition: metafieldDefinitionRepository,
             metafieldAssignment: metafieldAssignmentRepository,
+            bugReport: supabaseBugReportRepo,
             project: projectRepository,
             scrapNote: scrapNoteRepository,
             user: userRepository,

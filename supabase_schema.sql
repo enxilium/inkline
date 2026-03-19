@@ -25,6 +25,82 @@ begin
           for select using (auth.uid() = id);
     end if;
 end $$;
+
+-- BUG REPORTS (sync terminal failure reporting)
+create table if not exists public.bug_reports (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  project_id uuid references public.projects(id) on delete set null,
+  entity_type text,
+  entity_id text,
+  failure_fingerprint text not null,
+  payload jsonb not null default '{}'::jsonb,
+  note varchar(280),
+  app_version text,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  constraint bug_reports_payload_size_check
+    check (octet_length(convert_to(payload::text, 'UTF8')) <= 262144)
+);
+
+create index if not exists idx_bug_reports_user_created_at
+  on public.bug_reports(user_id, created_at desc);
+
+create index if not exists idx_bug_reports_fingerprint
+  on public.bug_reports(failure_fingerprint);
+
+alter table public.bug_reports enable row level security;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'bug_reports'
+          and policyname = 'Users can read their own bug reports'
+    ) then
+        create policy "Users can read their own bug reports" on public.bug_reports
+          for select using (auth.uid() = user_id);
+    end if;
+end $$;
+
+do $$
+begin
+    if not exists (
+        select 1 from pg_policies
+        where schemaname = 'public'
+          and tablename = 'bug_reports'
+          and policyname = 'Users can insert their own bug reports'
+    ) then
+        create policy "Users can insert their own bug reports" on public.bug_reports
+          for insert with check (auth.uid() = user_id);
+    end if;
+end $$;
+
+create or replace function public.cleanup_old_bug_reports()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  delete from public.bug_reports
+  where created_at < timezone('utc', now()) - interval '90 days';
+  return new;
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_trigger
+    where tgname = 'bug_reports_cleanup_after_insert'
+  ) then
+    create trigger bug_reports_cleanup_after_insert
+    after insert on public.bug_reports
+    for each statement execute function public.cleanup_old_bug_reports();
+  end if;
+end $$;
 do $$
 begin
     if not exists (

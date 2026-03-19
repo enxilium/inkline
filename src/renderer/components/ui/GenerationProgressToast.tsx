@@ -10,6 +10,9 @@ export interface AppToast {
     color?: string;
     progress?: number;
     durationMs?: number;
+    actionLabel?: string;
+    actionDisabled?: boolean;
+    onAction?: () => void;
 }
 
 type AppToastInput = Omit<AppToast, "id"> & { id?: string };
@@ -45,6 +48,9 @@ export const showToast = (input: AppToastInput): string => {
             color: input.color,
             progress: input.progress,
             durationMs: input.durationMs,
+            actionLabel: input.actionLabel,
+            actionDisabled: input.actionDisabled,
+            onAction: input.onAction,
         },
     });
 
@@ -62,6 +68,9 @@ export const updateToast = (id: string, patch: Partial<AppToast>): void => {
             color: patch.color,
             progress: patch.progress,
             durationMs: patch.durationMs,
+            actionLabel: patch.actionLabel,
+            actionDisabled: patch.actionDisabled,
+            onAction: patch.onAction,
         },
     });
 };
@@ -194,6 +203,16 @@ export const GenerationProgressToast: React.FC = () => {
                         <div className="app-toast-description">
                             {toast.description}
                         </div>
+                    ) : null}
+                    {toast.actionLabel ? (
+                        <button
+                            type="button"
+                            className="app-toast-action"
+                            onClick={toast.onAction}
+                            disabled={toast.actionDisabled}
+                        >
+                            {toast.actionLabel}
+                        </button>
                     ) : null}
                     {toast.variant === "progress" ? (
                         <div className="app-toast-progress-bar">

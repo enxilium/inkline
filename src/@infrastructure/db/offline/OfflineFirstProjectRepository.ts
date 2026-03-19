@@ -2,6 +2,7 @@ import { IProjectRepository } from "../../../@core/domain/repositories/IProjectR
 import { Project } from "../../../@core/domain/entities/story/Project";
 import { SupabaseProjectRepository } from "../SupabaseProjectRepository";
 import { FileSystemProjectRepository } from "../filesystem/FileSystemProjectRepository";
+import { pendingUpdates } from "./PendingUpdates";
 
 /**
  * Offline-first project repository that uses local filesystem as primary storage
@@ -13,7 +14,7 @@ import { FileSystemProjectRepository } from "../filesystem/FileSystemProjectRepo
 export class OfflineFirstProjectRepository implements IProjectRepository {
     constructor(
         private supabaseRepo: SupabaseProjectRepository,
-        private fsRepo: FileSystemProjectRepository
+        private fsRepo: FileSystemProjectRepository,
     ) {}
 
     async create(ownerId: string, project: Project): Promise<void> {
@@ -21,9 +22,21 @@ export class OfflineFirstProjectRepository implements IProjectRepository {
         try {
             await this.supabaseRepo.create(ownerId, project);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "project",
+                entityId: project.id,
+                projectId: project.id,
+                operation: "create",
+                payload: project,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to create project in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -79,9 +92,21 @@ export class OfflineFirstProjectRepository implements IProjectRepository {
         try {
             await this.supabaseRepo.update(project);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "project",
+                entityId: project.id,
+                projectId: project.id,
+                operation: "update",
+                payload: project,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to update project in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -95,7 +120,7 @@ export class OfflineFirstProjectRepository implements IProjectRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete project in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -109,7 +134,7 @@ export class OfflineFirstProjectRepository implements IProjectRepository {
      */
     private pickMostRecent(
         local: Project | null,
-        remote: Project | null
+        remote: Project | null,
     ): Project | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;

@@ -182,7 +182,10 @@ const broadcastFeatureDownloadProgress = (progress: DownloadProgress): void => {
         if (win.isDestroyed()) {
             continue;
         }
-        win.webContents.send(FEATURE_CHANNELS.FEATURE_DOWNLOAD_PROGRESS, progress);
+        win.webContents.send(
+            FEATURE_CHANNELS.FEATURE_DOWNLOAD_PROGRESS,
+            progress,
+        );
     }
 };
 
@@ -219,13 +222,17 @@ const runStartupIntegrityCheck = async (): Promise<void> => {
     const checkModelIntegrity = async (
         modelType: "image" | "audio",
     ): Promise<void> => {
-        const downloaded = await modelDownloadService.isModelDownloaded(modelType);
+        const downloaded =
+            await modelDownloadService.isModelDownloaded(modelType);
         await setupService.markModelDownloaded(modelType, downloaded);
         if (downloaded) {
             return;
         }
 
-        await modelDownloadService.downloadModel(modelType, sendStartupProgress);
+        await modelDownloadService.downloadModel(
+            modelType,
+            sendStartupProgress,
+        );
         await setupService.markModelDownloaded(modelType, true);
         repairedTargets.add(modelType);
     };
@@ -235,10 +242,14 @@ const runStartupIntegrityCheck = async (): Promise<void> => {
         await setupService.markLanguageToolInstalled(installed);
 
         if (!installed) {
-            await modelDownloadService.downloadLanguageTool(sendStartupProgress);
+            await modelDownloadService.downloadLanguageTool(
+                sendStartupProgress,
+            );
             const installedAfterDownload =
                 await modelDownloadService.isLanguageToolInstalled();
-            await setupService.markLanguageToolInstalled(installedAfterDownload);
+            await setupService.markLanguageToolInstalled(
+                installedAfterDownload,
+            );
 
             if (!installedAfterDownload) {
                 throw new Error(
@@ -272,7 +283,10 @@ const runStartupIntegrityCheck = async (): Promise<void> => {
         try {
             await checkLanguageToolIntegrity();
         } catch (error) {
-            logger.error("[StartupIntegrity] LanguageTool repair failed", error);
+            logger.error(
+                "[StartupIntegrity] LanguageTool repair failed",
+                error,
+            );
             errors.push("LanguageTool");
         }
 
@@ -299,7 +313,8 @@ const runStartupIntegrityCheck = async (): Promise<void> => {
         }
 
         try {
-            const comfyInstalled = await modelDownloadService.isComfyUIInstalled();
+            const comfyInstalled =
+                await modelDownloadService.isComfyUIInstalled();
             await setupService.markComfyUIInstalled(comfyInstalled);
 
             if (!comfyInstalled) {
@@ -316,7 +331,10 @@ const runStartupIntegrityCheck = async (): Promise<void> => {
             try {
                 await checkModelIntegrity("image");
             } catch (error) {
-                logger.error("[StartupIntegrity] Image model repair failed", error);
+                logger.error(
+                    "[StartupIntegrity] Image model repair failed",
+                    error,
+                );
                 errors.push("Image model");
             }
         }
@@ -325,7 +343,10 @@ const runStartupIntegrityCheck = async (): Promise<void> => {
             try {
                 await checkModelIntegrity("audio");
             } catch (error) {
-                logger.error("[StartupIntegrity] Audio model repair failed", error);
+                logger.error(
+                    "[StartupIntegrity] Audio model repair failed",
+                    error,
+                );
                 errors.push("Audio model");
             }
         }
@@ -340,7 +361,9 @@ const runStartupIntegrityCheck = async (): Promise<void> => {
 
         if (enabledModels.length > 0) {
             const restoredWorkflows =
-                await modelDownloadService.ensureWorkflowsInstalled(enabledModels);
+                await modelDownloadService.ensureWorkflowsInstalled(
+                    enabledModels,
+                );
 
             for (const modelType of restoredWorkflows) {
                 repairedTargets.add(
@@ -1033,7 +1056,7 @@ app.on("before-quit", async () => {
     logger.info("Cleaning up before quit");
 
     // Stop sync service (clears intervals and realtime subscriptions)
-    dependencies.syncService.stopAutoSync();
+    dependencies.syncService.stopAutoSync("shutdown");
 
     // Shutdown ComfyUI server (cast to access implementation-specific method)
     const comfyService = dependencies.services.audioGeneration as unknown as {

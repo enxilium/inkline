@@ -6,6 +6,7 @@ export const SYNC_REMOTE_CHANGE_CHANNEL = "sync:remoteChange";
 export const SYNC_CONFLICT_CHANNEL = "sync:conflict";
 export const SYNC_ENTITY_UPDATED_CHANNEL = "sync:entityUpdated";
 export const SYNC_ENTITY_DELETED_CHANNEL = "sync:entityDeleted";
+export const SYNC_TERMINAL_FAILURE_CHANNEL = "sync:terminalFailure";
 
 export type SyncStatus = "online" | "offline" | "syncing";
 
@@ -66,6 +67,19 @@ export type EntityDeletedPayload = {
     projectId: string;
 };
 
+export type SyncTerminalFailurePayload = {
+    source: "pendingUpdate" | "pendingRemoteDeletionLog";
+    entityType: EntityType;
+    entityId: string;
+    projectId: string;
+    attempts: number;
+    maxAttempts: number;
+    lastError: string;
+    failureFingerprint: string;
+    occurredAt: string;
+    details: Record<string, unknown>;
+};
+
 export interface SyncStateGateway {
     setStatus(status: SyncStatus): void;
     setLastSyncedAt(timestamp: Date | null): void;
@@ -74,6 +88,7 @@ export interface SyncStateGateway {
     notifyConflict(payload: ConflictPayload): void;
     notifyEntityUpdated(payload: EntityUpdatedPayload): void;
     notifyEntityDeleted(payload: EntityDeletedPayload): void;
+    notifyTerminalFailure(payload: SyncTerminalFailurePayload): void;
 }
 
 export class ElectronSyncStateGateway
@@ -120,6 +135,11 @@ export class ElectronSyncStateGateway
     notifyEntityDeleted(payload: EntityDeletedPayload): void {
         this.emit("entity-deleted", payload);
         this.broadcast(SYNC_ENTITY_DELETED_CHANNEL, payload);
+    }
+
+    notifyTerminalFailure(payload: SyncTerminalFailurePayload): void {
+        this.emit("terminal-failure", payload);
+        this.broadcast(SYNC_TERMINAL_FAILURE_CHANNEL, payload);
     }
 
     private broadcast(channel: string, payload: unknown): void {

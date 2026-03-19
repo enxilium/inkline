@@ -104,6 +104,7 @@ const DraggableBinderItem = ({
     disableDrag = false,
     animateReveal = false,
     animateCollapse = false,
+    isDragActive = false,
 }: {
     item: BinderItem;
     isActive: boolean;
@@ -122,6 +123,7 @@ const DraggableBinderItem = ({
     disableDrag?: boolean;
     animateReveal?: boolean;
     animateCollapse?: boolean;
+    isDragActive?: boolean;
 }) => {
     const renameDocument = useAppStore((state) => state.renameDocument);
     const renamingDocument = useAppStore((state) => state.renamingDocument);
@@ -172,7 +174,10 @@ const DraggableBinderItem = ({
         <li
             onDragOver={onDragOver}
             onDrop={onDrop}
-            className={isActive ? "is-active" : ""}
+            className={
+                (isActive ? "is-active" : "") +
+                (isDragActive ? " is-drag-active" : "")
+            }
             style={{
                 opacity: isDragging ? 0.4 : 1,
                 borderTop:
@@ -680,6 +685,14 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         e.dataTransfer.effectAllowed = "copyMove";
     };
 
+    const resetDragState = React.useCallback(() => {
+        setDraggedId(null);
+        setDragOverId(null);
+        setDragOverZone(null);
+        setDraggedDocument(null);
+        clearAutoExpandTimer();
+    }, [clearAutoExpandTimer, setDraggedDocument]);
+
     const handleDragOver = (e: React.DragEvent, item: BinderItem) => {
         e.preventDefault(); // Allow drop
         if (draggedId && draggedId !== item.id) {
@@ -695,10 +708,11 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                 const hasChildren =
                     (hoveredLocation?.sublocationIds.length ?? 0) > 0;
 
-                if (ratio < 0.25) {
+                // Favor "inside" for location nesting by shrinking edge zones.
+                if (ratio < 0.15) {
                     setDragOverZone("top");
                     clearAutoExpandTimer();
-                } else if (ratio > 0.75) {
+                } else if (ratio > 0.85) {
                     setDragOverZone("bottom");
                     clearAutoExpandTimer();
                 } else {
@@ -755,11 +769,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                     dropMode,
                 });
 
-                setDraggedId(null);
-                setDragOverId(null);
-                setDragOverZone(null);
-                setDraggedDocument(null);
-                clearAutoExpandTimer();
+                resetDragState();
                 return;
             }
 
@@ -778,20 +788,30 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             }
         }
 
-        setDraggedId(null);
-        setDragOverId(null);
-        setDragOverZone(null);
-        setDraggedDocument(null);
-        clearAutoExpandTimer();
+        resetDragState();
     };
 
     const handleDragEnd = () => {
-        setDraggedId(null);
-        setDragOverId(null);
-        setDragOverZone(null);
-        setDraggedDocument(null);
-        clearAutoExpandTimer();
+        resetDragState();
     };
+
+    React.useEffect(() => {
+        const handleGlobalReset = () => {
+            resetDragState();
+        };
+
+        window.addEventListener("dragend", handleGlobalReset);
+        window.addEventListener("drop", handleGlobalReset);
+        window.addEventListener("blur", handleGlobalReset);
+        window.addEventListener("mouseup", handleGlobalReset);
+
+        return () => {
+            window.removeEventListener("dragend", handleGlobalReset);
+            window.removeEventListener("drop", handleGlobalReset);
+            window.removeEventListener("blur", handleGlobalReset);
+            window.removeEventListener("mouseup", handleGlobalReset);
+        };
+    }, [resetDragState]);
 
     const renderedItems =
         activeSection.kind === "location" ? locationRows : activeSection.items;
@@ -1113,6 +1133,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                                                     "location" &&
                                                 !!collapsingLocationIds[item.id]
                                             }
+                                            isDragActive={!!draggedId}
                                             disableDrag={false}
                                         />
                                     );

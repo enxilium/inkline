@@ -8,13 +8,7 @@ import type {
     WorkspaceOrganization,
 } from "../../types";
 import { type DocumentRef } from "../ui/ListInput";
-import { SearchableSelect } from "../ui/SearchableSelect";
-import {
-    RichEditor,
-    type RichEditorCustomCard,
-    type RichEditorCardConfig,
-    type RichEditorRenderContext,
-} from "./RichEditor";
+import { RichEditor, type RichEditorCustomCard } from "./RichEditor";
 
 export type LocationEditorValues = {
     name: string;
@@ -31,7 +25,6 @@ export type LocationEditorProps = {
     metafieldDefinitions: WorkspaceMetafieldDefinition[];
     metafieldAssignments: WorkspaceMetafieldAssignment[];
     imageOptions: { id: string; label: string }[];
-    parentOptions: Array<{ id: string; label: string }>;
     currentParentLocationId: string | null;
     gallerySources: string[];
     songUrl?: string;
@@ -98,7 +91,6 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     metafieldDefinitions,
     metafieldAssignments,
     imageOptions,
-    parentOptions,
     currentParentLocationId,
     gallerySources,
     songUrl,
@@ -120,78 +112,10 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     onNavigateToDocument,
     focusTitleOnMount = false,
 }) => {
-    const [values, setValues] = React.useState<LocationEditorValues>(() =>
-        defaultValues(location, currentParentLocationId),
+    const initialValues = React.useMemo(
+        () => defaultValues(location, currentParentLocationId),
+        [location, currentParentLocationId],
     );
-    const [, setSaving] = React.useState(false);
-    const [assetBusy, setAssetBusy] = React.useState(false);
-    const [error, setError] = React.useState<string | null>(null);
-    const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
-    const firstImageRef = React.useRef<string | undefined>(undefined);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
-    const songInputRef = React.useRef<HTMLInputElement>(null);
-    const playlistInputRef = React.useRef<HTMLInputElement>(null);
-    const titleInputRef = React.useRef<HTMLInputElement>(null);
-    const isUserChange = React.useRef(false);
-
-    const toFriendlyError = React.useCallback(
-        (error: unknown, fallback: string, context?: UserErrorContext) =>
-            normalizeUserFacingError(error, fallback, context),
-        [],
-    );
-
-    React.useEffect(() => {
-        isUserChange.current = false;
-        setValues(defaultValues(location, currentParentLocationId));
-        setError(null);
-    }, [currentParentLocationId, location]);
-
-    React.useEffect(() => {
-        if (!focusTitleOnMount) {
-            return;
-        }
-
-        requestAnimationFrame(() => {
-            titleInputRef.current?.focus();
-            titleInputRef.current?.select();
-        });
-    }, [focusTitleOnMount]);
-
-    React.useEffect(() => {
-        if (!gallerySources.length) {
-            firstImageRef.current = undefined;
-            setCurrentImageIndex(0);
-            return;
-        }
-
-        const currentFirst = gallerySources[0];
-        const previousFirst = firstImageRef.current;
-        firstImageRef.current = currentFirst;
-
-        setCurrentImageIndex((prev) => {
-            if (!gallerySources.length) {
-                return 0;
-            }
-            if (currentFirst && currentFirst !== previousFirst) {
-                return 0;
-            }
-            if (prev >= gallerySources.length) {
-                return gallerySources.length - 1;
-            }
-            return prev;
-        });
-    }, [gallerySources]);
-
-    const handleChange = (
-        field: keyof LocationEditorValues,
-        value: string | string[],
-    ) => {
-        isUserChange.current = true;
-        setValues((prev) => ({
-            ...prev,
-            [field]: value,
-        }));
-    };
 
     const runtimeCharactersPresent = React.useMemo(
         () =>
@@ -244,10 +168,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     );
 
     const renderDefaultCard = React.useCallback(
-        (
-            _card: RichEditorCardConfig,
-            _context: RichEditorRenderContext<LocationEditorValues>,
-        ): React.ReactNode => null,
+        (): React.ReactNode => null,
         [],
     );
 

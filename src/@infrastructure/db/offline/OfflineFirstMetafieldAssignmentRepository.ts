@@ -6,6 +6,7 @@ import {
 import { SupabaseMetafieldAssignmentRepository } from "../SupabaseMetafieldAssignmentRepository";
 import { FileSystemMetafieldAssignmentRepository } from "../filesystem/FileSystemMetafieldAssignmentRepository";
 import { deletionLog } from "./DeletionLog";
+import { pendingUpdates } from "./PendingUpdates";
 
 export class OfflineFirstMetafieldAssignmentRepository implements IMetafieldAssignmentRepository {
     constructor(
@@ -18,6 +19,18 @@ export class OfflineFirstMetafieldAssignmentRepository implements IMetafieldAssi
         try {
             await this.supabaseRepo.create(assignment);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "metafieldAssignment",
+                entityId: assignment.id,
+                projectId: assignment.projectId,
+                operation: "create",
+                payload: assignment,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to create metafield assignment in Supabase (Offline?)",
                 error,
@@ -141,6 +154,18 @@ export class OfflineFirstMetafieldAssignmentRepository implements IMetafieldAssi
         try {
             await this.supabaseRepo.update(assignment);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "metafieldAssignment",
+                entityId: assignment.id,
+                projectId: assignment.projectId,
+                operation: "update",
+                payload: assignment,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to update metafield assignment in Supabase (Offline?)",
                 error,

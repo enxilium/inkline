@@ -2934,6 +2934,11 @@ input.toolbar-color:focus {
     pointer-events: auto;
 }
 
+.binder-list li.is-drag-active .binder-item-delete {
+    opacity: 0;
+    pointer-events: none;
+}
+
 .binder-item-delete:hover {
     color: var(--text-error);
     background: var(--color-danger-bg);

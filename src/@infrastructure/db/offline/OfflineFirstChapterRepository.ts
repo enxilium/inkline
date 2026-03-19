@@ -5,6 +5,7 @@ import { FileSystemChapterRepository } from "../filesystem/FileSystemChapterRepo
 import { SupabaseService } from "../SupabaseService";
 
 import { deletionLog } from "./DeletionLog";
+import { pendingUpdates } from "./PendingUpdates";
 
 /**
  * Offline-first chapter repository that uses local filesystem as primary storage
@@ -13,7 +14,7 @@ import { deletionLog } from "./DeletionLog";
 export class OfflineFirstChapterRepository implements IChapterRepository {
     constructor(
         private supabaseRepo: SupabaseChapterRepository,
-        private fsRepo: FileSystemChapterRepository
+        private fsRepo: FileSystemChapterRepository,
     ) {}
 
     async create(projectId: string, chapter: Chapter): Promise<void> {
@@ -21,9 +22,21 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
         try {
             await this.supabaseRepo.create(projectId, chapter);
         } catch (error) {
+            await pendingUpdates.add({
+                entityType: "chapter",
+                entityId: chapter.id,
+                projectId,
+                operation: "create",
+                payload: chapter,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to create chapter in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -77,7 +90,7 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
     async updateContent(
         chapterId: string,
         content: string,
-        updatedAt?: Date
+        updatedAt?: Date,
     ): Promise<void> {
         // Check if content actually changed to avoid phantom updates
         const current = await this.fsRepo.findById(chapterId);
@@ -96,13 +109,29 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
                 await this.supabaseRepo.updateContent(
                     chapterId,
                     content,
-                    timestamp
+                    timestamp,
                 );
             }
         } catch (error) {
+            const projectId = (await this.getProjectId(chapterId)) || "";
+            await pendingUpdates.add({
+                entityType: "chapter",
+                entityId: chapterId,
+                projectId,
+                operation: "updateContent",
+                payload: {
+                    content,
+                    updatedAt: timestamp.toISOString(),
+                },
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to update chapter content in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -112,9 +141,22 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
         try {
             await this.supabaseRepo.update(chapter);
         } catch (error) {
+            const projectId = (await this.getProjectId(chapter.id)) || "";
+            await pendingUpdates.add({
+                entityType: "chapter",
+                entityId: chapter.id,
+                projectId,
+                operation: "update",
+                payload: chapter,
+                attempts: 0,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+                lastError:
+                    error instanceof Error ? error.message : String(error),
+            });
             console.warn(
                 "Failed to update chapter in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -136,7 +178,7 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete chapter in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -166,7 +208,7 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
         } catch (error) {
             console.warn(
                 "Failed to delete chapters in Supabase (Offline?)",
-                error
+                error,
             );
         }
     }
@@ -180,7 +222,7 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
      */
     private pickMostRecent(
         local: Chapter | null,
-        remote: Chapter | null
+        remote: Chapter | null,
     ): Chapter | null {
         if (local && remote) {
             return remote.updatedAt > local.updatedAt ? remote : local;
@@ -234,7 +276,7 @@ export class OfflineFirstChapterRepository implements IChapterRepository {
     }
 
     private async getRemoteProjectId(
-        chapterId: string
+        chapterId: string,
     ): Promise<string | null> {
         try {
             const client = SupabaseService.getClient();

@@ -6,7 +6,6 @@ import {
 } from "../workspace/LocationEditor";
 import type { AutosaveStatus } from "../../types";
 import type { DocumentRef } from "../ui/ListInput";
-import type { SelectOption } from "../ui/SearchableSelect";
 
 interface ConnectedLocationEditorProps {
     locationId: string;
@@ -81,7 +80,6 @@ export const ConnectedLocationEditor: React.FC<
     const location = React.useMemo(
         () => locations.find((l) => l.id === locationId),
         [locations, locationId],
-        [locations, locationId],
     );
 
     const parentLocationId = React.useMemo(() => {
@@ -93,36 +91,6 @@ export const ConnectedLocationEditor: React.FC<
 
         return null;
     }, [locations, locationId]);
-
-    const parentOptions = React.useMemo((): SelectOption[] => {
-        const descendants = new Set<string>();
-        const stack = [locationId];
-
-        while (stack.length > 0) {
-            const currentId = stack.pop();
-            if (!currentId || descendants.has(currentId)) {
-                continue;
-            }
-
-            descendants.add(currentId);
-            const current = locations.find((entry) => entry.id === currentId);
-            if (!current) {
-                continue;
-            }
-
-            current.sublocationIds.forEach((childId) => {
-                stack.push(childId);
-            });
-        }
-
-        return locations
-            .filter((entry) => !descendants.has(entry.id))
-            .map((entry) => ({
-                id: entry.id,
-                label: entry.name || "Untitled Location",
-            }));
-    }, [locationId, locations]);
-
     const resolveStoredImageUrls = React.useCallback(
         (galleryIds: string[]): string[] =>
             galleryIds
@@ -187,13 +155,6 @@ export const ConnectedLocationEditor: React.FC<
                     locationId: location.id,
                     payload,
                 });
-
-                if (
-                    (parentLocationId ?? null) !==
-                    (payload.parentLocationId ?? null)
-                ) {
-                    await reloadActiveProject();
-                }
 
                 setAutosaveStatus("saved");
                 setTimeout(() => {
@@ -594,7 +555,6 @@ export const ConnectedLocationEditor: React.FC<
         <LocationEditor
             projectId={projectId}
             location={location}
-            parentOptions={parentOptions}
             currentParentLocationId={parentLocationId}
             allCharacters={characters}
             allLocations={locations}

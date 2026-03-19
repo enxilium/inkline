@@ -2,29 +2,6 @@ import { Location } from "../../@core/domain/entities/story/world/Location";
 import { ILocationRepository } from "../../@core/domain/repositories/ILocationRepository";
 import { SupabaseService } from "./SupabaseService";
 
-type LocationRow = {
-    id: string;
-    project_id: string;
-    name: string;
-    description: string | null;
-    culture: string | null;
-    history: string | null;
-    conflicts: string[] | null;
-    tags: string[] | null;
-    bgm_id: string | null;
-    playlist_id: string | null;
-    gallery_image_ids: string[] | null;
-    sublocation_ids: string[] | null;
-    character_ids: string[] | null;
-    organization_ids: string[] | null;
-    created_at: string;
-    updated_at: string;
-};
-
-const parseStringArray = (value: string[] | null | undefined): string[] =>
-    Array.isArray(value)
-        ? value.map((entry) => entry ?? "").filter(Boolean)
-        : [];
 import {
     LocationDbInsert,
     LocationDbRow,
@@ -41,11 +18,8 @@ const mapRowToLocation = (row: LocationDbRow): Location =>
         new Date(row.updated_at),
         row.bgm_id,
         row.playlist_id,
-        parseStringArray(row.gallery_image_ids),
-        parseStringArray(row.sublocation_ids),
-        parseStringArray(row.character_ids),
-        parseStringArray(row.organization_ids),
         asStringArray(row.gallery_image_ids),
+        asStringArray(row.sublocation_ids),
         asStringArray(row.character_ids),
         asStringArray(row.organization_ids),
     );
@@ -108,6 +82,7 @@ export class SupabaseLocationRepository implements ILocationRepository {
             bgm_id: location.bgmId,
             playlist_id: location.playlistId,
             gallery_image_ids: location.galleryImageIds,
+            sublocation_ids: location.sublocationIds,
             character_ids: location.characterIds,
             organization_ids: location.organizationIds,
             updated_at: location.updatedAt.toISOString(),

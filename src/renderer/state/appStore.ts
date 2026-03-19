@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import type { RendererApi } from "../../@interface-adapters/controllers/contracts";
 import type { ConflictPayload } from "../../@interface-adapters/controllers/sync/SyncStateGateway";
+import { showToast } from "../components/ui/GenerationProgressToast";
 import { globalSearchEngine } from "./globalSearchEngine";
 import type {
     GlobalFindAndReplaceRequest,
@@ -87,6 +88,7 @@ const unsubscribeSyncListeners: Array<() => void> = [];
 const recentlyResolvedConflicts = new Map<string, number>();
 const recentLocalMetafieldWrites = new Map<string, number>();
 const acceptedConflictOverwrites = new Set<string>();
+const submittedFailureFingerprints = new Set<string>();
 const CONFLICT_SUPPRESSION_MS = 15000;
 const LOCAL_METAFIELD_CONFLICT_SUPPRESSION_MS = 4000;
 
@@ -179,6 +181,151 @@ const isOpenDocumentTarget = (
     return openTabs.some((tab) => tab.kind === kind && tab.id === id);
 };
 
+const documentExistsInState = (
+    state: Pick<
+        AppStore,
+        "chapters" | "characters" | "locations" | "organizations" | "scrapNotes"
+    >,
+    selection: WorkspaceDocumentRef,
+): boolean => {
+    if (selection.kind === "chapter") {
+        return state.chapters.some((item) => item.id === selection.id);
+    }
+    if (selection.kind === "character") {
+        return state.characters.some((item) => item.id === selection.id);
+    }
+    if (selection.kind === "location") {
+        return state.locations.some((item) => item.id === selection.id);
+    }
+    if (selection.kind === "organization") {
+        return state.organizations.some((item) => item.id === selection.id);
+    }
+    return state.scrapNotes.some((item) => item.id === selection.id);
+};
+
+const resolveAssetOwnerSelection = (
+    state: Pick<
+        AppStore,
+        "chapters" | "characters" | "locations" | "organizations" | "scrapNotes"
+    >,
+    assetType: "image" | "bgm" | "playlist",
+    assetId: string,
+): WorkspaceDocumentRef | null => {
+    // Fallback order mandated for asset conflicts.
+    const chapter = state.chapters.find((item) => item.id === assetId);
+    if (chapter) {
+        return { kind: "chapter", id: chapter.id };
+    }
+
+    const character = state.characters.find((item) => {
+        if (assetType === "image") {
+            return (item.galleryImageIds ?? []).includes(assetId);
+        }
+        if (assetType === "bgm") {
+            return item.bgmId === assetId;
+        }
+        return item.playlistId === assetId;
+    });
+    if (character) {
+        return { kind: "character", id: character.id };
+    }
+
+    const location = state.locations.find((item) => {
+        if (assetType === "image") {
+            return (item.galleryImageIds ?? []).includes(assetId);
+        }
+        if (assetType === "bgm") {
+            return item.bgmId === assetId;
+        }
+        return item.playlistId === assetId;
+    });
+    if (location) {
+        return { kind: "location", id: location.id };
+    }
+
+    const organization = state.organizations.find((item) => {
+        if (assetType === "image") {
+            return (item.galleryImageIds ?? []).includes(assetId);
+        }
+        if (assetType === "bgm") {
+            return item.bgmId === assetId;
+        }
+        return item.playlistId === assetId;
+    });
+    if (organization) {
+        return { kind: "organization", id: organization.id };
+    }
+
+    const scrapNote = state.scrapNotes.find((item) => item.id === assetId);
+    if (scrapNote) {
+        return { kind: "scrapNote", id: scrapNote.id };
+    }
+
+    return null;
+};
+
+const resolveConflictSelection = (
+    state: Pick<
+        AppStore,
+        | "chapters"
+        | "characters"
+        | "locations"
+        | "organizations"
+        | "scrapNotes"
+        | "metafieldAssignments"
+    >,
+    conflict: ConflictPayload,
+): WorkspaceDocumentRef | null => {
+    const directKind = toWorkspaceDocumentKind(conflict.entityType);
+    if (directKind) {
+        return { kind: directKind, id: conflict.entityId };
+    }
+
+    if (conflict.entityType === "metafieldAssignment") {
+        const assignment = state.metafieldAssignments.find(
+            (item) => item.id === conflict.entityId,
+        );
+        if (
+            assignment &&
+            (assignment.entityType === "character" ||
+                assignment.entityType === "location" ||
+                assignment.entityType === "organization")
+        ) {
+            return { kind: assignment.entityType, id: assignment.entityId };
+        }
+        return null;
+    }
+
+    if (conflict.entityType === "metafieldDefinition") {
+        const assignment = state.metafieldAssignments.find(
+            (item) => item.definitionId === conflict.entityId,
+        );
+        if (
+            assignment &&
+            (assignment.entityType === "character" ||
+                assignment.entityType === "location" ||
+                assignment.entityType === "organization")
+        ) {
+            return { kind: assignment.entityType, id: assignment.entityId };
+        }
+        return null;
+    }
+
+    if (
+        conflict.entityType === "image" ||
+        conflict.entityType === "bgm" ||
+        conflict.entityType === "playlist"
+    ) {
+        return resolveAssetOwnerSelection(
+            state,
+            conflict.entityType,
+            conflict.entityId,
+        );
+    }
+
+    return null;
+};
+
 const createErrorMessage = (error: unknown, fallback: string): string => {
     return normalizeUserFacingError(error, fallback);
 };
@@ -214,6 +361,8 @@ const CHARACTER_DEFAULT_METAFIELDS = [
         initialValue: [] as string[],
     },
 ];
+
+const MAX_LOCATION_NESTING_LEVEL = 5;
 
 const runInBackground = (
     promise: Promise<unknown>,
@@ -320,6 +469,89 @@ const collectDescendantLocationIds = (
     return descendants;
 };
 
+const exceedsLocationNestingLimit = (
+    projectLocationIds: string[],
+    locations: WorkspaceLocation[],
+    maxLevel: number,
+): boolean => {
+    const locationsById = new Map(
+        locations.map((location) => [location.id, location]),
+    );
+
+    const childIds = new Set<string>();
+    locations.forEach((location) => {
+        location.sublocationIds.forEach((childId) => {
+            if (locationsById.has(childId)) {
+                childIds.add(childId);
+            }
+        });
+    });
+
+    const roots: string[] = [];
+    projectLocationIds.forEach((id) => {
+        if (locationsById.has(id) && !roots.includes(id)) {
+            roots.push(id);
+        }
+    });
+
+    locations.forEach((location) => {
+        if (!roots.includes(location.id) && !childIds.has(location.id)) {
+            roots.push(location.id);
+        }
+    });
+
+    const visited = new Set<string>();
+    const visit = (rootId: string): boolean => {
+        const stack: Array<{ id: string; depth: number }> = [
+            { id: rootId, depth: 0 },
+        ];
+
+        while (stack.length > 0) {
+            const current = stack.pop();
+            if (!current) {
+                continue;
+            }
+
+            const { id, depth } = current;
+            if (visited.has(id)) {
+                continue;
+            }
+
+            visited.add(id);
+            if (depth + 1 > maxLevel) {
+                return true;
+            }
+
+            const node = locationsById.get(id);
+            if (!node) {
+                continue;
+            }
+
+            node.sublocationIds.forEach((childId) => {
+                if (locationsById.has(childId)) {
+                    stack.push({ id: childId, depth: depth + 1 });
+                }
+            });
+        }
+
+        return false;
+    };
+
+    for (const rootId of roots) {
+        if (visit(rootId)) {
+            return true;
+        }
+    }
+
+    for (const location of locations) {
+        if (!visited.has(location.id) && visit(location.id)) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
 const patchEntity = <T extends { id: string }>(
     list: T[],
     entityId: string,
@@ -419,6 +651,7 @@ type AppStore = {
         localUpdatedAt: string;
         remoteUpdatedAt: string;
     } | null;
+    pendingConflictQueue: ConflictPayload[];
     lastSavedAt: number | null;
     shortcutStates: ShortcutStates;
     draggedDocument: { id: string; kind: string; title: string } | null;
@@ -593,6 +826,7 @@ type AppStore = {
     saveMetafieldValue: RendererApi["metafield"]["saveMetafieldValue"];
     removeMetafieldFromEntity: RendererApi["metafield"]["removeMetafieldFromEntity"];
     deleteMetafieldDefinitionGlobal: RendererApi["metafield"]["deleteMetafieldDefinitionGlobal"];
+    submitBugReport: RendererApi["support"]["submitBugReport"];
     importAsset: RendererApi["asset"]["importAsset"];
     generateCharacterImage: RendererApi["generation"]["generateCharacterImage"];
     generateCharacterSong: RendererApi["generation"]["generateCharacterSong"];
@@ -675,6 +909,8 @@ export const useAppStore = create<AppStore>((set, get) => {
         | "autosaveStatus"
         | "autosaveError"
         | "cloudSyncError"
+        | "pendingConflict"
+        | "pendingConflictQueue"
         | "lastSavedAt"
         | "pendingEditsByChapterId"
         | "pendingEditsById"
@@ -702,6 +938,8 @@ export const useAppStore = create<AppStore>((set, get) => {
         autosaveStatus: defaultAutosaveStatus,
         autosaveError: null,
         cloudSyncError: null,
+        pendingConflict: null,
+        pendingConflictQueue: [],
         lastSavedAt: null,
         pendingEditsByChapterId: {},
         pendingEditsById: {},
@@ -722,6 +960,18 @@ export const useAppStore = create<AppStore>((set, get) => {
             openingProjectId: null,
             currentUserId: "",
         });
+    };
+
+    let locationTreeMutationQueue: Promise<void> = Promise.resolve();
+
+    const enqueueLocationTreeMutation = (
+        operation: () => Promise<void>,
+    ): Promise<void> => {
+        const scheduled = locationTreeMutationQueue.then(operation, operation);
+        locationTreeMutationQueue = scheduled
+            .catch((): void => undefined)
+            .then((): void => undefined);
+        return scheduled;
     };
 
     const confirmDiscardPendingEdits = (): boolean => {
@@ -841,19 +1091,136 @@ export const useAppStore = create<AppStore>((set, get) => {
 
                 // Only show conflicts for the currently open project
                 if (stage === "workspace" && payload.projectId === projectId) {
-                    const current = get().pendingConflict;
-                    if (
-                        current &&
-                        current.projectId === payload.projectId &&
-                        current.entityType === payload.entityType &&
-                        current.entityId === payload.entityId &&
-                        getConflictEventKey(current) === conflictEventKey
-                    ) {
+                    set((state) => {
+                        const alreadyQueued = state.pendingConflictQueue.some(
+                            (queued) =>
+                                getConflictEventKey(queued) ===
+                                conflictEventKey,
+                        );
+
+                        if (alreadyQueued) {
+                            return state;
+                        }
+
+                        const queue = [...state.pendingConflictQueue, payload];
+                        return {
+                            pendingConflictQueue: queue,
+                            pendingConflict: state.pendingConflict ?? queue[0],
+                        };
+                    });
+                }
+            }),
+        );
+
+        unsubscribeSyncListeners.push(
+            syncEvents.onTerminalFailure((payload) => {
+                const reportAction = () => {
+                    const state = get();
+                    if (state.syncStatus === "offline") {
+                        showToast({
+                            variant: "info",
+                            title: "Report unavailable offline",
+                            description:
+                                "Reconnect to the internet before submitting a sync bug report.",
+                            durationMs: 3500,
+                        });
                         return;
                     }
 
-                    set({ pendingConflict: payload });
-                }
+                    const userId = state.user?.id?.trim();
+                    if (!userId) {
+                        showToast({
+                            variant: "error",
+                            title: "Sign in required",
+                            description:
+                                "You must be signed in to submit a bug report.",
+                            durationMs: 3500,
+                        });
+                        return;
+                    }
+
+                    if (
+                        submittedFailureFingerprints.has(
+                            payload.failureFingerprint,
+                        )
+                    ) {
+                        showToast({
+                            variant: "info",
+                            title: "Already reported",
+                            description:
+                                "This sync failure was already reported in this session.",
+                            durationMs: 3500,
+                        });
+                        return;
+                    }
+
+                    const notePrompt = window.prompt(
+                        "Optional note (max 280 chars):",
+                        "",
+                    );
+                    if (notePrompt === null) {
+                        return;
+                    }
+
+                    const note = notePrompt.trim().slice(0, 280);
+                    const diagnosticsPayload = {
+                        ...payload,
+                        syncStatus: state.syncStatus,
+                        lastSyncedAt: state.lastSyncedAt,
+                        stage: state.stage,
+                        activeDocument: state.activeDocument,
+                        openTabs: state.openTabs,
+                        cloudSyncError: state.cloudSyncError,
+                        submittedAt: new Date().toISOString(),
+                    };
+
+                    const submission = rendererApi.support.submitBugReport({
+                        userId,
+                        projectId: payload.projectId || null,
+                        entityType: payload.entityType,
+                        entityId: payload.entityId,
+                        failureFingerprint: payload.failureFingerprint,
+                        payload: diagnosticsPayload,
+                        note: note || null,
+                        appVersion: null,
+                    });
+
+                    void submission
+                        .then(() => {
+                            submittedFailureFingerprints.add(
+                                payload.failureFingerprint,
+                            );
+                            showToast({
+                                variant: "success",
+                                title: "Report submitted",
+                                description:
+                                    "Thanks. Your sync failure report was submitted.",
+                                durationMs: 3000,
+                            });
+                        })
+                        .catch((error) => {
+                            showToast({
+                                variant: "error",
+                                title: "Report failed",
+                                description: createErrorMessage(
+                                    error,
+                                    "Could not submit bug report.",
+                                ),
+                                durationMs: 4500,
+                            });
+                        });
+                };
+
+                showToast({
+                    id: `sync-terminal-${payload.failureFingerprint}`,
+                    variant: "error",
+                    title: "Sync retries exhausted",
+                    description: payload.lastError,
+                    actionLabel: "Report issue",
+                    actionDisabled: get().syncStatus === "offline",
+                    onAction: reportAction,
+                    durationMs: 0,
+                });
             }),
         );
 
@@ -1307,6 +1674,8 @@ export const useAppStore = create<AppStore>((set, get) => {
             stage: "workspace",
             autosaveStatus: defaultAutosaveStatus,
             autosaveError: null,
+            pendingConflict: null,
+            pendingConflictQueue: [],
             lastSavedAt: null,
         });
         return payload;
@@ -1353,6 +1722,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         syncStatus: "offline",
         lastSyncedAt: null,
         pendingConflict: null,
+        pendingConflictQueue: [],
         lastSavedAt: null,
         draggedDocument: null,
         shortcutStates: defaultShortcutStates,
@@ -2502,17 +2872,6 @@ export const useAppStore = create<AppStore>((set, get) => {
                             : null;
                 }
 
-                const nextProject = state.workspaceProject
-                    ? {
-                          ...state.workspaceProject,
-                          locationIds:
-                              state.workspaceProject.locationIds.filter(
-                                  (id) => id !== locationId,
-                              ),
-                          updatedAt: new Date(),
-                      }
-                    : state.workspaceProject;
-
                 return {
                     workspaceProject: state.workspaceProject
                         ? {
@@ -2731,145 +3090,168 @@ export const useAppStore = create<AppStore>((set, get) => {
             targetLocationId,
             dropMode,
         }) => {
-            const projectId = get().projectId.trim();
-            if (!projectId) {
-                return;
-            }
-
-            const previousState = get();
-            const previousLocations = previousState.locations;
-            const previousProject = previousState.workspaceProject;
-
-            if (!previousProject || locationId === targetLocationId) {
-                return;
-            }
-
-            const descendants = collectDescendantLocationIds(
-                locationId,
-                previousLocations,
-            );
-            if (dropMode === "inside" && descendants.has(targetLocationId)) {
-                return;
-            }
-
-            const locationsById = new Map(
-                previousLocations.map((location) => [
-                    location.id,
-                    {
-                        ...location,
-                        sublocationIds: [...location.sublocationIds],
-                    },
-                ]),
-            );
-
-            const sourceParentId = findParentLocationId(
-                locationId,
-                previousLocations,
-            );
-            const targetParentId = findParentLocationId(
-                targetLocationId,
-                previousLocations,
-            );
-            const destinationParentId =
-                dropMode === "inside" ? targetLocationId : targetParentId;
-
-            const nextProject = {
-                ...previousProject,
-                locationIds: [...previousProject.locationIds],
-            };
-
-            const getContainer = (parentId: string | null): string[] => {
-                if (!parentId) {
-                    return nextProject.locationIds;
-                }
-
-                const parent = locationsById.get(parentId);
-                if (!parent) {
-                    throw new Error("Location parent not found while moving.");
-                }
-
-                return parent.sublocationIds;
-            };
-
-            const sourceContainer = getContainer(sourceParentId);
-            const sourceIndex = sourceContainer.indexOf(locationId);
-            if (sourceIndex === -1) {
-                return;
-            }
-            sourceContainer.splice(sourceIndex, 1);
-
-            const destinationContainer = getContainer(destinationParentId);
-
-            let insertIndex = destinationContainer.length;
-            if (dropMode !== "inside") {
-                const targetIndex =
-                    destinationContainer.indexOf(targetLocationId);
-                if (targetIndex === -1) {
+            await enqueueLocationTreeMutation(async () => {
+                const projectId = get().projectId.trim();
+                if (!projectId) {
                     return;
                 }
 
-                insertIndex =
-                    dropMode === "before" ? targetIndex : targetIndex + 1;
+                const previousState = get();
+                const previousLocations = previousState.locations;
+                const previousProject = previousState.workspaceProject;
+
+                if (!previousProject || locationId === targetLocationId) {
+                    return;
+                }
+
+                const descendants = collectDescendantLocationIds(
+                    locationId,
+                    previousLocations,
+                );
+                if (descendants.has(targetLocationId)) {
+                    set({
+                        autosaveError:
+                            "Cannot move a location relative to its own descendant.",
+                    });
+                    return;
+                }
+
+                const locationsById = new Map(
+                    previousLocations.map((location) => [
+                        location.id,
+                        {
+                            ...location,
+                            sublocationIds: [...location.sublocationIds],
+                        },
+                    ]),
+                );
+
+                const sourceParentId = findParentLocationId(
+                    locationId,
+                    previousLocations,
+                );
+                const targetParentId = findParentLocationId(
+                    targetLocationId,
+                    previousLocations,
+                );
+                const destinationParentId =
+                    dropMode === "inside" ? targetLocationId : targetParentId;
+
+                const nextProject = {
+                    ...previousProject,
+                    locationIds: [...previousProject.locationIds],
+                };
+
+                const getContainer = (parentId: string | null): string[] => {
+                    if (!parentId) {
+                        return nextProject.locationIds;
+                    }
+
+                    const parent = locationsById.get(parentId);
+                    if (!parent) {
+                        throw new Error(
+                            "Location parent not found while moving.",
+                        );
+                    }
+
+                    return parent.sublocationIds;
+                };
+
+                const sourceContainer = getContainer(sourceParentId);
+                const sourceIndex = sourceContainer.indexOf(locationId);
+                if (sourceIndex === -1) {
+                    return;
+                }
+                sourceContainer.splice(sourceIndex, 1);
+
+                const destinationContainer = getContainer(destinationParentId);
+
+                let insertIndex = destinationContainer.length;
+                if (dropMode !== "inside") {
+                    const targetIndex =
+                        destinationContainer.indexOf(targetLocationId);
+                    if (targetIndex === -1) {
+                        return;
+                    }
+
+                    insertIndex =
+                        dropMode === "before" ? targetIndex : targetIndex + 1;
+
+                    if (
+                        sourceContainer === destinationContainer &&
+                        sourceIndex < insertIndex
+                    ) {
+                        insertIndex -= 1;
+                    }
+                }
+
+                destinationContainer.splice(insertIndex, 0, locationId);
+
+                nextProject.updatedAt = new Date();
+
+                const nextLocations = Array.from(locationsById.values());
 
                 if (
-                    sourceContainer === destinationContainer &&
-                    sourceIndex < insertIndex
+                    exceedsLocationNestingLimit(
+                        nextProject.locationIds,
+                        nextLocations,
+                        MAX_LOCATION_NESTING_LEVEL,
+                    )
                 ) {
-                    insertIndex -= 1;
+                    set({
+                        autosaveError:
+                            "Location nesting is limited to 5 levels in the editor.",
+                    });
+                    return;
                 }
-            }
 
-            destinationContainer.splice(insertIndex, 0, locationId);
-
-            nextProject.updatedAt = new Date();
-
-            const nextLocations = Array.from(locationsById.values());
-
-            set({
-                workspaceProject: nextProject,
-                locations: nextLocations,
-            });
-
-            const persistContainer = async (
-                parentId: string | null,
-                orderedLocationIds: string[],
-            ) => {
-                await rendererApi.logistics.reorderLocationChildren({
-                    projectId,
-                    parentLocationId: parentId,
-                    orderedLocationIds,
+                set({
+                    workspaceProject: nextProject,
+                    locations: nextLocations,
                 });
-            };
 
-            try {
-                if (sourceParentId !== destinationParentId) {
-                    await rendererApi.logistics.saveLocationInfo({
+                const persistContainer = async (
+                    parentId: string | null,
+                    orderedLocationIds: string[],
+                ) => {
+                    await rendererApi.logistics.reorderLocationChildren({
                         projectId,
-                        locationId,
-                        payload: {
-                            parentLocationId: destinationParentId,
-                        },
+                        parentLocationId: parentId,
+                        orderedLocationIds,
+                    });
+                };
+
+                try {
+                    if (sourceParentId !== destinationParentId) {
+                        await rendererApi.logistics.saveLocationInfo({
+                            projectId,
+                            locationId,
+                            payload: {
+                                parentLocationId: destinationParentId,
+                            },
+                        });
+                    }
+
+                    const destinationOrder = [...destinationContainer];
+                    // SaveLocationInfo already removes the item from its previous
+                    // parent/root while preserving remaining order.
+                    // Persist only the destination container to apply drop position.
+
+                    await persistContainer(
+                        destinationParentId,
+                        destinationOrder,
+                    );
+                } catch (error) {
+                    set({
+                        workspaceProject: previousProject,
+                        locations: previousLocations,
+                        autosaveError: createErrorMessage(
+                            error,
+                            "Failed to move location in tree.",
+                        ),
                     });
                 }
-
-                const destinationOrder = [...destinationContainer];
-                const sourceOrder = [...sourceContainer];
-
-                if (sourceParentId !== destinationParentId) {
-                    await persistContainer(sourceParentId, sourceOrder);
-                }
-
-                await persistContainer(destinationParentId, destinationOrder);
-            } catch (error) {
-                set({
-                    workspaceProject: previousProject,
-                    locations: previousLocations,
-                    autosaveError: createErrorMessage(
-                        error,
-                        "Failed to move location in tree.",
-                    ),
-                });
-            }
+            });
         },
         reorderOrganizations: async (newOrder) => {
             const projectId = get().projectId.trim();
@@ -2994,7 +3376,20 @@ export const useAppStore = create<AppStore>((set, get) => {
             set({ lastSyncedAt: timestamp });
         },
         setPendingConflict: (conflict) => {
-            set({ pendingConflict: conflict });
+            set((state) => {
+                if (!conflict) {
+                    return {
+                        pendingConflict: null,
+                        pendingConflictQueue: [],
+                    };
+                }
+
+                const queue = [...state.pendingConflictQueue, conflict];
+                return {
+                    pendingConflictQueue: queue,
+                    pendingConflict: state.pendingConflict ?? queue[0],
+                };
+            });
         },
         resolveConflict: async (resolution) => {
             const { pendingConflict } = get();
@@ -3006,6 +3401,8 @@ export const useAppStore = create<AppStore>((set, get) => {
             );
 
             try {
+                recentlyResolvedConflicts.set(conflictKey, Date.now());
+
                 if (resolution === "accept-remote") {
                     markAcceptedConflictOverwrite(
                         pendingConflict.entityType,
@@ -3019,7 +3416,32 @@ export const useAppStore = create<AppStore>((set, get) => {
                     pendingConflict.projectId,
                     resolution,
                 );
+
+                const stateAfterResolve = get();
+                const selection = resolveConflictSelection(
+                    stateAfterResolve,
+                    pendingConflict,
+                );
+
+                if (
+                    selection &&
+                    documentExistsInState(stateAfterResolve, selection)
+                ) {
+                    const existsInTabs = stateAfterResolve.openTabs.some(
+                        (tab) =>
+                            tab.kind === selection.kind &&
+                            tab.id === selection.id,
+                    );
+
+                    set((state) => ({
+                        activeDocument: selection,
+                        openTabs: existsInTabs
+                            ? state.openTabs
+                            : [...state.openTabs, selection],
+                    }));
+                }
             } catch (error) {
+                recentlyResolvedConflicts.delete(conflictKey);
                 acceptedConflictOverwrites.delete(
                     getConflictEntityKey(
                         pendingConflict.entityType,
@@ -3028,8 +3450,13 @@ export const useAppStore = create<AppStore>((set, get) => {
                 );
                 console.error("Failed to resolve conflict:", error);
             } finally {
-                recentlyResolvedConflicts.set(conflictKey, Date.now());
-                set({ pendingConflict: null });
+                set((state) => {
+                    const [, ...rest] = state.pendingConflictQueue;
+                    return {
+                        pendingConflictQueue: rest,
+                        pendingConflict: rest[0] ?? null,
+                    };
+                });
             }
         },
         setLastSavedAt: (timestamp) => {
@@ -3439,6 +3866,9 @@ export const useAppStore = create<AppStore>((set, get) => {
             return rendererApi.metafield.deleteMetafieldDefinitionGlobal(
                 request,
             );
+        },
+        submitBugReport: async (request) => {
+            return rendererApi.support.submitBugReport(request);
         },
         importAsset: async (request) => {
             return rendererApi.asset.importAsset(request);
