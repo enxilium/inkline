@@ -494,6 +494,9 @@ export const ConnectedOrganizationEditor: React.FC<
                 id: ch.id,
                 name: ch.title || "Untitled Chapter",
                 kind: "chapter",
+                previewTitle: ch.title || "Untitled Chapter",
+                previewContent: ch.content,
+                previewContentType: "tiptap-json",
             });
         }
         for (const sn of scrapNotes) {
@@ -501,6 +504,9 @@ export const ConnectedOrganizationEditor: React.FC<
                 id: sn.id,
                 name: sn.title || "Untitled Note",
                 kind: "scrapNote",
+                previewTitle: sn.title || "Untitled Note",
+                previewContent: sn.content,
+                previewContentType: "tiptap-json",
             });
         }
         for (const c of characters) {
@@ -508,6 +514,9 @@ export const ConnectedOrganizationEditor: React.FC<
                 id: c.id,
                 name: c.name || "Untitled Character",
                 kind: "character",
+                previewTitle: c.name || "Untitled Character",
+                previewContent: c.description || "",
+                previewContentType: "html",
             });
         }
         for (const l of locations) {
@@ -515,6 +524,9 @@ export const ConnectedOrganizationEditor: React.FC<
                 id: l.id,
                 name: l.name || "Untitled Location",
                 kind: "location",
+                previewTitle: l.name || "Untitled Location",
+                previewContent: l.description || "",
+                previewContentType: "html",
             });
         }
         for (const o of organizations) {
@@ -523,6 +535,9 @@ export const ConnectedOrganizationEditor: React.FC<
                     id: o.id,
                     name: o.name || "Untitled Organization",
                     kind: "organization",
+                    previewTitle: o.name || "Untitled Organization",
+                    previewContent: o.description || "",
+                    previewContentType: "html",
                 });
             }
         }

@@ -121,8 +121,9 @@ declare module "@tiptap/core" {
     }
 }
 
-interface TextNodesWithPosition {
+interface ProofreadChunk {
     text: string;
+    positionMap: number[];
     from: number;
     to: number;
 }
@@ -234,8 +235,6 @@ const gimmeDecoration = (from: number, to: number, match: Match) => {
     );
 };
 
-const moreThan500Words = (s: string) => s.trim().split(/\s+/).length >= 500;
-
 // Creates a proofreading function bound to a specific editor view
 const createProofreader = (
     view: EditorView,
@@ -247,8 +246,114 @@ const createProofreader = (
         matchId?: string,
     ) => void,
 ) => {
-    let textNodesWithPosition: TextNodesWithPosition[] = [];
+    const MAX_CHUNK_CHAR_LENGTH = 3200;
     let delegatedListenerAttached = false;
+
+    const buildProofreadChunk = (doc: PMNode, nodePos = 0): ProofreadChunk => {
+        const chars: string[] = [];
+        const positionMap: number[] = [];
+        let lastDocPos = nodePos + 1;
+
+        doc.descendants((node, pos) => {
+            const absolutePos = pos + nodePos;
+            let text = "";
+            let isTextNode = false;
+
+            if (node.isText) {
+                text = node.text || "";
+                isTextNode = true;
+            } else if (node.type.name === "documentReference") {
+                const attrs = node.attrs as {
+                    label?: unknown;
+                    id?: unknown;
+                };
+                const label =
+                    typeof attrs?.label === "string"
+                        ? attrs.label
+                        : typeof attrs?.id === "string"
+                          ? attrs.id
+                          : "";
+                text = label;
+            }
+
+            if (!text) {
+                return;
+            }
+
+            if (chars.length > 0 && absolutePos > lastDocPos) {
+                chars.push(" ");
+                positionMap.push(lastDocPos);
+            }
+
+            for (let index = 0; index < text.length; index += 1) {
+                chars.push(text[index]);
+                if (isTextNode) {
+                    positionMap.push(absolutePos + index);
+                } else {
+                    positionMap.push(absolutePos);
+                }
+            }
+
+            lastDocPos =
+                absolutePos +
+                (isTextNode ? text.length : Math.max(node.nodeSize - 1, 1));
+        });
+
+        const from = positionMap.length > 0 ? positionMap[0] : nodePos + 1;
+        const to =
+            positionMap.length > 0
+                ? positionMap[positionMap.length - 1] + 1
+                : nodePos + 1;
+
+        return {
+            text: chars.join(""),
+            positionMap,
+            from,
+            to,
+        };
+    };
+
+    const splitChunk = (chunk: ProofreadChunk): ProofreadChunk[] => {
+        const text = chunk.text;
+        if (text.length <= MAX_CHUNK_CHAR_LENGTH) {
+            return [chunk];
+        }
+
+        const chunks: ProofreadChunk[] = [];
+        let cursor = 0;
+
+        while (cursor < text.length) {
+            let end = Math.min(cursor + MAX_CHUNK_CHAR_LENGTH, text.length);
+
+            if (end < text.length) {
+                const breakAt = text.lastIndexOf(" ", end);
+                if (breakAt > cursor + 100) {
+                    end = breakAt;
+                }
+            }
+
+            const slicedText = text.slice(cursor, end);
+            const slicedMap = chunk.positionMap.slice(cursor, end);
+            if (slicedText.trim()) {
+                chunks.push({
+                    text: slicedText,
+                    positionMap: slicedMap,
+                    from: slicedMap.length > 0 ? slicedMap[0] : chunk.from,
+                    to:
+                        slicedMap.length > 0
+                            ? slicedMap[slicedMap.length - 1] + 1
+                            : chunk.to,
+                });
+            }
+
+            cursor = end;
+            while (cursor < text.length && text[cursor] === " ") {
+                cursor += 1;
+            }
+        }
+
+        return chunks;
+    };
 
     const setupDelegatedListener = () => {
         if (delegatedListenerAttached) return;
@@ -321,6 +426,8 @@ const createProofreader = (
         doc: PMNode,
         text: string,
         originalFrom: number,
+        positionMap?: number[],
+        rangeTo?: number,
     ) => {
         const state = getPluginState();
         if (!state) return;
@@ -355,8 +462,26 @@ const createProofreader = (
                     contextForSureMatch: 0,
                 };
 
-                const docFrom = match.offset + originalFrom;
-                const docTo = docFrom + match.length;
+                let docFrom = match.offset + originalFrom;
+                let docTo = docFrom + match.length;
+
+                if (positionMap && positionMap.length > 0) {
+                    const startIndex = Math.max(0, match.offset);
+                    const endIndex = Math.max(
+                        startIndex,
+                        match.offset + match.length - 1,
+                    );
+                    const startPos = positionMap[startIndex];
+                    const endPos = positionMap[endIndex];
+
+                    if (typeof startPos === "number") {
+                        docFrom = startPos;
+                        docTo =
+                            typeof endPos === "number"
+                                ? Math.max(startPos + 1, endPos + 1)
+                                : startPos + 1;
+                    }
+                }
 
                 if (documentId) {
                     // Check if this suggestion was previously ignored
@@ -399,9 +524,15 @@ const createProofreader = (
             const currentState = getPluginState();
             if (!currentState) return;
 
+            const removeFrom = positionMap?.[0] ?? originalFrom;
+            const removeTo =
+                positionMap && positionMap.length > 0
+                    ? positionMap[positionMap.length - 1] + 1
+                    : (rangeTo ?? originalFrom + text.length);
+
             const decorationsToRemove = currentState.decorationSet.find(
-                originalFrom,
-                originalFrom + text.length,
+                removeFrom,
+                removeTo,
             );
 
             let newDecorationSet =
@@ -427,87 +558,36 @@ const createProofreader = (
     );
 
     let lastOriginalFrom = 0;
-    const onNodeChanged = (doc: PMNode, text: string, originalFrom: number) => {
-        if (originalFrom !== lastOriginalFrom)
-            getMatchAndSetDecorations(doc, text, originalFrom);
-        else debouncedGetMatchAndSetDecorations(doc, text, originalFrom);
-        lastOriginalFrom = originalFrom;
+    const onNodeChanged = (chunk: ProofreadChunk) => {
+        if (chunk.from !== lastOriginalFrom)
+            getMatchAndSetDecorations(
+                view.state.doc,
+                chunk.text,
+                chunk.from,
+                chunk.positionMap,
+                chunk.to,
+            );
+        else
+            debouncedGetMatchAndSetDecorations(
+                view.state.doc,
+                chunk.text,
+                chunk.from,
+                chunk.positionMap,
+                chunk.to,
+            );
+        lastOriginalFrom = chunk.from;
     };
 
     const proofreadAndDecorateWholeDoc = async (doc: PMNode, nodePos = 0) => {
-        textNodesWithPosition = [];
-
-        let index = 0;
-        doc?.descendants((node, pos) => {
-            if (!node.isText) {
-                index += 1;
-                return;
-            }
-
-            const intermediateTextNodeWIthPos = {
-                text: "",
-                from: -1,
-                to: -1,
-            };
-
-            if (textNodesWithPosition[index]) {
-                intermediateTextNodeWIthPos.text =
-                    textNodesWithPosition[index].text + node.text;
-                intermediateTextNodeWIthPos.from =
-                    textNodesWithPosition[index].from + nodePos;
-                intermediateTextNodeWIthPos.to =
-                    intermediateTextNodeWIthPos.from +
-                    intermediateTextNodeWIthPos.text.length +
-                    nodePos;
-            } else {
-                intermediateTextNodeWIthPos.text = node.text;
-                intermediateTextNodeWIthPos.from = pos + nodePos;
-                intermediateTextNodeWIthPos.to =
-                    pos + nodePos + node.text.length;
-            }
-
-            textNodesWithPosition[index] = intermediateTextNodeWIthPos;
-        });
-
-        textNodesWithPosition = textNodesWithPosition.filter(Boolean);
-
-        let finalText = "";
-        const chunksOf500Words: { from: number; text: string }[] = [];
-        let upperFrom = 0 + nodePos;
-        let newDataSet = true;
-        let lastPos = 1 + nodePos;
-
-        for (const { text, from, to } of textNodesWithPosition) {
-            if (!newDataSet) {
-                upperFrom = from;
-                newDataSet = true;
-            } else {
-                const diff = from - lastPos;
-                if (diff > 0) finalText += Array(diff + 1).join(" ");
-            }
-
-            lastPos = to;
-            finalText += text;
-
-            if (moreThan500Words(finalText)) {
-                const updatedFrom = chunksOf500Words.length
-                    ? upperFrom
-                    : upperFrom + 1;
-                chunksOf500Words.push({ from: updatedFrom, text: finalText });
-                finalText = "";
-                newDataSet = false;
-            }
+        const fullChunk = buildProofreadChunk(doc, nodePos);
+        if (!fullChunk.text.trim()) {
+            return;
         }
 
-        chunksOf500Words.push({
-            from: chunksOf500Words.length ? upperFrom : 1,
-            text: finalText,
-        });
-
-        if (
-            chunksOf500Words.length === 0 ||
-            chunksOf500Words.every((c) => !c.text.trim())
-        ) {
+        const chunksOf500Words = splitChunk(fullChunk).filter((chunk) =>
+            chunk.text.trim(),
+        );
+        if (chunksOf500Words.length === 0) {
             return;
         }
 
@@ -518,11 +598,10 @@ const createProofreader = (
         );
         view.dispatch(loadingTr);
 
-        const requests = chunksOf500Words
-            .filter((c) => c.text.trim())
-            .map(({ text, from }) =>
-                getMatchAndSetDecorations(doc, text, from),
-            );
+        const requests = chunksOf500Words.map(
+            ({ text, from, positionMap, to }) =>
+                getMatchAndSetDecorations(doc, text, from, positionMap, to),
+        );
 
         Promise.all(requests).then(() => {
             const doneTr = view.state.tr.setMeta(
@@ -542,6 +621,7 @@ const createProofreader = (
     );
 
     return {
+        buildProofreadChunk,
         proofreadAndDecorateWholeDoc,
         debouncedProofreadAndDecorate,
         onNodeChanged,
@@ -939,11 +1019,12 @@ export const LanguageTool = Extension.create<
                                     });
 
                                     if (changedNodeWithPos) {
-                                        proofreader.onNodeChanged(
-                                            changedNodeWithPos.node,
-                                            changedNodeWithPos.node.textContent,
-                                            changedNodeWithPos.pos + 1,
-                                        );
+                                        const chunk =
+                                            proofreader.buildProofreadChunk(
+                                                changedNodeWithPos.node,
+                                                changedNodeWithPos.pos + 1,
+                                            );
+                                        proofreader.onNodeChanged(chunk);
                                     }
                                 }
                             }

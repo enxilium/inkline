@@ -71,6 +71,19 @@ export const RichTextAreaInput = forwardRef<
             [id],
         );
 
+        const resolveReferencePreview = useMemo(
+            () =>
+                (ref: {
+                    id: string;
+                    kind: DocumentRef["kind"];
+                    name: string;
+                }) =>
+                    docsRef.current.find(
+                        (doc) => doc.id === ref.id && doc.kind === ref.kind,
+                    ),
+            [],
+        );
+
         const editor = useEditor({
             extensions: [
                 StarterKit,
@@ -79,6 +92,7 @@ export const RichTextAreaInput = forwardRef<
                         availableDocuments: () => docsRef.current,
                         onReferenceClick,
                     }),
+                    resolveReference: resolveReferencePreview,
                 }),
                 ...(enableGrammarCheck
                     ? [

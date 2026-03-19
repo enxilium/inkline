@@ -39,6 +39,15 @@ export const LanguageToolPopup: React.FC<LanguageToolPopupProps> = ({
         editor.commands.resetLanguageToolMatch();
     }, [editor]);
 
+    React.useEffect(() => {
+        const visible = Boolean(match && position);
+        document.body.dataset.ltPopupVisible = visible ? "1" : "0";
+
+        return () => {
+            document.body.dataset.ltPopupVisible = "0";
+        };
+    }, [match, position]);
+
     // Poll storage regularly to detect changes (more reliable than transaction-based)
     React.useEffect(() => {
         if (!editor) return;
@@ -108,13 +117,16 @@ export const LanguageToolPopup: React.FC<LanguageToolPopupProps> = ({
 
                         // coordsAtPos returns viewport coordinates
                         const coords = editor.view.coordsAtPos(
-                            currentRange.from
+                            currentRange.from,
                         );
 
                         // The popup is positioned inside .editor-body which has position: relative
                         // We need to find .editor-body and get its bounding rect
                         const editorDom = editor.view.dom;
-                        const editorBody = editorDom.closest(".editor-body");
+                        const editorBody =
+                            editorDom.closest(".editor-body") ||
+                            editorDom.closest(".rich-textarea-wrapper") ||
+                            editorDom.parentElement;
 
                         if (!editorBody) {
                             setPosition(null);
@@ -140,7 +152,10 @@ export const LanguageToolPopup: React.FC<LanguageToolPopupProps> = ({
                             top: relativeTop + 8,
                             left: Math.max(
                                 0,
-                                Math.min(relativeLeft, bodyRect.width - 320)
+                                Math.min(
+                                    relativeLeft,
+                                    Math.max(bodyRect.width - 320, 0),
+                                ),
                             ),
                         });
                     } catch {
@@ -169,29 +184,49 @@ export const LanguageToolPopup: React.FC<LanguageToolPopupProps> = ({
         };
     }, [editor]);
 
-    // Close popup when clicking outside
+    // Close popup only when pointer is outside both underline and popup.
+    // A small grace window avoids accidental close while moving between them.
     React.useEffect(() => {
         if (!match) return;
 
-        const handleClickOutside = (e: MouseEvent) => {
+        let dismissTimer: number | null = null;
+
+        const clearDismissTimer = () => {
+            if (dismissTimer !== null) {
+                window.clearTimeout(dismissTimer);
+                dismissTimer = null;
+            }
+        };
+
+        const isHoveringLanguageToolRegion = () =>
+            Boolean(document.querySelector(".lt:hover, .lt-popup:hover"));
+
+        const handlePointerMove = (e: MouseEvent) => {
             const target = e.target as HTMLElement;
 
-            // Don't close if clicking on the popup or a decorated element
+            // Keep visible while hovering popup or active LT underline.
             if (target.closest(".lt-popup") || target.closest(".lt")) {
+                clearDismissTimer();
                 return;
             }
 
-            handleDismiss();
+            if (dismissTimer !== null) {
+                return;
+            }
+
+            dismissTimer = window.setTimeout(() => {
+                if (!isHoveringLanguageToolRegion()) {
+                    handleDismiss();
+                }
+                dismissTimer = null;
+            }, 140);
         };
 
-        // Small delay to prevent immediate close
-        const timer = setTimeout(() => {
-            document.addEventListener("mousedown", handleClickOutside);
-        }, 50);
+        document.addEventListener("mousemove", handlePointerMove, true);
 
         return () => {
-            clearTimeout(timer);
-            document.removeEventListener("mousedown", handleClickOutside);
+            clearDismissTimer();
+            document.removeEventListener("mousemove", handlePointerMove, true);
         };
     }, [match]);
 

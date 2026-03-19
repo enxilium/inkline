@@ -7,15 +7,26 @@ import { type SuggestionOptions } from "@tiptap/suggestion";
 import { mergeAttributes } from "@tiptap/core";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
 import type { DocumentRef, DocumentRefKind } from "../components/ui/ListInput";
+import {
+    createReferencePreviewPopup,
+    isElementPartOfLanguageToolProblem,
+} from "../components/ui/documentReferencePreview";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types
 // ─────────────────────────────────────────────────────────────────────────────
 
-export interface DocumentReferenceOptions
-    extends Omit<MentionOptions, "suggestion"> {
+export interface DocumentReferenceOptions extends Omit<
+    MentionOptions,
+    "suggestion"
+> {
     suggestion: Partial<SuggestionOptions<DocumentRef>>;
     onReferenceClick?: (ref: DocumentRef) => void;
+    resolveReference?: (ref: {
+        id: string;
+        kind: DocumentRefKind;
+        name: string;
+    }) => DocumentRef | undefined;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -106,7 +117,7 @@ class SuggestionListRenderer {
                     <span class="tiptap-ref-name">${item.name}</span>
                     <span class="tiptap-ref-kind">${this.getKindLabel(item.kind)}</span>
                 </div>
-            `
+            `,
             )
             .join("");
 
@@ -115,7 +126,7 @@ class SuggestionListRenderer {
             el.addEventListener("click", (e) => {
                 const index = parseInt(
                     (e.currentTarget as HTMLElement).dataset.index || "0",
-                    10
+                    10,
                 );
                 this.selectItem(index);
             });
@@ -178,7 +189,7 @@ export interface CreateDocumentReferenceSuggestionOptions {
 }
 
 export function createDocumentReferenceSuggestion(
-    options: CreateDocumentReferenceSuggestionOptions
+    options: CreateDocumentReferenceSuggestionOptions,
 ): Partial<SuggestionOptions<DocumentRef>> {
     let renderer: SuggestionListRenderer | null = null;
     let popup: TippyInstance | null = null;
@@ -315,6 +326,7 @@ export const DocumentReference = Mention.extend<DocumentReferenceOptions>({
             renderText: undefined,
             deleteTriggerWithBackspace: true,
             suggestion: {},
+            resolveReference: undefined,
         };
     },
 
@@ -360,7 +372,7 @@ export const DocumentReference = Mention.extend<DocumentReferenceOptions>({
             mergeAttributes(
                 { "data-type": this.name },
                 this.options.HTMLAttributes,
-                HTMLAttributes
+                HTMLAttributes,
             ),
             `${node.attrs.label ?? node.attrs.id}`,
         ];
@@ -406,6 +418,51 @@ export const DocumentReference = Mention.extend<DocumentReferenceOptions>({
             // Icon is handled via CSS ::before to ensure it appears in static renderHTML too
             span.textContent = node.attrs.label || "Untitled";
 
+            let previewPopup: TippyInstance | null = null;
+
+            const openPreview = () => {
+                if (previewPopup) {
+                    return;
+                }
+
+                if (isElementPartOfLanguageToolProblem(span)) {
+                    return;
+                }
+
+                const fallbackRef: DocumentRef = {
+                    id: String(node.attrs.id),
+                    kind: node.attrs.kind as DocumentRefKind,
+                    name: String(node.attrs.label || "Untitled"),
+                    previewTitle: String(node.attrs.label || "Untitled"),
+                    previewContent: "",
+                    previewContentType: "text",
+                };
+
+                const resolved = this.options.resolveReference?.({
+                    id: fallbackRef.id,
+                    kind: fallbackRef.kind,
+                    name: fallbackRef.name,
+                });
+
+                previewPopup = createReferencePreviewPopup(
+                    span,
+                    resolved ?? fallbackRef,
+                );
+                previewPopup.show();
+            };
+
+            const closePreview = () => {
+                if (!previewPopup) {
+                    return;
+                }
+
+                previewPopup.destroy();
+                previewPopup = null;
+            };
+
+            span.addEventListener("mouseenter", openPreview);
+            span.addEventListener("mouseleave", closePreview);
+
             span.addEventListener("click", (e) => {
                 e.preventDefault();
                 e.stopPropagation();
@@ -424,6 +481,9 @@ export const DocumentReference = Mention.extend<DocumentReferenceOptions>({
 
             return {
                 dom: span,
+                destroy: () => {
+                    closePreview();
+                },
             };
         };
     },

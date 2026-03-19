@@ -380,6 +380,9 @@ export const ConnectedCharacterEditor: React.FC<
                 kind: "chapter",
                 id: ch.id,
                 name: ch.title || `Chapter ${ch.order}`,
+                previewTitle: ch.title || `Chapter ${ch.order}`,
+                previewContent: ch.content,
+                previewContentType: "tiptap-json",
             });
         });
 
@@ -388,6 +391,9 @@ export const ConnectedCharacterEditor: React.FC<
                 kind: "scrapNote",
                 id: sn.id,
                 name: sn.title || "Untitled Note",
+                previewTitle: sn.title || "Untitled Note",
+                previewContent: sn.content,
+                previewContentType: "tiptap-json",
             });
         });
 
@@ -397,6 +403,9 @@ export const ConnectedCharacterEditor: React.FC<
                     kind: "character",
                     id: c.id,
                     name: c.name || "Untitled Character",
+                    previewTitle: c.name || "Untitled Character",
+                    previewContent: c.description || "",
+                    previewContentType: "html",
                 });
             }
         });
@@ -406,6 +415,9 @@ export const ConnectedCharacterEditor: React.FC<
                 kind: "location",
                 id: loc.id,
                 name: loc.name || "Untitled Location",
+                previewTitle: loc.name || "Untitled Location",
+                previewContent: loc.description || "",
+                previewContentType: "html",
             });
         });
 
@@ -414,6 +426,9 @@ export const ConnectedCharacterEditor: React.FC<
                 kind: "organization",
                 id: org.id,
                 name: org.name || "Untitled Organization",
+                previewTitle: org.name || "Untitled Organization",
+                previewContent: org.description || "",
+                previewContentType: "html",
             });
         });
 

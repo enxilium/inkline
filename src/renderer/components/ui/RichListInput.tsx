@@ -1,11 +1,18 @@
 import * as React from "react";
 import classNames from "clsx";
 import { CloseIcon, PlusIcon } from "./Icons";
+import type { Instance as TippyInstance } from "tippy.js";
 import {
     RichTextAreaInput,
     type RichTextAreaInputRef,
 } from "./RichTextAreaInput";
 import { DocumentRef, DocumentRefKind } from "./ListInput";
+import {
+    createReferenceLookup,
+    createReferencePreviewPopup,
+    getReferenceKey,
+    isElementPartOfLanguageToolProblem,
+} from "./documentReferencePreview";
 
 export interface RichListItem {
     title: string;
@@ -45,6 +52,16 @@ export const RichListInput: React.FC<RichListInputProps> = ({
     const containerRef = React.useRef<HTMLDivElement>(null);
     const inputDescriptionRef = React.useRef<RichTextAreaInputRef>(null);
     const editDescriptionRef = React.useRef<RichTextAreaInputRef>(null);
+    const activePreviewRef = React.useRef<{
+        key: string;
+        popup: TippyInstance;
+        anchor: HTMLElement;
+    } | null>(null);
+
+    const referenceLookup = React.useMemo(
+        () => createReferenceLookup(availableDocuments),
+        [availableDocuments],
+    );
 
     const handleKeyDown = (e: KeyboardEvent) => {
         if (e.key === "Enter" && e.ctrlKey) {
@@ -112,6 +129,97 @@ export const RichListInput: React.FC<RichListInputProps> = ({
         }
     };
 
+    React.useEffect(() => {
+        return () => {
+            if (activePreviewRef.current) {
+                activePreviewRef.current.popup.destroy();
+                activePreviewRef.current = null;
+            }
+        };
+    }, []);
+
+    const hideReferencePreview = React.useCallback(() => {
+        if (!activePreviewRef.current) {
+            return;
+        }
+
+        activePreviewRef.current.popup.destroy();
+        activePreviewRef.current = null;
+    }, []);
+
+    const showReferencePreview = React.useCallback(
+        (anchor: HTMLElement) => {
+            if (isElementPartOfLanguageToolProblem(anchor)) {
+                return;
+            }
+
+            const id = anchor.getAttribute("data-id");
+            const kind = anchor.getAttribute(
+                "data-kind",
+            ) as DocumentRefKind | null;
+            const name =
+                anchor.getAttribute("data-label") || anchor.textContent || "";
+
+            if (!id || !kind) {
+                hideReferencePreview();
+                return;
+            }
+
+            const key = getReferenceKey(kind, id);
+            if (activePreviewRef.current?.key === key) {
+                return;
+            }
+
+            hideReferencePreview();
+
+            const previewRef = referenceLookup.get(key) ?? {
+                id,
+                kind,
+                name,
+                previewTitle: name,
+                previewContent: "",
+                previewContentType: "text" as const,
+            };
+
+            const popup = createReferencePreviewPopup(anchor, previewRef);
+            popup.show();
+            activePreviewRef.current = { key, popup, anchor };
+        },
+        [hideReferencePreview, referenceLookup],
+    );
+
+    const handleItemMouseOver = React.useCallback(
+        (e: React.MouseEvent) => {
+            const target = e.target as HTMLElement;
+            const refNode = target.closest(
+                '[data-type="documentReference"]',
+            ) as HTMLElement | null;
+
+            if (!refNode) {
+                return;
+            }
+
+            showReferencePreview(refNode);
+        },
+        [showReferencePreview],
+    );
+
+    const handleItemMouseOut = React.useCallback(
+        (e: React.MouseEvent) => {
+            const related = e.relatedTarget as Node | null;
+            if (!activePreviewRef.current) {
+                return;
+            }
+
+            if (related && activePreviewRef.current.anchor.contains(related)) {
+                return;
+            }
+
+            hideReferencePreview();
+        },
+        [hideReferencePreview],
+    );
+
     const handleItemClick = (e: React.MouseEvent) => {
         const target = e.target as HTMLElement;
         const refNode = target.closest('[data-type="documentReference"]');
@@ -134,7 +242,7 @@ export const RichListInput: React.FC<RichListInputProps> = ({
             ref={containerRef}
             className={classNames(
                 "list-input-container rich-list-input",
-                className
+                className,
             )}
             onBlur={handleBlur}
         >
@@ -182,6 +290,8 @@ export const RichListInput: React.FC<RichListInputProps> = ({
                             key={index}
                             className="list-input-item rich-list-item"
                             onClick={handleItemClick}
+                            onMouseOver={handleItemMouseOver}
+                            onMouseOut={handleItemMouseOut}
                         >
                             {editingIndex === index ? (
                                 <div className="list-input-edit-wrapper rich-list-edit-wrapper">

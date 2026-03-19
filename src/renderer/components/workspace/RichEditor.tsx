@@ -41,10 +41,10 @@ import {
 } from "../ui/Icons";
 import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
-import { RichTextAreaInput } from "../ui/RichTextAreaInput";
 import type { DocumentRef } from "../ui/ListInput";
 import { showToast } from "../ui/GenerationProgressToast";
 import { MetafieldsSection } from "./MetafieldsSection";
+import { ParagraphRichField } from "./ParagraphRichField";
 import {
     normalizeUserFacingError,
     type UserErrorContext,
@@ -1375,14 +1375,12 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                     fixedCard.type === "description"
                 ) {
                     content = (
-                        <div className="entity-field">
-                            <RichTextAreaInput
-                                key={`${entityType}:${entityId}:description`}
+                        <ParagraphRichField
+                                syncSourceKey={`${entityType}:${entityId}:description`}
                                 id={`${entityType}-description`}
+                                value={values.description}
                                 rows={4}
                                 placeholder="Describe this entity... (use / to reference)"
-                                value={values.description}
-                                syncSourceKey={`${entityType}:${entityId}:description`}
                                 onChange={(val) =>
                                     handleChange(
                                         "description",
@@ -1390,9 +1388,8 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                                     )
                                 }
                                 availableDocuments={availableDocuments}
-                                onReferenceClick={onNavigateToDocument}
+                                onNavigateToDocument={onNavigateToDocument}
                             />
-                        </div>
                     );
                 } else if (
                     fixedCard.source === "core" &&
@@ -1656,6 +1653,8 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                             label: item.name || "Untitled organization",
                         }))}
                         imageOptions={imageOptions}
+                        availableDocuments={availableDocuments}
+                        onNavigateToDocument={onNavigateToDocument}
                         onCreateOrReuseDefinition={(request) =>
                             onCreateOrReuseMetafieldDefinition({
                                 ...request,

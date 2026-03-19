@@ -7,6 +7,7 @@ export type TextStats = {
 type TiptapJsonNode = {
     type?: unknown;
     text?: unknown;
+    attrs?: unknown;
     content?: unknown;
 };
 
@@ -30,6 +31,25 @@ const extractTextFromTiptapNode = (node: unknown, out: string[]): void => {
     const rec = node as TiptapJsonNode;
 
     const nodeType = typeof rec.type === "string" ? rec.type : null;
+
+    if (nodeType === "documentReference") {
+        const attrs =
+            rec.attrs && typeof rec.attrs === "object"
+                ? (rec.attrs as Record<string, unknown>)
+                : null;
+        const label =
+            typeof attrs?.label === "string"
+                ? attrs.label
+                : typeof attrs?.id === "string"
+                  ? attrs.id
+                  : "";
+
+        if (label) {
+            out.push(label);
+        }
+        return;
+    }
+
     if (nodeType === "hardBreak") {
         // Mirror editor behavior: hard breaks separate words.
         out.push("\n");
@@ -58,7 +78,7 @@ const extractTextFromTiptapNode = (node: unknown, out: string[]): void => {
  * This intentionally mirrors the renderer behavior so AI word indices align.
  */
 export const extractPlainText = (
-    content: string | null | undefined
+    content: string | null | undefined,
 ): string => {
     if (!content) {
         return "";

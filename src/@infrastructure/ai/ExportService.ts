@@ -146,6 +146,11 @@ function renderNode(node: TiptapNode): string {
             return `<img src="${escapeAttr(src)}" alt="${escapeAttr(alt)}"${titleAttr}/>`;
         }
 
+        case "documentReference":
+            return escapeHtml(
+                String(node.attrs?.label ?? node.attrs?.id ?? ""),
+            );
+
         case "text":
             return renderMarks(node.text || "", node.marks);
 

@@ -19,10 +19,11 @@ import type {
     WorkspaceMetafieldAssignment,
     WorkspaceMetafieldDefinition,
 } from "../../types";
+import type { DocumentRef } from "../ui/ListInput";
 import { Input } from "../ui/Input";
-import { RichTextAreaInput } from "../ui/RichTextAreaInput";
 import { TraitsInput } from "../ui/TraitsInput";
 import { Button } from "../ui/Button";
+import { ParagraphRichField } from "./ParagraphRichField";
 
 type EditorEntityType = "character" | "location" | "organization";
 type MetafieldUiKind = "field" | "paragraph" | "select";
@@ -42,6 +43,8 @@ type Props = {
     locationOptions: Array<{ id: string; label: string }>;
     organizationOptions: Array<{ id: string; label: string }>;
     imageOptions: Array<{ id: string; label: string }>;
+    availableDocuments?: DocumentRef[];
+    onNavigateToDocument?: (ref: DocumentRef) => void;
     onCreateOrReuseDefinition: (request: {
         projectId: string;
         name: string;
@@ -273,6 +276,8 @@ export const MetafieldsSection: React.FC<Props> = ({
     entityId,
     definitions,
     assignments,
+    availableDocuments = [],
+    onNavigateToDocument,
     onCreateOrReuseDefinition,
     onAssignDefinition,
     onSaveValue,
@@ -522,12 +527,13 @@ export const MetafieldsSection: React.FC<Props> = ({
 
         if (staged.kind === "paragraph") {
             return (
-                <RichTextAreaInput
-                    key={`metafield:${assignment.id}:paragraph`}
+                <ParagraphRichField
                     syncSourceKey={`metafield:${assignment.id}:paragraph`}
                     value={staged.value}
                     rows={6}
                     placeholder="Write paragraph..."
+                    availableDocuments={availableDocuments}
+                    onNavigateToDocument={onNavigateToDocument}
                     onChange={(value) => {
                         setStagedValues((prev) => ({
                             ...prev,

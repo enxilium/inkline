@@ -163,6 +163,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
 
     const warnedEditsRef = React.useRef<Set<string>>(new Set());
     const lastTextStyleRef = React.useRef<Record<string, string>>({});
+    const availableDocumentsRef = React.useRef<DocumentRef[]>([]);
 
     // Build available documents for slash-command references
     const availableDocuments: DocumentRef[] = React.useMemo(() => {
@@ -173,6 +174,9 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 kind: "chapter",
                 id: ch.id,
                 name: ch.title || `Chapter ${ch.order}`,
+                previewTitle: ch.title || `Chapter ${ch.order}`,
+                previewContent: ch.content,
+                previewContentType: "tiptap-json",
             });
         });
 
@@ -182,6 +186,9 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 kind: "scrapNote",
                 id: sn.id,
                 name: sn.title || "Untitled Note",
+                previewTitle: sn.title || "Untitled Note",
+                previewContent: sn.content,
+                previewContentType: "tiptap-json",
             });
         });
 
@@ -190,6 +197,9 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 kind: "character",
                 id: c.id,
                 name: c.name || "Unnamed Character",
+                previewTitle: c.name || "Unnamed Character",
+                previewContent: c.description || "",
+                previewContentType: "html",
             });
         });
 
@@ -198,6 +208,9 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 kind: "location",
                 id: loc.id,
                 name: loc.name || "Unnamed Location",
+                previewTitle: loc.name || "Unnamed Location",
+                previewContent: loc.description || "",
+                previewContentType: "html",
             });
         });
 
@@ -206,6 +219,9 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 kind: "organization",
                 id: org.id,
                 name: org.name || "Unnamed Organization",
+                previewTitle: org.name || "Unnamed Organization",
+                previewContent: org.description || "",
+                previewContentType: "html",
             });
         });
 
@@ -220,6 +236,10 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
         documentId,
     ]);
 
+    React.useEffect(() => {
+        availableDocumentsRef.current = availableDocuments;
+    }, [availableDocuments]);
+
     // Handle reference click - navigate to the referenced document
     const handleReferenceClick = React.useCallback(
         (ref: DocumentRef) => {
@@ -232,10 +252,19 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
     const documentReferenceSuggestion = React.useMemo(
         () =>
             createDocumentReferenceSuggestion({
-                availableDocuments,
+                availableDocuments: () => availableDocumentsRef.current,
                 onReferenceClick: handleReferenceClick,
             }),
-        [availableDocuments, handleReferenceClick],
+        [handleReferenceClick],
+    );
+
+    const resolveReferencePreview = React.useCallback(
+        (ref: { id: string; kind: DocumentRef["kind"]; name: string }) => {
+            return availableDocumentsRef.current.find(
+                (doc) => doc.id === ref.id && doc.kind === ref.kind,
+            );
+        },
+        [],
     );
 
     // If undo brings back a highlight, restore its edit payload from archive.
@@ -343,14 +372,10 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
                 },
                 underline: {},
             }),
-            // Only enable document references for scrap notes, not chapters
-            ...(kind === "scrapNote"
-                ? [
-                      DocumentReference.configure({
-                          suggestion: documentReferenceSuggestion,
-                      }),
-                  ]
-                : []),
+            DocumentReference.configure({
+                suggestion: documentReferenceSuggestion,
+                resolveReference: resolveReferencePreview,
+            }),
             TiptapImage.configure({
                 inline: false,
                 allowBase64: false,
