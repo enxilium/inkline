@@ -24,6 +24,10 @@ commands = [
 	command = "npm run publish"
 	description="Packages and publishes installer for current OS to GitHub."
 
+	[tasks.clear-local-branches]
+    command = "git branch | grep -v \"main\" | xargs git branch -d"
+    description = "Deletes all local branches except main."
+
 [open]
 repo = "https://github.com/enxilium/inkline"
 website = "https://inkline.jacemu.xyz/"
