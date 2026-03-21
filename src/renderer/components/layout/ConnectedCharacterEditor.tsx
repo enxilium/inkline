@@ -30,6 +30,7 @@ export const ConnectedCharacterEditor: React.FC<
         assets,
         metafieldDefinitions,
         metafieldAssignments,
+        editorTemplates,
         activeDocument,
         updateCharacterLocally,
         addOrUpdateMetafieldDefinitionLocally,
@@ -37,10 +38,12 @@ export const ConnectedCharacterEditor: React.FC<
         updateMetafieldAssignmentLocally,
         removeMetafieldAssignmentLocally,
         removeMetafieldDefinitionLocally,
+        reloadProjectTemplateData,
         saveCharacterInfo,
         createOrReuseMetafieldDefinition,
         assignMetafieldToEntity,
         saveMetafieldValue,
+        saveEditorTemplate,
         removeMetafieldFromEntity,
         deleteMetafieldDefinitionGlobal,
         generateCharacterImage,
@@ -132,6 +135,14 @@ export const ConnectedCharacterEditor: React.FC<
                     assignment.entityId === characterId,
             ),
         [metafieldAssignments, characterId],
+    );
+
+    const characterEditorTemplate = React.useMemo(
+        () =>
+            editorTemplates.find(
+                (template) => template.editorType === "character",
+            ) ?? null,
+        [editorTemplates],
     );
 
     const definitionById = React.useMemo(
@@ -810,6 +821,16 @@ export const ConnectedCharacterEditor: React.FC<
         [character, importAsset, projectId],
     );
 
+    const handleSaveEditorTemplate = React.useCallback(
+        async (request: Parameters<typeof saveEditorTemplate>[0]) => {
+            const response = await saveEditorTemplate(request);
+            await reloadProjectTemplateData(request.projectId);
+
+            return response;
+        },
+        [reloadProjectTemplateData, saveEditorTemplate],
+    );
+
     if (!character) {
         return <div className="empty-editor">Character not found.</div>;
     }
@@ -844,6 +865,8 @@ export const ConnectedCharacterEditor: React.FC<
                 handleDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={handleImportMetafieldImage}
+            editorTemplate={characterEditorTemplate}
+            onSaveEditorTemplate={handleSaveEditorTemplate}
             onActionLog={handleActionLog}
             onSectionLayoutSync={handleSectionLayoutSync}
             initialSectionPlacement={initialSectionPlacement}

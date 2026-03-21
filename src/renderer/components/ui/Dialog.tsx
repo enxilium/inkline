@@ -36,6 +36,24 @@ export const DialogContent = React.forwardRef<
 ));
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
+export const DialogModalEditorContent = React.forwardRef<
+    React.ElementRef<typeof DialogPrimitive.Content>,
+    React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
+>(({ className, children, ...props }, ref) => (
+    <DialogPortal>
+        <DialogOverlay />
+        <DialogPrimitive.Content
+            ref={ref}
+            className={cx("dialog-modal-editor", className)}
+            {...props}
+        >
+            {children}
+        </DialogPrimitive.Content>
+    </DialogPortal>
+));
+DialogModalEditorContent.displayName =
+    DialogPrimitive.Content.displayName;
+
 export const DialogHeader: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({
     className,
     ...props

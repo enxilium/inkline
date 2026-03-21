@@ -20,6 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 
 import type {
     WorkspaceCharacter,
+    WorkspaceEditorTemplate,
     WorkspaceLocation,
     WorkspaceMetafieldAssignment,
     WorkspaceMetafieldDefinition,
@@ -30,6 +31,7 @@ import { Button } from "../ui/Button";
 import {
     Dialog,
     DialogContent,
+    DialogModalEditorContent,
     DialogDescription,
     DialogHeader,
     DialogTitle,
@@ -68,6 +70,54 @@ export type RichEditorSectionPlacement = {
 export type RichEditorActionLog = {
     action: string;
     payload?: Record<string, unknown>;
+};
+
+type TemplateDraftField = {
+    definitionId: string;
+    kind: "field" | "paragraph" | "select";
+    column: RichEditorColumnId;
+};
+
+const TEMPLATE_CORE_LEFT_ITEMS = [
+    "template-core:description",
+] as const;
+const TEMPLATE_CORE_RIGHT_ITEMS = [
+    "template-core:portrait",
+    "template-core:audio",
+] as const;
+const TEMPLATE_CORE_ITEM_IDS = new Set<string>([
+    ...TEMPLATE_CORE_LEFT_ITEMS,
+    ...TEMPLATE_CORE_RIGHT_ITEMS,
+]);
+
+const toTemplateCardItemId = (definitionId: string): string =>
+    `template-field:${definitionId}`;
+
+const toTemplateDefinitionId = (itemId: string): string | null =>
+    itemId.startsWith("template-field:")
+        ? itemId.slice("template-field:".length)
+        : null;
+
+const isTemplateCardItemId = (itemId: string): boolean =>
+    itemId.startsWith("template-field:");
+
+const findTemplateColumnForItem = (
+    placement: RichEditorSectionPlacement,
+    itemId: string,
+): RichEditorColumnId | null => {
+    if (placement.left.includes(itemId)) {
+        return "left";
+    }
+    if (placement.right.includes(itemId)) {
+        return "right";
+    }
+    if (itemId === "rich-editor-template-column-left") {
+        return "left";
+    }
+    if (itemId === "rich-editor-template-column-right") {
+        return "right";
+    }
+    return null;
 };
 
 export type RichEditorBaseValues = {
@@ -154,6 +204,7 @@ type SortableSectionCardProps = {
     children: React.ReactNode;
     className?: string;
     disableDrag?: boolean;
+    showDragHandle?: boolean;
     isActiveDrag?: boolean;
     dragDimensions?: { width: number; height: number } | null;
 };
@@ -164,6 +215,7 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
     children,
     className,
     disableDrag = false,
+    showDragHandle = true,
     isActiveDrag = false,
     dragDimensions = null,
 }) => {
@@ -197,16 +249,18 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
             className={`entity-section-card${className ? ` ${className}` : ""}${isDragging ? " is-dragging" : ""}`}
         >
             <div className="entity-section-card-header">
-                <h3 className="entity-section-card-title">{title}</h3>
-                <button
-                    type="button"
-                    className="entity-section-card-handle"
-                    aria-label={`Reorder ${title} section`}
-                    {...attributes}
-                    {...listeners}
-                >
-                    <GripVerticalIcon size={14} />
-                </button>
+                <p className="panel-label">{title}</p>
+                {showDragHandle ? (
+                    <button
+                        type="button"
+                        className="entity-section-card-handle"
+                        aria-label={`Reorder ${title} section`}
+                        {...attributes}
+                        {...listeners}
+                    >
+                        <GripVerticalIcon size={14} />
+                    </button>
+                ) : null}
             </div>
             <div className="entity-section-card-body">{children}</div>
         </section>
@@ -281,6 +335,16 @@ export type RichEditorProps<TValues extends RichEditorBaseValues> = {
         definitionId: string;
     }) => Promise<void>;
     onImportMetafieldImage: (file: File) => Promise<string>;
+    editorTemplate?: WorkspaceEditorTemplate | null;
+    onSaveEditorTemplate?: (request: {
+        projectId: string;
+        editorType: "character" | "location" | "organization";
+        placement: RichEditorSectionPlacement;
+        fields: Array<{
+            definitionId: string;
+            kind: "field" | "paragraph" | "select";
+        }>;
+    }) => Promise<{ template: WorkspaceEditorTemplate }>;
     focusTitleOnMount?: boolean;
     initialSectionPlacement?: RichEditorSectionPlacement;
     onSectionLayoutSync?: (
@@ -358,6 +422,11 @@ const resolveMetafieldUiKind = (
     return "field";
 };
 
+const defaultKindForDefinition = (
+    definition: WorkspaceMetafieldDefinition,
+): "field" | "paragraph" | "select" =>
+    definition.valueType === "string[]" ? "select" : "field";
+
 export function RichEditor<TValues extends RichEditorBaseValues>({
     panelLabel,
     projectId,
@@ -390,6 +459,8 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     onRemoveMetafieldFromEntity,
     onDeleteMetafieldDefinitionGlobal,
     onImportMetafieldImage,
+    editorTemplate,
+    onSaveEditorTemplate,
     focusTitleOnMount = false,
     initialSectionPlacement,
     onSectionLayoutSync,
@@ -425,6 +496,32 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
         string | null
     >(null);
     const [isCreatingMetafield, setIsCreatingMetafield] = React.useState(false);
+    const [isTemplateDialogOpen, setIsTemplateDialogOpen] =
+        React.useState(false);
+    const [isSavingTemplate, setIsSavingTemplate] = React.useState(false);
+    const [templateDraftError, setTemplateDraftError] = React.useState<
+        string | null
+    >(null);
+    const [templateDraftFields, setTemplateDraftFields] = React.useState<
+        TemplateDraftField[]
+    >([]);
+    const [templateFieldToAdd, setTemplateFieldToAdd] = React.useState("");
+    const [templateNewFieldName, setTemplateNewFieldName] = React.useState("");
+    const [templateNewFieldKind, setTemplateNewFieldKind] = React.useState<
+        NewMetafieldKind
+    >("field");
+    const [templateSectionPlacement, setTemplateSectionPlacement] =
+        React.useState<RichEditorSectionPlacement>({
+            left: [...TEMPLATE_CORE_LEFT_ITEMS],
+            right: [...TEMPLATE_CORE_RIGHT_ITEMS],
+        });
+    const [activeTemplateDragId, setActiveTemplateDragId] = React.useState<
+        string | null
+    >(null);
+    const [templateDragPreviewDimensions, setTemplateDragPreviewDimensions] =
+        React.useState<{ width: number; height: number } | null>(null);
+    const [pendingTemplateDeleteDefinitionId, setPendingTemplateDeleteDefinitionId] =
+        React.useState<string | null>(null);
     const [sectionPlacement, setSectionPlacement] =
         React.useState<RichEditorSectionPlacement>(() => {
             const defs = CORE_CARD_CONFIG;
@@ -459,6 +556,9 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     const pendingMetafieldColumnsRef = React.useRef<
         Map<string, RichEditorColumnId>
     >(new Map());
+
+    const supportsTemplateEditing = Boolean(onSaveEditorTemplate);
+    const isTemplateEditLocked = supportsTemplateEditing;
 
     const toFriendlyError = React.useCallback(
         (err: unknown, fallback: string, context?: UserErrorContext) =>
@@ -542,6 +642,209 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
         () => new Map(internalCards.map((card) => [card.id, card])),
         [internalCards],
     );
+
+    const templateDefinitionOptions = React.useMemo(
+        () =>
+            metafieldDefinitions.filter((definition) => {
+                if (definition.name.startsWith("_sys:")) {
+                    return false;
+                }
+
+                if (
+                    definition.valueType !== "string" &&
+                    definition.valueType !== "string[]"
+                ) {
+                    return false;
+                }
+
+                return (
+                    definition.scope === "project" ||
+                    definition.scope === entityType
+                );
+            }),
+        [entityType, metafieldDefinitions],
+    );
+
+    const templateDefinitionById = React.useMemo(
+        () =>
+            new Map(
+                templateDefinitionOptions.map((definition) => [
+                    definition.id,
+                    definition,
+                ]),
+            ),
+        [templateDefinitionOptions],
+    );
+
+    const buildTemplateDraftFields = React.useCallback((): TemplateDraftField[] => {
+        if (editorTemplate && editorTemplate.editorType === entityType) {
+            const left = new Set(editorTemplate.placement.left);
+            const right = new Set(editorTemplate.placement.right);
+            const seenDefinitions = new Set<string>();
+
+            return [...editorTemplate.fields]
+                .sort((a, b) => a.orderIndex - b.orderIndex)
+                .filter((field) => templateDefinitionById.has(field.definitionId))
+                .filter((field) => {
+                    if (seenDefinitions.has(field.definitionId)) {
+                        return false;
+                    }
+                    seenDefinitions.add(field.definitionId);
+                    return true;
+                })
+                .map((field) => ({
+                    definitionId: field.definitionId,
+                    kind: field.kind,
+                    column: right.has(field.definitionId)
+                        ? "right"
+                        : left.has(field.definitionId)
+                          ? "left"
+                          : "left",
+                }));
+        }
+
+        const orderedAssignments = [...metafieldAssignments].sort(
+            (a, b) => a.orderIndex - b.orderIndex,
+        );
+        const seenDefinitions = new Set<string>();
+
+        return orderedAssignments
+            .map((assignment) => {
+                const definition = templateDefinitionById.get(
+                    assignment.definitionId,
+                );
+                if (!definition) {
+                    return null;
+                }
+
+                const column = sectionPlacement.right.includes(assignment.id)
+                    ? "right"
+                    : sectionPlacement.left.includes(assignment.id)
+                      ? "left"
+                      : "left";
+
+                return {
+                    definitionId: assignment.definitionId,
+                    kind: resolveMetafieldUiKind(assignment, definition),
+                    column,
+                } as TemplateDraftField;
+            })
+            .filter((field) => {
+                if (!field) {
+                    return false;
+                }
+                if (seenDefinitions.has(field.definitionId)) {
+                    return false;
+                }
+                seenDefinitions.add(field.definitionId);
+                return true;
+            })
+            .filter((field): field is TemplateDraftField => Boolean(field));
+    }, [
+        editorTemplate,
+        entityType,
+        metafieldAssignments,
+        sectionPlacement.left,
+        sectionPlacement.right,
+        templateDefinitionById,
+    ]);
+
+    const openTemplateDialog = React.useCallback(() => {
+        if (!supportsTemplateEditing) {
+            return;
+        }
+
+        const draftFields = buildTemplateDraftFields();
+        const draftFieldIds = draftFields.map((field) =>
+            toTemplateCardItemId(field.definitionId),
+        );
+        const nextLeft = [
+            ...TEMPLATE_CORE_LEFT_ITEMS,
+            ...draftFields
+                .filter((field) => field.column === "left")
+                .map((field) => toTemplateCardItemId(field.definitionId)),
+        ];
+        const nextRight = [
+            ...TEMPLATE_CORE_RIGHT_ITEMS,
+            ...draftFields
+                .filter((field) => field.column === "right")
+                .map((field) => toTemplateCardItemId(field.definitionId)),
+        ];
+        const placed = new Set([...nextLeft, ...nextRight]);
+        const missing = draftFieldIds.filter((id) => !placed.has(id));
+
+        setTemplateDraftError(null);
+        setTemplateFieldToAdd("");
+        setTemplateNewFieldName("");
+        setTemplateNewFieldKind("field");
+        setPendingTemplateDeleteDefinitionId(null);
+        setTemplateDraftFields(draftFields);
+        setTemplateSectionPlacement({
+            left: nextLeft,
+            right: [...nextRight, ...missing],
+        });
+        setActiveTemplateDragId(null);
+        setTemplateDragPreviewDimensions(null);
+        setIsTemplateDialogOpen(true);
+    }, [buildTemplateDraftFields, supportsTemplateEditing]);
+
+    const closeTemplateDialog = React.useCallback(() => {
+        if (isSavingTemplate) {
+            return;
+        }
+
+        setIsTemplateDialogOpen(false);
+        setTemplateDraftError(null);
+        setTemplateFieldToAdd("");
+        setTemplateNewFieldName("");
+        setTemplateNewFieldKind("field");
+        setPendingTemplateDeleteDefinitionId(null);
+        setActiveTemplateDragId(null);
+        setTemplateDragPreviewDimensions(null);
+    }, [isSavingTemplate]);
+
+    const templateDraftByDefinitionId = React.useMemo(
+        () =>
+            new Map(
+                templateDraftFields.map((field) => [field.definitionId, field]),
+            ),
+        [templateDraftFields],
+    );
+
+    React.useEffect(() => {
+        if (!isTemplateDialogOpen) {
+            return;
+        }
+
+        const templateFieldIds = templateDraftFields.map((field) =>
+            toTemplateCardItemId(field.definitionId),
+        );
+
+        setTemplateSectionPlacement((current) => {
+            const filteredLeft = current.left.filter(
+                (itemId) =>
+                    TEMPLATE_CORE_ITEM_IDS.has(itemId) ||
+                    templateFieldIds.includes(itemId),
+            );
+            const filteredRight = current.right.filter(
+                (itemId) =>
+                    TEMPLATE_CORE_ITEM_IDS.has(itemId) ||
+                    templateFieldIds.includes(itemId),
+            );
+
+            const present = new Set([...filteredLeft, ...filteredRight]);
+            const missing = templateFieldIds.filter((itemId) => !present.has(itemId));
+
+            if (missing.length === 0) {
+                return current;
+            }
+
+            return {
+                left: [...filteredLeft, ...missing],
+                right: filteredRight,
+            };
+        });
+    }, [isTemplateDialogOpen, templateDraftFields]);
 
     const defaultPlacement = React.useMemo<RichEditorSectionPlacement>(() => {
         const left: string[] = [];
@@ -627,6 +930,68 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             return prev;
         });
     }, [gallerySources]);
+
+    React.useEffect(() => {
+        if (!supportsTemplateEditing) {
+            return;
+        }
+
+        if (!editorTemplate || editorTemplate.editorType !== entityType) {
+            return;
+        }
+
+        const assignmentByDefinitionId = new Map(
+            metafieldAssignments.map((assignment) => [
+                assignment.definitionId,
+                assignment.id,
+            ]),
+        );
+
+        const nextTemplateLeft = editorTemplate.placement.left
+            .map((definitionId) => assignmentByDefinitionId.get(definitionId))
+            .filter((id): id is string => Boolean(id));
+        const nextTemplateRight = editorTemplate.placement.right
+            .map((definitionId) => assignmentByDefinitionId.get(definitionId))
+            .filter((id): id is string => Boolean(id));
+
+        const placedAssignmentIds = new Set([
+            ...nextTemplateLeft,
+            ...nextTemplateRight,
+        ]);
+        const remainingAssignments = [...metafieldAssignments]
+            .sort((a, b) => a.orderIndex - b.orderIndex)
+            .map((assignment) => assignment.id)
+            .filter((assignmentId) => !placedAssignmentIds.has(assignmentId));
+
+        const nextPlacement: RichEditorSectionPlacement = {
+            left: [...defaultPlacement.left, ...nextTemplateLeft, ...remainingAssignments],
+            right: [...defaultPlacement.right, ...nextTemplateRight],
+        };
+
+        setSectionPlacement((current) => {
+            const isSameLeft =
+                current.left.length === nextPlacement.left.length &&
+                current.left.every((id, index) => id === nextPlacement.left[index]);
+            const isSameRight =
+                current.right.length === nextPlacement.right.length &&
+                current.right.every(
+                    (id, index) => id === nextPlacement.right[index],
+                );
+
+            if (isSameLeft && isSameRight) {
+                return current;
+            }
+
+            return nextPlacement;
+        });
+    }, [
+        defaultPlacement.left,
+        defaultPlacement.right,
+        editorTemplate,
+        entityType,
+        metafieldAssignments,
+        supportsTemplateEditing,
+    ]);
 
     React.useEffect(() => {
         const assignmentIds = [
@@ -1127,6 +1492,452 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             pendingMetafieldDraft,
         ]);
 
+    const addTemplateField = React.useCallback(() => {
+        const definitionId = templateFieldToAdd.trim();
+        if (!definitionId) {
+            setTemplateDraftError("Choose a metafield to add.");
+            return;
+        }
+
+        if (templateDraftFields.some((field) => field.definitionId === definitionId)) {
+            setTemplateDraftError("This metafield is already in the template.");
+            return;
+        }
+
+        const definition = templateDefinitionById.get(definitionId);
+        if (!definition) {
+            setTemplateDraftError("Selected metafield is no longer available.");
+            return;
+        }
+
+        setTemplateDraftFields((current) => [
+            ...current,
+            {
+                definitionId,
+                kind: defaultKindForDefinition(definition),
+                column: "left",
+            },
+        ]);
+        setTemplateSectionPlacement((current) => ({
+            left: [...current.left, toTemplateCardItemId(definitionId)],
+            right: current.right,
+        }));
+        setTemplateFieldToAdd("");
+        setTemplateDraftError(null);
+    }, [templateDefinitionById, templateDraftFields, templateFieldToAdd]);
+
+    const createAndAddTemplateField = React.useCallback(async () => {
+        const name = templateNewFieldName.trim();
+        if (!name) {
+            setTemplateDraftError("Metafield name is required.");
+            return;
+        }
+
+        setTemplateDraftError(null);
+
+        try {
+            const response = await onCreateOrReuseMetafieldDefinition({
+                projectId,
+                name,
+                scope: entityType,
+                valueType: templateNewFieldKind === "select" ? "string[]" : "string",
+            });
+
+            const definitionId = response.definition.id;
+            if (
+                templateDraftFields.some(
+                    (field) => field.definitionId === definitionId,
+                )
+            ) {
+                setTemplateDraftError(
+                    "This metafield is already in the template.",
+                );
+                return;
+            }
+
+            setTemplateDraftFields((current) => [
+                ...current,
+                {
+                    definitionId,
+                    kind: templateNewFieldKind,
+                    column: "left",
+                },
+            ]);
+            setTemplateSectionPlacement((current) => ({
+                left: [...current.left, toTemplateCardItemId(definitionId)],
+                right: current.right,
+            }));
+            setTemplateNewFieldName("");
+            setTemplateNewFieldKind("field");
+        } catch (createError) {
+            setTemplateDraftError(
+                toFriendlyError(createError, "Failed to create metafield."),
+            );
+        }
+    }, [
+        entityType,
+        onCreateOrReuseMetafieldDefinition,
+        projectId,
+        templateDraftFields,
+        templateNewFieldKind,
+        templateNewFieldName,
+        toFriendlyError,
+    ]);
+
+    const updateTemplateDraftField = React.useCallback(
+        (
+            index: number,
+            patch: Partial<Pick<TemplateDraftField, "kind" | "column">>,
+        ) => {
+            setTemplateDraftFields((current) =>
+                current.map((field, fieldIndex) =>
+                    fieldIndex === index
+                        ? {
+                              ...field,
+                              ...patch,
+                          }
+                        : field,
+                ),
+            );
+            if (templateDraftError) {
+                setTemplateDraftError(null);
+            }
+        },
+        [templateDraftError],
+    );
+
+    const removeTemplateDraftField = React.useCallback((index: number) => {
+        setTemplateDraftFields((current) => {
+            const field = current[index];
+            if (field) {
+                const itemId = toTemplateCardItemId(field.definitionId);
+                setTemplateSectionPlacement((placement) => ({
+                    left: placement.left.filter((id) => id !== itemId),
+                    right: placement.right.filter((id) => id !== itemId),
+                }));
+            }
+
+            return current.filter((_, fieldIndex) => fieldIndex !== index);
+        });
+        if (templateDraftError) {
+            setTemplateDraftError(null);
+        }
+    }, [templateDraftError]);
+
+    const requestTemplateDraftFieldDelete = React.useCallback(
+        (definitionId: string) => {
+            setPendingTemplateDeleteDefinitionId(definitionId);
+        },
+        [],
+    );
+
+    const cancelTemplateDraftFieldDelete = React.useCallback(() => {
+        if (isSavingTemplate) {
+            return;
+        }
+        setPendingTemplateDeleteDefinitionId(null);
+    }, [isSavingTemplate]);
+
+    const confirmTemplateDraftFieldDelete = React.useCallback(() => {
+        if (!pendingTemplateDeleteDefinitionId) {
+            return;
+        }
+
+        const index = templateDraftFields.findIndex(
+            (field) => field.definitionId === pendingTemplateDeleteDefinitionId,
+        );
+        if (index >= 0) {
+            removeTemplateDraftField(index);
+        }
+
+        setPendingTemplateDeleteDefinitionId(null);
+    }, [
+        pendingTemplateDeleteDefinitionId,
+        removeTemplateDraftField,
+        templateDraftFields,
+    ]);
+
+    const handleTemplateSectionDragStart = React.useCallback(
+        (event: DragStartEvent) => {
+            const activeId = String(event.active.id);
+            if (!isTemplateCardItemId(activeId) || isSavingTemplate) {
+                return;
+            }
+
+            setActiveTemplateDragId(activeId);
+
+            const initialRect = event.active.rect.current.initial;
+            if (
+                initialRect &&
+                initialRect.width > 0 &&
+                initialRect.height > 0
+            ) {
+                setTemplateDragPreviewDimensions({
+                    width: initialRect.width,
+                    height: initialRect.height,
+                });
+                return;
+            }
+
+            setTemplateDragPreviewDimensions(null);
+        },
+        [isSavingTemplate],
+    );
+
+    const handleTemplateSectionDragOver = React.useCallback(
+        (event: DragOverEvent) => {
+            if (isSavingTemplate) {
+                return;
+            }
+
+            const { active, over } = event;
+            if (!over) {
+                return;
+            }
+
+            const activeId = String(active.id);
+            const overId = String(over.id);
+
+            if (
+                !isTemplateCardItemId(activeId) ||
+                !isTemplateCardItemId(overId)
+            ) {
+                return;
+            }
+
+            setTemplateSectionPlacement((current) => {
+                const sourceColumn = findTemplateColumnForItem(current, activeId);
+                const targetColumn = findTemplateColumnForItem(current, overId);
+
+                if (
+                    !sourceColumn ||
+                    !targetColumn ||
+                    sourceColumn === targetColumn
+                ) {
+                    return current;
+                }
+
+                const sourceItems = current[sourceColumn].filter(
+                    (id) => id !== activeId,
+                );
+                const targetItems = [...current[targetColumn]];
+                const targetIndex = targetItems.includes(overId)
+                    ? targetItems.indexOf(overId)
+                    : targetItems.length;
+
+                if (targetIndex < 0) {
+                    targetItems.push(activeId);
+                } else {
+                    targetItems.splice(targetIndex, 0, activeId);
+                }
+
+                return {
+                    ...current,
+                    [sourceColumn]: sourceItems,
+                    [targetColumn]: targetItems,
+                };
+            });
+        },
+        [isSavingTemplate],
+    );
+
+    const handleTemplateSectionDragEnd = React.useCallback(
+        (event: DragEndEvent) => {
+            setActiveTemplateDragId(null);
+            setTemplateDragPreviewDimensions(null);
+
+            if (isSavingTemplate) {
+                return;
+            }
+
+            const { active, over } = event;
+            if (!over) {
+                return;
+            }
+
+            const activeId = String(active.id);
+            const overId = String(over.id);
+
+            if (!isTemplateCardItemId(activeId)) {
+                return;
+            }
+
+            let nextPlacement: RichEditorSectionPlacement | null = null;
+
+            setTemplateSectionPlacement((current) => {
+                const sourceColumn = findTemplateColumnForItem(current, activeId);
+                const targetColumn = findTemplateColumnForItem(current, overId);
+                if (!sourceColumn || !targetColumn) {
+                    return current;
+                }
+
+                if (sourceColumn === targetColumn) {
+                    const sourceItems = current[sourceColumn];
+                    const oldIndex = sourceItems.indexOf(activeId);
+                    if (oldIndex < 0) {
+                        return current;
+                    }
+
+                    const newIndex = sourceItems.includes(overId)
+                        ? sourceItems.indexOf(overId)
+                        : sourceItems.length - 1;
+
+                    if (newIndex < 0 || oldIndex === newIndex) {
+                        return current;
+                    }
+
+                    const reordered = arrayMove(sourceItems, oldIndex, newIndex);
+                    nextPlacement = {
+                        ...current,
+                        [sourceColumn]: reordered,
+                    };
+                    return nextPlacement;
+                }
+
+                const sourceItems = current[sourceColumn].filter(
+                    (id) => id !== activeId,
+                );
+                const targetItems = [...current[targetColumn]];
+                const targetIndex = targetItems.includes(overId)
+                    ? targetItems.indexOf(overId)
+                    : targetItems.length;
+
+                if (targetIndex < 0) {
+                    targetItems.push(activeId);
+                } else {
+                    targetItems.splice(targetIndex, 0, activeId);
+                }
+
+                nextPlacement = {
+                    ...current,
+                    [sourceColumn]: sourceItems,
+                    [targetColumn]: targetItems,
+                };
+                return nextPlacement;
+            });
+
+            if (!nextPlacement) {
+                return;
+            }
+
+            const orderedTemplateItemIds = [
+                ...nextPlacement.left,
+                ...nextPlacement.right,
+            ].filter((itemId) => isTemplateCardItemId(itemId));
+
+            const leftSet = new Set(nextPlacement.left);
+            setTemplateDraftFields((current) => {
+                const byDefinition = new Map(
+                    current.map((field) => [field.definitionId, field]),
+                );
+                return orderedTemplateItemIds
+                    .map((itemId) => {
+                        const definitionId = toTemplateDefinitionId(itemId);
+                        if (!definitionId) {
+                            return null;
+                        }
+
+                        const existing = byDefinition.get(definitionId);
+                        if (!existing) {
+                            return null;
+                        }
+
+                        return {
+                            ...existing,
+                            column: leftSet.has(itemId) ? "left" : "right",
+                        };
+                    })
+                    .filter((field): field is TemplateDraftField => Boolean(field));
+            });
+        },
+        [isSavingTemplate],
+    );
+
+    const handleTemplateSectionDragCancel = React.useCallback(() => {
+        setActiveTemplateDragId(null);
+        setTemplateDragPreviewDimensions(null);
+    }, []);
+
+    const saveTemplateDraft = React.useCallback(async () => {
+        if (!onSaveEditorTemplate) {
+            return;
+        }
+
+        const dedupedFields: TemplateDraftField[] = [];
+        const seenDefinitions = new Set<string>();
+        const orderedTemplateDefinitionIds = [
+            ...templateSectionPlacement.left,
+            ...templateSectionPlacement.right,
+        ]
+            .map((itemId) => toTemplateDefinitionId(itemId))
+            .filter((definitionId): definitionId is string => Boolean(definitionId));
+
+        for (const orderedDefinitionId of orderedTemplateDefinitionIds) {
+            const field = templateDraftByDefinitionId.get(orderedDefinitionId);
+            if (!field) {
+                continue;
+            }
+
+            const trimmedDefinitionId = field.definitionId.trim();
+            if (
+                !trimmedDefinitionId ||
+                seenDefinitions.has(trimmedDefinitionId)
+            ) {
+                continue;
+            }
+
+            seenDefinitions.add(trimmedDefinitionId);
+            dedupedFields.push({
+                definitionId: trimmedDefinitionId,
+                kind: field.kind,
+                column: templateSectionPlacement.left.includes(
+                    toTemplateCardItemId(trimmedDefinitionId),
+                )
+                    ? "left"
+                    : "right",
+            });
+        }
+
+        setIsSavingTemplate(true);
+        setTemplateDraftError(null);
+
+        try {
+            await onSaveEditorTemplate({
+                projectId,
+                editorType: entityType,
+                placement: {
+                    left: dedupedFields
+                        .filter((field) => field.column === "left")
+                        .map((field) => field.definitionId),
+                    right: dedupedFields
+                        .filter((field) => field.column === "right")
+                        .map((field) => field.definitionId),
+                },
+                fields: dedupedFields.map((field) => ({
+                    definitionId: field.definitionId,
+                    kind: field.kind,
+                })),
+            });
+
+            setIsTemplateDialogOpen(false);
+            setTemplateFieldToAdd("");
+        } catch (templateError) {
+            setTemplateDraftError(
+                toFriendlyError(templateError, "Failed to save editor template."),
+            );
+        } finally {
+            setIsSavingTemplate(false);
+        }
+    }, [
+        entityType,
+        onSaveEditorTemplate,
+        projectId,
+        templateDraftByDefinitionId,
+        templateSectionPlacement.left,
+        templateSectionPlacement.right,
+        toFriendlyError,
+    ]);
+
     const buildAddSectionOptions = React.useCallback(
         (targetColumn: RichEditorColumnId) => [
             {
@@ -1153,6 +1964,10 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
 
     const handleSectionDragStart = React.useCallback(
         (event: DragStartEvent) => {
+            if (isTemplateEditLocked) {
+                return;
+            }
+
             setActiveDragSectionId(String(event.active.id));
 
             const initialRect = event.active.rect.current.initial;
@@ -1170,11 +1985,15 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
 
             setDragPreviewDimensions(null);
         },
-        [],
+        [isTemplateEditLocked],
     );
 
     const handleSectionDragEnd = React.useCallback(
         (event: DragEndEvent) => {
+            if (isTemplateEditLocked) {
+                return;
+            }
+
             const { active, over } = event;
             setActiveDragSectionId(null);
             setDragPreviewDimensions(null);
@@ -1246,6 +2065,10 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 return;
             }
 
+            if (supportsTemplateEditing) {
+                return;
+            }
+
             void onSectionLayoutSync?.(nextPlacement);
 
             void onActionLog?.({
@@ -1299,15 +2122,21 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
         },
         [
             entityType,
+            isTemplateEditLocked,
             metafieldAssignments,
             onActionLog,
             onSaveMetafieldValue,
             onSectionLayoutSync,
+            supportsTemplateEditing,
             toFriendlyError,
         ],
     );
 
     const handleSectionDragOver = React.useCallback((event: DragOverEvent) => {
+        if (isTemplateEditLocked) {
+            return;
+        }
+
         const { active, over } = event;
         if (!over) {
             return;
@@ -1348,12 +2177,16 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 [targetColumn]: targetItems,
             };
         });
-    }, []);
+    }, [isTemplateEditLocked]);
 
     const handleSectionDragCancel = React.useCallback(() => {
+        if (isTemplateEditLocked) {
+            return;
+        }
+
         setActiveDragSectionId(null);
         setDragPreviewDimensions(null);
-    }, []);
+    }, [isTemplateEditLocked]);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -1363,6 +2196,12 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
 
     const leftDroppable = useDroppable({ id: "rich-editor-column-left" });
     const rightDroppable = useDroppable({ id: "rich-editor-column-right" });
+    const templateLeftDroppable = useDroppable({
+        id: "rich-editor-template-column-left",
+    });
+    const templateRightDroppable = useDroppable({
+        id: "rich-editor-template-column-right",
+    });
 
     const renderSection = React.useCallback(
         (itemId: string): React.ReactNode => {
@@ -1574,6 +2413,8 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                         key={fixedCard.id}
                         id={fixedCard.id}
                         title={fixedCard.title}
+                        disableDrag={isTemplateEditLocked}
+                        showDragHandle={!isTemplateEditLocked}
                         isActiveDrag={activeDragSectionId === fixedCard.id}
                         dragDimensions={dragPreviewDimensions}
                     >
@@ -1598,6 +2439,7 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                                 : "entity-section-card--full"
                         }
                         disableDrag
+                        showDragHandle={false}
                         isActiveDrag={
                             activeDragSectionId ===
                             optimisticCard.tempAssignmentId
@@ -1634,7 +2476,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             return (
                 <div key={itemId} className={metafieldSectionClassName}>
                     <MetafieldsSection
-                        key={itemId}
                         projectId={projectId}
                         entityType={entityType}
                         entityId={entityId}
@@ -1690,6 +2531,7 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             handleAssetAction,
             handleChange,
             imageOptions,
+            isTemplateEditLocked,
             internalCardById,
             metafieldAssignments,
             metafieldDefinitions,
@@ -1722,10 +2564,18 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 <DndContext
                     sensors={sensors}
                     collisionDetection={closestCenter}
-                    onDragStart={handleSectionDragStart}
-                    onDragOver={handleSectionDragOver}
-                    onDragEnd={handleSectionDragEnd}
-                    onDragCancel={handleSectionDragCancel}
+                    onDragStart={
+                        isTemplateEditLocked ? undefined : handleSectionDragStart
+                    }
+                    onDragOver={
+                        isTemplateEditLocked ? undefined : handleSectionDragOver
+                    }
+                    onDragEnd={
+                        isTemplateEditLocked ? undefined : handleSectionDragEnd
+                    }
+                    onDragCancel={
+                        isTemplateEditLocked ? undefined : handleSectionDragCancel
+                    }
                 >
                     <div className="entity-editor-grid entity-editor-grid--balanced">
                         <div className="entity-header entity-header--lhs">
@@ -1763,10 +2613,12 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                                 </SortableContext>
                             </div>
                             <div className="entity-column-add">
-                                <ActionDropdown
-                                    options={buildAddSectionOptions("left")}
-                                    size={14}
-                                />
+                                {!supportsTemplateEditing ? (
+                                    <ActionDropdown
+                                        options={buildAddSectionOptions("left")}
+                                        size={14}
+                                    />
+                                ) : null}
                             </div>
                         </div>
                         <div className="entity-column-shell entity-column-shell--rhs">
@@ -1786,10 +2638,12 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                                 </SortableContext>
                             </div>
                             <div className="entity-column-add">
-                                <ActionDropdown
-                                    options={buildAddSectionOptions("right")}
-                                    size={14}
-                                />
+                                {!supportsTemplateEditing ? (
+                                    <ActionDropdown
+                                        options={buildAddSectionOptions("right")}
+                                        size={14}
+                                    />
+                                ) : null}
                             </div>
                         </div>
                     </div>
@@ -1874,6 +2728,402 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                                     : "Create Metafield"}
                             </Button>
                         </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+            <Dialog
+                open={isTemplateDialogOpen}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        closeTemplateDialog();
+                    }
+                }}
+            >
+                <DialogModalEditorContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit {panelLabel} Template</DialogTitle>
+                        <DialogDescription>
+                            Changes apply to every {entityType} and become the default for newly created entries.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="dialog-form">
+                        <div className="dialog-field">
+                            <Label htmlFor="template-new-metafield-name">
+                                Create New Metafield
+                            </Label>
+                            <div className="metafield-create-grid">
+                                <Input
+                                    id="template-new-metafield-name"
+                                    value={templateNewFieldName}
+                                    onChange={(event) =>
+                                        setTemplateNewFieldName(event.target.value)
+                                    }
+                                    placeholder="Metafield name"
+                                    disabled={isSavingTemplate}
+                                />
+                                <select
+                                    className="input"
+                                    value={templateNewFieldKind}
+                                    onChange={(event) =>
+                                        setTemplateNewFieldKind(
+                                            event.target.value as NewMetafieldKind,
+                                        )
+                                    }
+                                    disabled={isSavingTemplate}
+                                >
+                                    <option value="field">Field</option>
+                                    <option value="paragraph">Paragraph</option>
+                                    <option value="select">Select</option>
+                                </select>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                        void createAndAddTemplateField();
+                                    }}
+                                    disabled={
+                                        isSavingTemplate ||
+                                        !templateNewFieldName.trim()
+                                    }
+                                >
+                                    Create & Add
+                                </Button>
+                            </div>
+                        </div>
+                        <div className="dialog-field">
+                            {templateDraftFields.length === 0 ? (
+                                <span className="card-hint">
+                                    No metafields yet. Add existing or create one, then drag it into place.
+                                </span>
+                            ) : null}
+                                <DndContext
+                                    sensors={sensors}
+                                    collisionDetection={closestCenter}
+                                    onDragStart={handleTemplateSectionDragStart}
+                                    onDragOver={handleTemplateSectionDragOver}
+                                    onDragEnd={handleTemplateSectionDragEnd}
+                                    onDragCancel={handleTemplateSectionDragCancel}
+                                >
+                                    <div className="entity-editor-grid entity-editor-grid--balanced">
+                                        <div className="entity-column-shell entity-column-shell--lhs">
+                                            <div
+                                                className="entity-column-dropzone"
+                                                ref={templateLeftDroppable.setNodeRef}
+                                            >
+                                                <SortableContext
+                                                    items={templateSectionPlacement.left}
+                                                    strategy={rectSortingStrategy}
+                                                >
+                                                    <div className="entity-column entity-column--sortable">
+                                                        {templateSectionPlacement.left.map(
+                                                            (itemId) => {
+                                                                if (
+                                                                    itemId ===
+                                                                    "template-core:description"
+                                                                ) {
+                                                                    return (
+                                                                        <SortableSectionCard
+                                                                            key={itemId}
+                                                                            id={itemId}
+                                                                            title="Description"
+                                                                            className="is-static"
+                                                                            disableDrag
+                                                                            showDragHandle={false}
+                                                                        >
+                                                                            <div className="entity-metafield-static">
+                                                                                Core card preview
+                                                                            </div>
+                                                                        </SortableSectionCard>
+                                                                    );
+                                                                }
+
+                                                                const definitionId =
+                                                                    toTemplateDefinitionId(
+                                                                        itemId,
+                                                                    );
+                                                                if (!definitionId) {
+                                                                    return null;
+                                                                }
+                                                                const field =
+                                                                    templateDraftByDefinitionId.get(
+                                                                        definitionId,
+                                                                    );
+                                                                const definition =
+                                                                    templateDefinitionById.get(
+                                                                        definitionId,
+                                                                    );
+                                                                if (!field || !definition) {
+                                                                    return null;
+                                                                }
+
+                                                                return (
+                                                                    <SortableSectionCard
+                                                                        key={itemId}
+                                                                        id={itemId}
+                                                                        title={definition.name}
+                                                                        disableDrag={isSavingTemplate}
+                                                                        showDragHandle={!isSavingTemplate}
+                                                                        isActiveDrag={
+                                                                            activeTemplateDragId ===
+                                                                            itemId
+                                                                        }
+                                                                        dragDimensions={
+                                                                            templateDragPreviewDimensions
+                                                                        }
+                                                                    >
+                                                                        <div className="metafield-create-grid">
+                                                                            <select
+                                                                                className="input"
+                                                                                value={field.kind}
+                                                                                onChange={(event) =>
+                                                                                    updateTemplateDraftField(
+                                                                                        templateDraftFields.findIndex(
+                                                                                            (
+                                                                                                item,
+                                                                                            ) =>
+                                                                                                item.definitionId ===
+                                                                                                definitionId,
+                                                                                        ),
+                                                                                        {
+                                                                                            kind: event.target
+                                                                                                .value as TemplateDraftField["kind"],
+                                                                                        },
+                                                                                    )
+                                                                                }
+                                                                                disabled={isSavingTemplate}
+                                                                            >
+                                                                                <option value="field">
+                                                                                    Field
+                                                                                </option>
+                                                                                <option value="paragraph">
+                                                                                    Paragraph
+                                                                                </option>
+                                                                                <option value="select">
+                                                                                    Select
+                                                                                </option>
+                                                                            </select>
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant="ghost"
+                                                                                onClick={() =>
+                                                                                    requestTemplateDraftFieldDelete(
+                                                                                        definitionId,
+                                                                                    )
+                                                                                }
+                                                                                disabled={isSavingTemplate}
+                                                                            >
+                                                                                Remove
+                                                                            </Button>
+                                                                        </div>
+                                                                    </SortableSectionCard>
+                                                                );
+                                                            },
+                                                        )}
+                                                    </div>
+                                                </SortableContext>
+                                            </div>
+                                        </div>
+                                        <div className="entity-column-shell entity-column-shell--rhs">
+                                            <div
+                                                className="entity-column-dropzone"
+                                                ref={templateRightDroppable.setNodeRef}
+                                            >
+                                                <SortableContext
+                                                    items={templateSectionPlacement.right}
+                                                    strategy={rectSortingStrategy}
+                                                >
+                                                    <div className="entity-column entity-column--sortable">
+                                                        {templateSectionPlacement.right.map(
+                                                            (itemId) => {
+                                                                if (
+                                                                    itemId ===
+                                                                    "template-core:portrait"
+                                                                ) {
+                                                                    return (
+                                                                        <SortableSectionCard
+                                                                            key={itemId}
+                                                                            id={itemId}
+                                                                            title="Portrait"
+                                                                            className="is-static"
+                                                                            disableDrag
+                                                                            showDragHandle={false}
+                                                                        >
+                                                                            <div className="entity-metafield-static">
+                                                                                Core card preview
+                                                                            </div>
+                                                                        </SortableSectionCard>
+                                                                    );
+                                                                }
+
+                                                                if (
+                                                                    itemId ===
+                                                                    "template-core:audio"
+                                                                ) {
+                                                                    return (
+                                                                        <SortableSectionCard
+                                                                            key={itemId}
+                                                                            id={itemId}
+                                                                            title="Audio Assets"
+                                                                            className="is-static"
+                                                                            disableDrag
+                                                                            showDragHandle={false}
+                                                                        >
+                                                                            <div className="entity-metafield-static">
+                                                                                Core card preview
+                                                                            </div>
+                                                                        </SortableSectionCard>
+                                                                    );
+                                                                }
+
+                                                                const definitionId =
+                                                                    toTemplateDefinitionId(
+                                                                        itemId,
+                                                                    );
+                                                                if (!definitionId) {
+                                                                    return null;
+                                                                }
+                                                                const field =
+                                                                    templateDraftByDefinitionId.get(
+                                                                        definitionId,
+                                                                    );
+                                                                const definition =
+                                                                    templateDefinitionById.get(
+                                                                        definitionId,
+                                                                    );
+                                                                if (!field || !definition) {
+                                                                    return null;
+                                                                }
+
+                                                                return (
+                                                                    <SortableSectionCard
+                                                                        key={itemId}
+                                                                        id={itemId}
+                                                                        title={definition.name}
+                                                                        disableDrag={isSavingTemplate}
+                                                                        showDragHandle={!isSavingTemplate}
+                                                                        isActiveDrag={
+                                                                            activeTemplateDragId ===
+                                                                            itemId
+                                                                        }
+                                                                        dragDimensions={
+                                                                            templateDragPreviewDimensions
+                                                                        }
+                                                                    >
+                                                                        <div className="metafield-create-grid">
+                                                                            <select
+                                                                                className="input"
+                                                                                value={field.kind}
+                                                                                onChange={(event) =>
+                                                                                    updateTemplateDraftField(
+                                                                                        templateDraftFields.findIndex(
+                                                                                            (
+                                                                                                item,
+                                                                                            ) =>
+                                                                                                item.definitionId ===
+                                                                                                definitionId,
+                                                                                        ),
+                                                                                        {
+                                                                                            kind: event.target
+                                                                                                .value as TemplateDraftField["kind"],
+                                                                                        },
+                                                                                    )
+                                                                                }
+                                                                                disabled={isSavingTemplate}
+                                                                            >
+                                                                                <option value="field">
+                                                                                    Field
+                                                                                </option>
+                                                                                <option value="paragraph">
+                                                                                    Paragraph
+                                                                                </option>
+                                                                                <option value="select">
+                                                                                    Select
+                                                                                </option>
+                                                                            </select>
+                                                                            <Button
+                                                                                type="button"
+                                                                                size="sm"
+                                                                                variant="ghost"
+                                                                                onClick={() =>
+                                                                                    requestTemplateDraftFieldDelete(
+                                                                                        definitionId,
+                                                                                    )
+                                                                                }
+                                                                                disabled={isSavingTemplate}
+                                                                            >
+                                                                                Remove
+                                                                            </Button>
+                                                                        </div>
+                                                                    </SortableSectionCard>
+                                                                );
+                                                            },
+                                                        )}
+                                                    </div>
+                                                </SortableContext>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </DndContext>
+                        </div>
+                        {templateDraftError ? (
+                            <span className="card-hint is-error">{templateDraftError}</span>
+                        ) : null}
+                        <div className="dialog-actions">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={closeTemplateDialog}
+                                disabled={isSavingTemplate}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="primary"
+                                onClick={() => {
+                                    void saveTemplateDraft();
+                                }}
+                                disabled={isSavingTemplate}
+                            >
+                                {isSavingTemplate ? "Saving..." : "Save Template"}
+                            </Button>
+                        </div>
+                    </div>
+                </DialogModalEditorContent>
+            </Dialog>
+            <Dialog
+                open={Boolean(pendingTemplateDeleteDefinitionId)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        cancelTemplateDraftFieldDelete();
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Heads up!</DialogTitle>
+                        <DialogDescription>
+                            Heads up! Deleting this metafield will affect ALL existing items using this template. Any existing information will be discarded.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="dialog-actions">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={cancelTemplateDraftFieldDelete}
+                            disabled={isSavingTemplate}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="primary"
+                            onClick={confirmTemplateDraftFieldDelete}
+                            disabled={isSavingTemplate}
+                        >
+                            Delete Metafield
+                        </Button>
                     </div>
                 </DialogContent>
             </Dialog>

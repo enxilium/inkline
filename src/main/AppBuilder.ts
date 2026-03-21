@@ -72,6 +72,7 @@ import { ListProjectMetafields } from "../@core/application/use-cases/metafield/
 import { CreateOrReuseMetafieldDefinition } from "../@core/application/use-cases/metafield/CreateOrReuseMetafieldDefinition";
 import { AssignMetafieldToEntity } from "../@core/application/use-cases/metafield/AssignMetafieldToEntity";
 import { SaveMetafieldValue } from "../@core/application/use-cases/metafield/SaveMetafieldValue";
+import { SaveEditorTemplate } from "../@core/application/use-cases/metafield/SaveEditorTemplate";
 import { RemoveMetafieldFromEntity } from "../@core/application/use-cases/metafield/RemoveMetafieldFromEntity";
 import { DeleteMetafieldDefinitionGlobal } from "../@core/application/use-cases/metafield/DeleteMetafieldDefinitionGlobal";
 import { SubmitBugReport } from "../@core/application/use-cases/support/SubmitBugReport";
@@ -144,6 +145,7 @@ import { ListProjectMetafieldsController } from "../@interface-adapters/controll
 import { CreateOrReuseMetafieldDefinitionController } from "../@interface-adapters/controllers/metafield/CreateOrReuseMetafieldDefinitionController";
 import { AssignMetafieldToEntityController } from "../@interface-adapters/controllers/metafield/AssignMetafieldToEntityController";
 import { SaveMetafieldValueController } from "../@interface-adapters/controllers/metafield/SaveMetafieldValueController";
+import { SaveEditorTemplateController } from "../@interface-adapters/controllers/metafield/SaveEditorTemplateController";
 import { RemoveMetafieldFromEntityController } from "../@interface-adapters/controllers/metafield/RemoveMetafieldFromEntityController";
 import { DeleteMetafieldDefinitionGlobalController } from "../@interface-adapters/controllers/metafield/DeleteMetafieldDefinitionGlobalController";
 import { SubmitBugReportController } from "../@interface-adapters/controllers/support/SubmitBugReportController";
@@ -160,6 +162,7 @@ import type { IScrapNoteRepository } from "../@core/domain/repositories/IScrapNo
 import type { IUserRepository } from "../@core/domain/repositories/IUserRepository";
 import type { IMetafieldDefinitionRepository } from "../@core/domain/repositories/IMetafieldDefinitionRepository";
 import type { IMetafieldAssignmentRepository } from "../@core/domain/repositories/IMetafieldAssignmentRepository";
+import type { IEditorTemplateRepository } from "../@core/domain/repositories/IEditorTemplateRepository";
 import type { IBugReportRepository } from "../@core/domain/repositories/IBugReportRepository";
 import type { IAITextService } from "../@core/domain/services/IAITextService";
 import type { ICreativeAssetGenerationService } from "../@core/domain/services/ICreativeAssetGenerationService";
@@ -187,6 +190,7 @@ export type RepositoryDependencies = {
     event: IEventRepository;
     metafieldDefinition: IMetafieldDefinitionRepository;
     metafieldAssignment: IMetafieldAssignmentRepository;
+    editorTemplate: IEditorTemplateRepository;
     bugReport: IBugReportRepository;
 };
 
@@ -237,6 +241,7 @@ type UseCaseMap = {
         createOrReuseMetafieldDefinition: CreateOrReuseMetafieldDefinition;
         assignMetafieldToEntity: AssignMetafieldToEntity;
         saveMetafieldValue: SaveMetafieldValue;
+        saveEditorTemplate: SaveEditorTemplate;
         removeMetafieldFromEntity: RemoveMetafieldFromEntity;
         deleteMetafieldDefinitionGlobal: DeleteMetafieldDefinitionGlobal;
     };
@@ -472,6 +477,14 @@ export class AppBuilder {
                     repo.metafieldDefinition,
                     repo.metafieldAssignment,
                 ),
+                saveEditorTemplate: new SaveEditorTemplate(
+                    repo.editorTemplate,
+                    repo.metafieldDefinition,
+                    repo.metafieldAssignment,
+                    repo.character,
+                    repo.location,
+                    repo.organization,
+                ),
                 removeMetafieldFromEntity: new RemoveMetafieldFromEntity(
                     repo.metafieldAssignment,
                 ),
@@ -591,6 +604,8 @@ export class AppBuilder {
                     repo.project,
                     repo.user,
                     repo.timeline,
+                    repo.metafieldDefinition,
+                    repo.editorTemplate,
                 ),
                 deleteProject: new DeleteProject(
                     repo.project,
@@ -627,6 +642,7 @@ export class AppBuilder {
                     repo.event,
                     repo.metafieldDefinition,
                     repo.metafieldAssignment,
+                    repo.editorTemplate,
                 ),
                 renameProject: new RenameProject(repo.project),
                 reorderProjectItems: new ReorderProjectItems(repo.project),
@@ -635,13 +651,23 @@ export class AppBuilder {
                 createCharacter: new CreateCharacter(
                     repo.character,
                     repo.project,
+                    repo.editorTemplate,
                     repo.metafieldDefinition,
                     repo.metafieldAssignment,
                 ),
-                createLocation: new CreateLocation(repo.location, repo.project),
+                createLocation: new CreateLocation(
+                    repo.location,
+                    repo.project,
+                    repo.editorTemplate,
+                    repo.metafieldDefinition,
+                    repo.metafieldAssignment,
+                ),
                 createOrganization: new CreateOrganization(
                     repo.organization,
                     repo.project,
+                    repo.editorTemplate,
+                    repo.metafieldDefinition,
+                    repo.metafieldAssignment,
                 ),
                 deleteCharacter: new DeleteCharacter(
                     repo.character,
@@ -772,6 +798,9 @@ export class AppBuilder {
                 ),
                 saveMetafieldValue: new SaveMetafieldValueController(
                     useCases.metafield.saveMetafieldValue,
+                ),
+                saveEditorTemplate: new SaveEditorTemplateController(
+                    useCases.metafield.saveEditorTemplate,
                 ),
                 removeMetafieldFromEntity:
                     new RemoveMetafieldFromEntityController(

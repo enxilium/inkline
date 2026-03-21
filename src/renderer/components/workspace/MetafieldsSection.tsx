@@ -169,11 +169,12 @@ type AssignmentRow = {
     definition: WorkspaceMetafieldDefinition;
 };
 
-type SortableMetafieldCardProps = {
+type MetafieldCardProps = {
     row: AssignmentRow;
     entityType: EditorEntityType;
     entityId: string;
     isBusy: boolean;
+    showDelete: boolean;
     withBusy: (action: () => Promise<void>) => Promise<void>;
     onUnassign: Props["onUnassign"];
     onAction?: Props["onAction"];
@@ -184,17 +185,78 @@ type SortableMetafieldCardProps = {
     ) => React.ReactNode;
 };
 
+type SortableMetafieldCardProps = MetafieldCardProps;
+
+const StaticMetafieldCard: React.FC<MetafieldCardProps> = ({
+        row,
+        entityType,
+        entityId,
+        isBusy,
+    showDelete,
+        withBusy,
+        onUnassign,
+        onAction,
+        uiKind,
+        renderValueEditor,
+    }) => {
+        const { assignment, definition } = row;
+
+        return (
+            <div className="metafield-card">
+                <div className="metafield-card-header">
+                    <p className="panel-label">{definition.name}</p>
+                    {showDelete ? (
+                        <div className="metafield-actions">
+                            <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                onClick={() =>
+                                    void withBusy(async () => {
+                                        await onUnassign({
+                                            definitionId: definition.id,
+                                            entityType,
+                                            entityId,
+                                        });
+                                        onAction?.({
+                                            type: "metafield_deleted",
+                                            assignmentId: assignment.id,
+                                            definitionId: definition.id,
+                                        });
+                                    })
+                                }
+                                disabled={isBusy}
+                            >
+                                Delete
+                            </Button>
+                        </div>
+                    ) : null}
+                </div>
+                <div
+                    className={
+                        uiKind === "field"
+                            ? "metafield-value metafield-value--field"
+                            : "metafield-value"
+                    }
+                >
+                    {renderValueEditor(assignment, definition)}
+                </div>
+            </div>
+        );
+    };
+
 const SortableMetafieldCard: React.FC<SortableMetafieldCardProps> = ({
-    row,
-    entityType,
-    entityId,
-    isBusy,
-    withBusy,
-    onUnassign,
-    onAction,
-    uiKind,
-    renderValueEditor,
-}) => {
+        row,
+        entityType,
+        entityId,
+        isBusy,
+    showDelete,
+        withBusy,
+        onUnassign,
+        onAction,
+        uiKind,
+        renderValueEditor,
+    }) => {
     const { assignment, definition } = row;
 
     const {
@@ -228,34 +290,36 @@ const SortableMetafieldCard: React.FC<SortableMetafieldCardProps> = ({
                     >
                         ⠿
                     </button>
-                    <span className="metafield-card-title">
+                    <p className="panel-label">
                         {definition.name}
-                    </span>
+                    </p>
                 </div>
-                <div className="metafield-actions">
-                    <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() =>
-                            void withBusy(async () => {
-                                await onUnassign({
-                                    definitionId: definition.id,
-                                    entityType,
-                                    entityId,
-                                });
-                                onAction?.({
-                                    type: "metafield_deleted",
-                                    assignmentId: assignment.id,
-                                    definitionId: definition.id,
-                                });
-                            })
-                        }
-                        disabled={isBusy}
-                    >
-                        Delete
-                    </Button>
-                </div>
+                {showDelete ? (
+                    <div className="metafield-actions">
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                                void withBusy(async () => {
+                                    await onUnassign({
+                                        definitionId: definition.id,
+                                        entityType,
+                                        entityId,
+                                    });
+                                    onAction?.({
+                                        type: "metafield_deleted",
+                                        assignmentId: assignment.id,
+                                        definitionId: definition.id,
+                                    });
+                                })
+                            }
+                            disabled={isBusy}
+                        >
+                            Delete
+                        </Button>
+                    </div>
+                ) : null}
             </div>
             <div
                 className={
@@ -589,15 +653,23 @@ export const MetafieldsSection: React.FC<Props> = ({
         [definitions],
     );
 
+    const CardComponent = disableDnd
+        ? StaticMetafieldCard
+        : SortableMetafieldCard;
+    const cardsClassName = hideControls
+        ? "metafield-list metafield-canvas metafield-list--embedded"
+        : "metafield-list metafield-canvas";
+
     const cards = (
-        <div className="metafield-list metafield-canvas">
+        <div className={cardsClassName}>
             {orderedAssignmentRows.map((row) => (
-                <SortableMetafieldCard
+                <CardComponent
                     key={row.assignment.id}
                     row={row}
                     entityType={entityType}
                     entityId={entityId}
                     isBusy={isBusy}
+                    showDelete={!hideControls}
                     withBusy={withBusy}
                     onUnassign={onUnassign}
                     onAction={onAction}

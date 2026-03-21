@@ -2,6 +2,7 @@ import React from "react";
 
 import type {
     WorkspaceCharacter,
+    WorkspaceEditorTemplate,
     WorkspaceLocation,
     WorkspaceMetafieldAssignment,
     WorkspaceMetafieldDefinition,
@@ -80,6 +81,16 @@ export type CharacterEditorProps = {
         definitionId: string;
     }) => Promise<void>;
     onImportMetafieldImage: (file: File) => Promise<string>;
+    editorTemplate?: WorkspaceEditorTemplate | null;
+    onSaveEditorTemplate?: (request: {
+        projectId: string;
+        editorType: "character" | "location" | "organization";
+        placement: CharacterSectionPlacement;
+        fields: Array<{
+            definitionId: string;
+            kind: "field" | "paragraph" | "select";
+        }>;
+    }) => Promise<{ template: WorkspaceEditorTemplate }>;
     onActionLog?: (entry: CharacterEditorActionLog) => Promise<void>;
     onSectionLayoutSync?: (layout: CharacterSectionPlacement) => Promise<void>;
     initialSectionPlacement?: CharacterSectionPlacement;
@@ -129,6 +140,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     onRemoveMetafieldFromEntity,
     onDeleteMetafieldDefinitionGlobal,
     onImportMetafieldImage,
+    editorTemplate,
+    onSaveEditorTemplate,
     onActionLog,
     onSectionLayoutSync,
     initialSectionPlacement,
@@ -271,6 +284,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                 onDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={onImportMetafieldImage}
+            editorTemplate={editorTemplate}
+            onSaveEditorTemplate={onSaveEditorTemplate}
             onActionLog={onActionLog}
             onSectionLayoutSync={onSectionLayoutSync}
             initialSectionPlacement={initialSectionPlacement}

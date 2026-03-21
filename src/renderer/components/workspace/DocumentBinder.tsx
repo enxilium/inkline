@@ -19,6 +19,7 @@ import {
     ChevronRightIcon,
     MapIcon,
     MessageSquareFilledIcon,
+    PenLineIcon,
     PersonIcon,
     PlusIcon,
 } from "../ui/Icons";
@@ -53,6 +54,7 @@ export type DocumentBinderProps = {
         dropMode: "before" | "inside" | "after";
     }) => void;
     onReorderOrganizations: (newOrder: string[]) => void;
+    onEditTemplate?: (kind: "character" | "location" | "organization") => void;
     onToggleCollapse?: () => void;
     /** Used to choose the correct icon for the toggle button (collapse vs expand/pin-open). */
     isBinderOpen?: boolean;
@@ -63,6 +65,11 @@ export type DocumentBinderProps = {
     /** When false, the bottom section tabbar is not rendered. */
     showTabbar?: boolean;
 };
+
+const isTemplateEditableKind = (
+    kind: WorkspaceDocumentKind,
+): kind is "character" | "location" | "organization" =>
+    kind === "character" || kind === "location" || kind === "organization";
 
 type BinderItem = {
     id: string;
@@ -343,6 +350,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     onReorderLocations,
     onMoveLocation,
     onReorderOrganizations,
+    onEditTemplate,
     onToggleCollapse,
     isBinderOpen,
     activeKind: controlledActiveKind,
@@ -666,6 +674,9 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
 
     const activeSection =
         sections.find((section) => section.kind === activeKind) ?? sections[0];
+    const activeTemplateKind = isTemplateEditableKind(activeSection.kind)
+        ? activeSection.kind
+        : null;
 
     const handleDragStart = (e: React.DragEvent, item: BinderItem) => {
         setDraggedId(item.id);
@@ -846,14 +857,26 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                         {activeSection.title.toUpperCase()}
                     </span>
                 </div>
-                <Button
-                    variant="icon"
-                    className="binder-create"
-                    onClick={activeSection.onCreate}
-                    title={`New ${activeSection.title}`}
-                >
-                    <PlusIcon size={14} />
-                </Button>
+                <div className="binder-active-actions">
+                    {onEditTemplate && activeTemplateKind ? (
+                        <Button
+                            variant="icon"
+                            className="binder-create"
+                            onClick={() => onEditTemplate(activeTemplateKind)}
+                            title={`Edit ${activeSection.title} Template`}
+                        >
+                            <PenLineIcon size={14} />
+                        </Button>
+                    ) : null}
+                    <Button
+                        variant="icon"
+                        className="binder-create"
+                        onClick={activeSection.onCreate}
+                        title={`New ${activeSection.title}`}
+                    >
+                        <PlusIcon size={14} />
+                    </Button>
+                </div>
             </div>
 
             <div className="binder-sections binder-scroll-area">

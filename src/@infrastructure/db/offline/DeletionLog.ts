@@ -6,6 +6,7 @@ export type EntityType =
     | "location"
     | "organization"
     | "scrapNote"
+    | "editorTemplate"
     | "metafieldDefinition"
     | "metafieldAssignment"
     | "image"

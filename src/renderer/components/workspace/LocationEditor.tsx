@@ -2,6 +2,7 @@ import React from "react";
 
 import type {
     WorkspaceCharacter,
+    WorkspaceEditorTemplate,
     WorkspaceLocation,
     WorkspaceMetafieldAssignment,
     WorkspaceMetafieldDefinition,
@@ -68,6 +69,16 @@ export type LocationEditorProps = {
         definitionId: string;
     }) => Promise<void>;
     onImportMetafieldImage: (file: File) => Promise<string>;
+    editorTemplate?: WorkspaceEditorTemplate | null;
+    onSaveEditorTemplate?: (request: {
+        projectId: string;
+        editorType: "character" | "location" | "organization";
+        placement: { left: string[]; right: string[] };
+        fields: Array<{
+            definitionId: string;
+            kind: "field" | "paragraph" | "select";
+        }>;
+    }) => Promise<{ template: WorkspaceEditorTemplate }>;
     onDirtyStateChange?: (isDirty: boolean) => void;
     onNavigateToDocument?: (ref: DocumentRef) => void;
     focusTitleOnMount?: boolean;
@@ -108,6 +119,8 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     onRemoveMetafieldFromEntity,
     onDeleteMetafieldDefinitionGlobal,
     onImportMetafieldImage,
+    editorTemplate,
+    onSaveEditorTemplate,
     onDirtyStateChange,
     onNavigateToDocument,
     focusTitleOnMount = false,
@@ -209,6 +222,8 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
                 onDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={onImportMetafieldImage}
+            editorTemplate={editorTemplate}
+            onSaveEditorTemplate={onSaveEditorTemplate}
             onDirtyStateChange={onDirtyStateChange}
             focusTitleOnMount={focusTitleOnMount}
             assetText={{

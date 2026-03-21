@@ -24,6 +24,7 @@ export const ConnectedLocationEditor: React.FC<
         assets,
         metafieldDefinitions,
         metafieldAssignments,
+        editorTemplates,
         activeDocument,
         updateLocationLocally,
         addOrUpdateMetafieldDefinitionLocally,
@@ -31,10 +32,12 @@ export const ConnectedLocationEditor: React.FC<
         updateMetafieldAssignmentLocally,
         removeMetafieldAssignmentLocally,
         removeMetafieldDefinitionLocally,
+        reloadProjectTemplateData,
         saveLocationInfo,
         createOrReuseMetafieldDefinition,
         assignMetafieldToEntity,
         saveMetafieldValue,
+        saveEditorTemplate,
         removeMetafieldFromEntity,
         deleteMetafieldDefinitionGlobal,
         generateLocationImage,
@@ -129,6 +132,13 @@ export const ConnectedLocationEditor: React.FC<
                     assignment.entityId === locationId,
             ),
         [metafieldAssignments, locationId],
+    );
+
+    const locationEditorTemplate = React.useMemo(
+        () =>
+            editorTemplates.find((template) => template.editorType === "location") ??
+            null,
+        [editorTemplates],
     );
 
     const handleSubmit = React.useCallback(
@@ -484,6 +494,16 @@ export const ConnectedLocationEditor: React.FC<
         [importAsset, location, projectId],
     );
 
+    const handleSaveEditorTemplate = React.useCallback(
+        async (request: Parameters<typeof saveEditorTemplate>[0]) => {
+            const response = await saveEditorTemplate(request);
+            await reloadProjectTemplateData(request.projectId);
+
+            return response;
+        },
+        [reloadProjectTemplateData, saveEditorTemplate],
+    );
+
     if (!location) {
         return <div className="empty-editor">Location not found.</div>;
     }
@@ -597,6 +617,8 @@ export const ConnectedLocationEditor: React.FC<
                 handleDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={handleImportMetafieldImage}
+            editorTemplate={locationEditorTemplate}
+            onSaveEditorTemplate={handleSaveEditorTemplate}
             onDirtyStateChange={handleDirtyStateChange}
             onNavigateToDocument={handleNavigateToDocument}
             focusTitleOnMount={focusTitleOnMount}

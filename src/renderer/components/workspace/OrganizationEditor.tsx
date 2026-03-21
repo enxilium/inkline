@@ -2,6 +2,7 @@ import React from "react";
 
 import type {
     WorkspaceCharacter,
+    WorkspaceEditorTemplate,
     WorkspaceLocation,
     WorkspaceMetafieldAssignment,
     WorkspaceMetafieldDefinition,
@@ -78,6 +79,16 @@ export type OrganizationEditorProps = {
         definitionId: string;
     }) => Promise<void>;
     onImportMetafieldImage: (file: File) => Promise<string>;
+    editorTemplate?: WorkspaceEditorTemplate | null;
+    onSaveEditorTemplate?: (request: {
+        projectId: string;
+        editorType: "character" | "location" | "organization";
+        placement: { left: string[]; right: string[] };
+        fields: Array<{
+            definitionId: string;
+            kind: "field" | "paragraph" | "select";
+        }>;
+    }) => Promise<{ template: WorkspaceEditorTemplate }>;
     onDirtyStateChange?: (isDirty: boolean) => void;
     focusTitleOnMount?: boolean;
 };
@@ -121,6 +132,8 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     onRemoveMetafieldFromEntity,
     onDeleteMetafieldDefinitionGlobal,
     onImportMetafieldImage,
+    editorTemplate,
+    onSaveEditorTemplate,
     onDirtyStateChange,
     focusTitleOnMount = false,
 }) => {
@@ -230,6 +243,8 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                 onDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={onImportMetafieldImage}
+            editorTemplate={editorTemplate}
+            onSaveEditorTemplate={onSaveEditorTemplate}
             onDirtyStateChange={onDirtyStateChange}
             focusTitleOnMount={focusTitleOnMount}
             assetText={{

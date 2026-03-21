@@ -24,6 +24,7 @@ export const ConnectedOrganizationEditor: React.FC<
         assets,
         metafieldDefinitions,
         metafieldAssignments,
+        editorTemplates,
         activeDocument,
         updateOrganizationLocally,
         addOrUpdateMetafieldDefinitionLocally,
@@ -31,10 +32,12 @@ export const ConnectedOrganizationEditor: React.FC<
         updateMetafieldAssignmentLocally,
         removeMetafieldAssignmentLocally,
         removeMetafieldDefinitionLocally,
+        reloadProjectTemplateData,
         saveOrganizationInfo,
         createOrReuseMetafieldDefinition,
         assignMetafieldToEntity,
         saveMetafieldValue,
+        saveEditorTemplate,
         removeMetafieldFromEntity,
         deleteMetafieldDefinitionGlobal,
         generateOrganizationImage,
@@ -129,6 +132,14 @@ export const ConnectedOrganizationEditor: React.FC<
                     assignment.entityId === organizationId,
             ),
         [metafieldAssignments, organizationId],
+    );
+
+    const organizationEditorTemplate = React.useMemo(
+        () =>
+            editorTemplates.find(
+                (template) => template.editorType === "organization",
+            ) ?? null,
+        [editorTemplates],
     );
 
     const handleSubmit = React.useCallback(
@@ -487,6 +498,16 @@ export const ConnectedOrganizationEditor: React.FC<
         [importAsset, organization, projectId],
     );
 
+    const handleSaveEditorTemplate = React.useCallback(
+        async (request: Parameters<typeof saveEditorTemplate>[0]) => {
+            const response = await saveEditorTemplate(request);
+            await reloadProjectTemplateData(request.projectId);
+
+            return response;
+        },
+        [reloadProjectTemplateData, saveEditorTemplate],
+    );
+
     const availableDocuments: DocumentRef[] = React.useMemo(() => {
         const docs: DocumentRef[] = [];
         for (const ch of chapters) {
@@ -594,6 +615,8 @@ export const ConnectedOrganizationEditor: React.FC<
                 handleDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={handleImportMetafieldImage}
+            editorTemplate={organizationEditorTemplate}
+            onSaveEditorTemplate={handleSaveEditorTemplate}
             onDirtyStateChange={handleDirtyStateChange}
             focusTitleOnMount={focusTitleOnMount}
         />

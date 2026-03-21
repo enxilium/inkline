@@ -7,7 +7,8 @@ export const ConnectedDocumentBinder: React.FC<{
     activeKind?: WorkspaceDocumentKind;
     onActiveKindChange?: (kind: WorkspaceDocumentKind) => void;
     showTabbar?: boolean;
-}> = ({ activeKind, onActiveKindChange, showTabbar }) => {
+    onEditTemplate?: (kind: "character" | "location" | "organization") => void;
+}> = ({ activeKind, onActiveKindChange, showTabbar, onEditTemplate }) => {
     const store = useAppStore();
 
     return (
@@ -39,6 +40,7 @@ export const ConnectedDocumentBinder: React.FC<{
             onReorderLocations={store.reorderLocations}
             onMoveLocation={store.moveLocationInTree}
             onReorderOrganizations={store.reorderOrganizations}
+            onEditTemplate={onEditTemplate}
             onToggleCollapse={store.toggleBinder}
             isBinderOpen={store.isBinderOpen}
         />

@@ -38,6 +38,8 @@ import type {
     WorkspaceViewMode,
     WorkspaceMetafieldDefinition,
     WorkspaceMetafieldAssignment,
+    WorkspaceEditorTemplate,
+    WorkspaceEditorTemplateType,
 } from "../types";
 import { normalizeUserFacingError } from "../utils/userFacingError";
 
@@ -344,24 +346,6 @@ const generateOptimisticId = (): string => {
     return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 };
 
-const normalizeOptimisticMetafieldName = (name: string): string =>
-    name.trim().replace(/\s+/g, " ").toLowerCase();
-
-const CHARACTER_DEFAULT_METAFIELDS = [
-    { name: "Race", valueType: "string" as const, initialValue: "" },
-    { name: "Age", valueType: "string" as const, initialValue: "" },
-    {
-        name: "Personality",
-        valueType: "string[]" as const,
-        initialValue: [] as string[],
-    },
-    {
-        name: "Powers & Abilities",
-        valueType: "string[]" as const,
-        initialValue: [] as string[],
-    },
-];
-
 const MAX_LOCATION_NESTING_LEVEL = 5;
 
 const runInBackground = (
@@ -370,6 +354,19 @@ const runInBackground = (
 ): void => {
     promise.catch(onError);
 };
+
+const makeTemplateSeedValue = (
+    kind: "field" | "paragraph" | "select",
+): WorkspaceMetafieldAssignment["valueJson"] =>
+    kind === "select"
+        ? {
+              kind,
+              value: [] as string[],
+          }
+        : {
+              kind,
+              value: "",
+          };
 
 const documentExists = (
     payload: OpenProjectPayload,
@@ -633,6 +630,7 @@ type AppStore = {
     events: WorkspaceEvent[];
     metafieldDefinitions: WorkspaceMetafieldDefinition[];
     metafieldAssignments: WorkspaceMetafieldAssignment[];
+    editorTemplates: WorkspaceEditorTemplate[];
     assets: WorkspaceAssets;
     activeDocument: WorkspaceDocumentRef | null;
     openTabs: WorkspaceDocumentRef[];
@@ -756,6 +754,10 @@ type AppStore = {
     ) => void;
     removeMetafieldAssignmentLocally: (assignmentId: string) => void;
     removeMetafieldDefinitionLocally: (definitionId: string) => void;
+    getEditorTemplateForType: (
+        editorType: WorkspaceEditorTemplateType,
+    ) => WorkspaceEditorTemplate | null;
+    reloadProjectTemplateData: (targetProjectId?: string) => Promise<void>;
     createChapterEntry: (order?: number) => Promise<void>;
     createScrapNoteEntry: () => Promise<void>;
     createCharacterEntry: () => Promise<void>;
@@ -824,6 +826,7 @@ type AppStore = {
     createOrReuseMetafieldDefinition: RendererApi["metafield"]["createOrReuseMetafieldDefinition"];
     assignMetafieldToEntity: RendererApi["metafield"]["assignMetafieldToEntity"];
     saveMetafieldValue: RendererApi["metafield"]["saveMetafieldValue"];
+    saveEditorTemplate: RendererApi["metafield"]["saveEditorTemplate"];
     removeMetafieldFromEntity: RendererApi["metafield"]["removeMetafieldFromEntity"];
     deleteMetafieldDefinitionGlobal: RendererApi["metafield"]["deleteMetafieldDefinitionGlobal"];
     submitBugReport: RendererApi["support"]["submitBugReport"];
@@ -887,6 +890,75 @@ type AppStore = {
 };
 
 export const useAppStore = create<AppStore>((set, get) => {
+    const templateReloadInFlightByProject = new Map<string, Promise<void>>();
+
+    const assertTemplateReloadNotInFlight = (projectId: string): void => {
+        if (templateReloadInFlightByProject.has(projectId)) {
+            throw new Error(
+                "Template schema is updating. Please wait for it to finish before creating a new entity.",
+            );
+        }
+    };
+
+    const buildTemplateDerivedOptimisticAssignments = (
+        projectId: string,
+        entityType: "character" | "location" | "organization",
+        entityId: string,
+        now: Date,
+    ): WorkspaceMetafieldAssignment[] => {
+        const state = get();
+        const template = state.editorTemplates.find(
+            (item) =>
+                item.projectId === projectId && item.editorType === entityType,
+        );
+
+        if (!template) {
+            throw new Error(
+                `${entityType[0].toUpperCase()}${entityType.slice(1)} template is missing for this project.`,
+            );
+        }
+
+        const projectDefinitionIds = new Set(
+            state.metafieldDefinitions
+                .filter((definition) => definition.projectId === projectId)
+                .map((definition) => definition.id),
+        );
+
+        const dedupedOrderedFields = [...template.fields]
+            .sort((a, b) => a.orderIndex - b.orderIndex)
+            .filter((field, index, fields) => {
+                return (
+                    fields.findIndex(
+                        (candidate) =>
+                            candidate.definitionId === field.definitionId,
+                    ) === index
+                );
+            });
+
+        const assignments: WorkspaceMetafieldAssignment[] = [];
+        for (const [index, field] of dedupedOrderedFields.entries()) {
+            if (!projectDefinitionIds.has(field.definitionId)) {
+                throw new Error(
+                    `Template definition ${field.definitionId} is missing for ${entityType}.`,
+                );
+            }
+
+            assignments.push({
+                id: generateOptimisticId(),
+                projectId,
+                definitionId: field.definitionId,
+                entityType,
+                entityId,
+                valueJson: makeTemplateSeedValue(field.kind),
+                orderIndex: index,
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+
+        return assignments;
+    };
+
     const resetWorkspaceState = (): Pick<
         AppStore,
         | "projectId"
@@ -902,6 +974,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         | "events"
         | "metafieldDefinitions"
         | "metafieldAssignments"
+        | "editorTemplates"
         | "workspaceViewMode"
         | "assets"
         | "activeDocument"
@@ -931,6 +1004,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         events: [] as WorkspaceEvent[],
         metafieldDefinitions: [] as WorkspaceMetafieldDefinition[],
         metafieldAssignments: [] as WorkspaceMetafieldAssignment[],
+        editorTemplates: [] as WorkspaceEditorTemplate[],
         workspaceViewMode: "manuscript",
         assets: emptyAssets,
         activeDocument: null as WorkspaceDocumentRef | null,
@@ -1030,6 +1104,82 @@ export const useAppStore = create<AppStore>((set, get) => {
         unsubscribeAuthState = authEvents.onStateChanged((payload) => {
             void syncAuthState(payload.user);
         });
+    };
+
+    const applyTemplateSlices = (payload: OpenProjectPayload): void => {
+        set({
+            metafieldDefinitions: payload.metafieldDefinitions,
+            metafieldAssignments: payload.metafieldAssignments,
+            editorTemplates: payload.editorTemplates,
+        });
+    };
+
+    const reloadProjectTemplateDataFromRepository = async (
+        targetProjectId?: string,
+    ): Promise<void> => {
+        const projectId = (targetProjectId ?? get().projectId).trim();
+        if (!projectId) {
+            return;
+        }
+
+        const existingInFlight = templateReloadInFlightByProject.get(projectId);
+        if (existingInFlight) {
+            await existingInFlight;
+            return;
+        }
+
+        const reloadPromise = (async () => {
+            const payload = await rendererApi.project.openProject({ projectId });
+            const current = get();
+
+            if (
+                current.stage !== "workspace" ||
+                current.projectId !== projectId
+            ) {
+                return;
+            }
+
+            applyTemplateSlices(payload);
+        })().finally(() => {
+            templateReloadInFlightByProject.delete(projectId);
+        });
+
+        templateReloadInFlightByProject.set(projectId, reloadPromise);
+        await reloadPromise;
+    };
+
+    const reconcileEntityMetafieldsFromRepository = async (
+        projectId: string,
+        entityType: "character" | "location" | "organization",
+        entityId: string,
+    ): Promise<void> => {
+        const metafields = await rendererApi.metafield.listProjectMetafields({
+            projectId,
+        });
+
+        const current = get();
+        if (current.stage !== "workspace" || current.projectId !== projectId) {
+            return;
+        }
+
+        const remoteEntityAssignments = metafields.assignments.filter(
+            (assignment) =>
+                assignment.entityType === entityType &&
+                assignment.entityId === entityId,
+        );
+
+        set((state) => ({
+            metafieldAssignments: [
+                ...state.metafieldAssignments.filter(
+                    (assignment) =>
+                        !(
+                            assignment.entityType === entityType &&
+                            assignment.entityId === entityId
+                        ),
+                ),
+                ...remoteEntityAssignments,
+            ],
+        }));
     };
 
     const ensureSyncSubscription = () => {
@@ -1360,6 +1510,19 @@ export const useAppStore = create<AppStore>((set, get) => {
                         }));
                         break;
                     }
+                    case "editorTemplate": {
+                        runInBackground(
+                            reloadProjectTemplateDataFromRepository(
+                                payload.projectId,
+                            ),
+                            (error) =>
+                                console.error(
+                                    "Failed to reload template data after realtime template update",
+                                    error,
+                                ),
+                        );
+                        break;
+                    }
                     case "metafieldDefinition": {
                         const definition =
                             data as unknown as WorkspaceMetafieldDefinition;
@@ -1583,6 +1746,19 @@ export const useAppStore = create<AppStore>((set, get) => {
                         }));
                         break;
                     }
+                    case "editorTemplate": {
+                        runInBackground(
+                            reloadProjectTemplateDataFromRepository(
+                                payload.projectId,
+                            ),
+                            (error) =>
+                                console.error(
+                                    "Failed to reload template data after realtime template deletion",
+                                    error,
+                                ),
+                        );
+                        break;
+                    }
                     case "metafieldDefinition": {
                         set((state) => ({
                             metafieldDefinitions:
@@ -1668,6 +1844,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             events: payload.events,
             metafieldDefinitions: payload.metafieldDefinitions,
             metafieldAssignments: payload.metafieldAssignments,
+            editorTemplates: payload.editorTemplates,
             assets: indexedAssets,
             activeDocument: nextSelection,
             openTabs: nextSelection ? [nextSelection] : [],
@@ -1712,6 +1889,7 @@ export const useAppStore = create<AppStore>((set, get) => {
         events: [],
         metafieldDefinitions: [],
         metafieldAssignments: [],
+        editorTemplates: [],
         workspaceViewMode: "manuscript",
         assets: emptyAssets,
         activeDocument: null,
@@ -2017,6 +2195,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 locations: [],
                 organizations: [],
                 scrapNotes: [],
+                editorTemplates: [],
                 assets: emptyAssets,
                 activeDocument: null,
                 autosaveStatus: defaultAutosaveStatus,
@@ -2170,6 +2349,16 @@ export const useAppStore = create<AppStore>((set, get) => {
                 ),
             }));
         },
+        getEditorTemplateForType: (editorType) => {
+            return (
+                get().editorTemplates.find(
+                    (template) => template.editorType === editorType,
+                ) ?? null
+            );
+        },
+        reloadProjectTemplateData: async (targetProjectId) => {
+            await reloadProjectTemplateDataFromRepository(targetProjectId);
+        },
         createChapterEntry: async (order) => {
             const projectId = get().projectId.trim();
             if (!projectId) {
@@ -2322,38 +2511,17 @@ export const useAppStore = create<AppStore>((set, get) => {
                 throw new Error("Open a project before creating characters.");
             }
 
+            assertTemplateReloadNotInFlight(projectId);
+
             const now = new Date();
             const id = generateOptimisticId();
-            const optimisticDefinitions: WorkspaceMetafieldDefinition[] =
-                CHARACTER_DEFAULT_METAFIELDS.map((seed) => {
-                    const definitionId = generateOptimisticId();
-                    return {
-                        id: definitionId,
-                        projectId,
-                        name: seed.name,
-                        nameNormalized: normalizeOptimisticMetafieldName(
-                            seed.name,
-                        ),
-                        scope: "character" as const,
-                        valueType: seed.valueType,
-                        targetEntityKind:
-                            null as WorkspaceMetafieldDefinition["targetEntityKind"],
-                        createdAt: now,
-                        updatedAt: now,
-                    };
-                });
-            const optimisticAssignments: WorkspaceMetafieldAssignment[] =
-                optimisticDefinitions.map((definition, index) => ({
-                    id: generateOptimisticId(),
+            const optimisticAssignments =
+                buildTemplateDerivedOptimisticAssignments(
                     projectId,
-                    definitionId: definition.id,
-                    entityType: "character" as const,
-                    entityId: id,
-                    valueJson: CHARACTER_DEFAULT_METAFIELDS[index].initialValue,
-                    orderIndex: index,
-                    createdAt: now,
-                    updatedAt: now,
-                }));
+                    "character",
+                    id,
+                    now,
+                );
 
             set((state) => {
                 const nextCharacters = [
@@ -2397,10 +2565,6 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {
                     workspaceProject: nextProject,
                     characters: nextCharacters,
-                    metafieldDefinitions: [
-                        ...state.metafieldDefinitions,
-                        ...optimisticDefinitions,
-                    ],
                     metafieldAssignments: [
                         ...state.metafieldAssignments,
                         ...optimisticAssignments,
@@ -2414,18 +2578,11 @@ export const useAppStore = create<AppStore>((set, get) => {
             runInBackground(
                 (async () => {
                     await rendererApi.world.createCharacter({ projectId, id });
-
-                    const metafields =
-                        await rendererApi.metafield.listProjectMetafields({
-                            projectId,
-                        });
-
-                    if (get().projectId === projectId) {
-                        set({
-                            metafieldDefinitions: metafields.definitions,
-                            metafieldAssignments: metafields.assignments,
-                        });
-                    }
+                    await reconcileEntityMetafieldsFromRepository(
+                        projectId,
+                        "character",
+                        id,
+                    );
                 })(),
                 (error) => {
                     const message =
@@ -2445,8 +2602,17 @@ export const useAppStore = create<AppStore>((set, get) => {
                 throw new Error("Open a project before creating locations.");
             }
 
+            assertTemplateReloadNotInFlight(projectId);
+
             const now = new Date();
             const id = generateOptimisticId();
+            const optimisticAssignments =
+                buildTemplateDerivedOptimisticAssignments(
+                    projectId,
+                    "location",
+                    id,
+                    now,
+                );
 
             set((state) => {
                 const nextLocations = [
@@ -2490,6 +2656,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {
                     workspaceProject: nextProject,
                     locations: nextLocations,
+                    metafieldAssignments: [
+                        ...state.metafieldAssignments,
+                        ...optimisticAssignments,
+                    ],
                     activeDocument: nextTab,
                     openTabs: nextTabs,
                     pendingTitleFocusDocument: nextTab,
@@ -2497,7 +2667,14 @@ export const useAppStore = create<AppStore>((set, get) => {
             });
 
             runInBackground(
-                rendererApi.world.createLocation({ projectId, id }),
+                (async () => {
+                    await rendererApi.world.createLocation({ projectId, id });
+                    await reconcileEntityMetafieldsFromRepository(
+                        projectId,
+                        "location",
+                        id,
+                    );
+                })(),
                 (error) => {
                     const message =
                         createErrorMessage(
@@ -2518,8 +2695,17 @@ export const useAppStore = create<AppStore>((set, get) => {
                 );
             }
 
+            assertTemplateReloadNotInFlight(projectId);
+
             const now = new Date();
             const id = generateOptimisticId();
+            const optimisticAssignments =
+                buildTemplateDerivedOptimisticAssignments(
+                    projectId,
+                    "organization",
+                    id,
+                    now,
+                );
 
             set((state) => {
                 const nextOrganizations = [
@@ -2561,6 +2747,10 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return {
                     workspaceProject: nextProject,
                     organizations: nextOrganizations,
+                    metafieldAssignments: [
+                        ...state.metafieldAssignments,
+                        ...optimisticAssignments,
+                    ],
                     activeDocument: nextTab,
                     openTabs: nextTabs,
                     pendingTitleFocusDocument: nextTab,
@@ -2568,7 +2758,14 @@ export const useAppStore = create<AppStore>((set, get) => {
             });
 
             runInBackground(
-                rendererApi.world.createOrganization({ projectId, id }),
+                (async () => {
+                    await rendererApi.world.createOrganization({ projectId, id });
+                    await reconcileEntityMetafieldsFromRepository(
+                        projectId,
+                        "organization",
+                        id,
+                    );
+                })(),
                 (error) => {
                     const message =
                         createErrorMessage(
@@ -3858,6 +4055,9 @@ export const useAppStore = create<AppStore>((set, get) => {
         },
         saveMetafieldValue: async (request) => {
             return rendererApi.metafield.saveMetafieldValue(request);
+        },
+        saveEditorTemplate: async (request) => {
+            return rendererApi.metafield.saveEditorTemplate(request);
         },
         removeMetafieldFromEntity: async (request) => {
             return rendererApi.metafield.removeMetafieldFromEntity(request);

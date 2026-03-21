@@ -54,6 +54,9 @@ export type WorkspaceMetafieldDefinition =
     OpenProjectPayload["metafieldDefinitions"][number];
 export type WorkspaceMetafieldAssignment =
     OpenProjectPayload["metafieldAssignments"][number];
+export type WorkspaceEditorTemplate =
+    OpenProjectPayload["editorTemplates"][number];
+export type WorkspaceEditorTemplateType = WorkspaceEditorTemplate["editorType"];
 
 export type WorkspaceViewMode = "manuscript" | "timeline";
 
