@@ -283,6 +283,13 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
               - If instrumental, leave empty or provide minimal structure if needed.
             - 'seconds': Duration in seconds (default 60).
 
+                        ## Safety requirements (mandatory)
+                        - Keep the output strictly SFW and suitable for a broad audience.
+                        - Do not generate sexual, explicit, erotic, fetish, pornographic, or suggestive themes.
+                        - Do not include nudity, sexual acts, sexual body-part emphasis, or age-ambiguous intimacy.
+                        - Avoid explicit profanity-heavy, hateful, or graphic-violence themes.
+                        - If the subject implies NSFW content, sanitize it into a neutral, cinematic, or instrumental-safe mood instead.
+
             ## Output Format
             Return a single JSON object with keys: 'tags', 'lyrics', 'seconds'.
         `;
@@ -381,6 +388,12 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
         -Natural language should be vivid and concrete, with a sense of picture
         -The overall description should be logical and clear
         -Ensure that Tags complement and do not duplicate natural language
+        ### Safety requirements (mandatory):
+        -Output must be strictly SFW and suitable for a broad audience.
+        -Do not include sexual, explicit, erotic, fetish, pornographic, or suggestive content.
+        -Do not include nudity, underwear-focus, cleavage-focus, body-part fetishization, or sexual poses.
+        -Do not include age-ambiguous or minor-like sexualized depictions.
+        -If the subject suggests NSFW material, reinterpret it into a neutral, non-sexual, story-safe visual concept.
         ## Creative tasks
         [My creative idea]: Generate a high-quality anime-style portrait of the following entity in the story:
         ${subjectDescription}
@@ -419,7 +432,7 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
             .input("positive", result.text)
             .input(
                 "negative",
-                "You are an assistant designed to generate low-quality images based on textual prompts <Prompt Start> blurry, worst quality, low quality, jpeg artifacts, signature, watermark, username, error, deformed hands, bad anatomy, extra limbs, poorly drawn hands, poorly drawn face, mutation, deformed, extra eyes, extra arms, extra legs, malformed limbs, fused fingers, too many fingers, long neck, cross-eyed, bad proportions, missing arms, missing legs, extra digit, fewer digits, cropped",
+                "You are an assistant designed to generate low-quality images based on textual prompts <Prompt Start> blurry, worst quality, low quality, jpeg artifacts, signature, watermark, username, error, deformed hands, bad anatomy, extra limbs, poorly drawn hands, poorly drawn face, mutation, deformed, extra eyes, extra arms, extra legs, malformed limbs, fused fingers, too many fingers, long neck, cross-eyed, bad proportions, missing arms, missing legs, extra digit, fewer digits, cropped, nsfw, explicit, erotic, nudity, nude, nipples, cleavage, lingerie, underwear focus, fetish, pornographic, sexual pose, suggestive",
             );
 
         return this.executeWorkflow(builder, "images", onProgress);

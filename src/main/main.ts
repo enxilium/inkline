@@ -159,6 +159,13 @@ const appBuilder = new AppBuilder(dependencies);
 let loadingWindow: BrowserWindow | null = null;
 let setupWindow: BrowserWindow | null = null;
 
+const LEGAL_VERSION = "2026-03-22";
+const LEGAL_POLICIES_RELATIVE_PATH = path.join(
+    "assets",
+    "legal",
+    "policies.md",
+);
+
 const EMPTY_STARTUP_INTEGRITY_STATUS: StartupIntegrityStatus = {
     state: "idle",
     repairedTargets: [],
@@ -444,7 +451,40 @@ const createSetupWindow = (): Promise<void> => {
     });
 };
 
+const readLegalPoliciesMarkdown = async (): Promise<string> => {
+    const candidatePaths = [
+        path.join(process.resourcesPath, LEGAL_POLICIES_RELATIVE_PATH),
+        path.join(app.getAppPath(), LEGAL_POLICIES_RELATIVE_PATH),
+        path.join(process.cwd(), LEGAL_POLICIES_RELATIVE_PATH),
+    ];
+
+    for (const candidatePath of candidatePaths) {
+        if (!fs.existsSync(candidatePath)) {
+            continue;
+        }
+
+        try {
+            return await fs.promises.readFile(candidatePath, "utf-8");
+        } catch (error) {
+            logger.warn(
+                `[Setup] Failed to read legal policies at ${candidatePath}`,
+                error,
+            );
+        }
+    }
+
+    throw new Error("Legal policies file is missing.");
+};
+
 const setupSetupIpcHandlers = (onComplete: () => void): void => {
+    ipcMain.handle(SETUP_CHANNELS.GET_LEGAL_POLICIES, async () => {
+        const markdown = await readLegalPoliciesMarkdown();
+        return {
+            markdown,
+            legalVersion: LEGAL_VERSION,
+        };
+    });
+
     // Complete setup and launch main app
     ipcMain.handle(
         SETUP_CHANNELS.COMPLETE_SETUP,
@@ -457,12 +497,29 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
                     audioGeneration: boolean;
                 };
                 theme: { colorScheme: "dark" | "light"; accentColor: string };
+                legalAccepted: boolean;
+                legalAcceptedAt: string | null;
+                legalVersion: string;
             },
         ) => {
+            if (!config.legalAccepted) {
+                throw new Error(
+                    "You must accept the Terms of Service and Privacy Policy before continuing.",
+                );
+            }
+
+            const acceptedAt =
+                config.legalAcceptedAt && config.legalAcceptedAt.trim().length
+                    ? config.legalAcceptedAt
+                    : new Date().toISOString();
+
             await setupService.saveConfig({
                 setupCompleted: true,
                 features: config.features,
                 theme: config.theme,
+                legalAccepted: true,
+                legalAcceptedAt: acceptedAt,
+                legalVersion: config.legalVersion || LEGAL_VERSION,
             });
 
             if (setupWindow) {
@@ -595,15 +652,6 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
             }
         },
     );
-
-    // Check model status
-    ipcMain.handle(SETUP_CHANNELS.CHECK_MODEL_STATUS, async () => {
-        const [imageDownloaded, audioDownloaded] = await Promise.all([
-            modelDownloadService.isModelDownloaded("image"),
-            modelDownloadService.isModelDownloaded("audio"),
-        ]);
-        return { image: imageDownloaded, audio: audioDownloaded };
-    });
 };
 
 // ──────────────────────────────────────────────────────────────
@@ -847,6 +895,48 @@ const setupContextMenu = (): void => {
     });
 };
 
+const applyForcedFreshSetupIfRequested = async (): Promise<void> => {
+    if (!app.commandLine.hasSwitch("force-setup")) {
+        return;
+    }
+
+    const userDataPath = app.getPath("userData");
+    const resetFiles = [
+        "inkline-setup.json",
+        "user-session.json",
+        "local-preferences.json",
+        "supabase-auth-session.json",
+    ];
+
+    for (const fileName of resetFiles) {
+        const filePath = path.join(userDataPath, fileName);
+        try {
+            await fs.promises.unlink(filePath);
+        } catch (error) {
+            if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+                logger.warn(
+                    `[Setup] Failed to clear ${fileName} during force setup`,
+                    error,
+                );
+            }
+        }
+    }
+
+    const dataDirectory = path.join(userDataPath, "inkline-data");
+    try {
+        await fs.promises.rm(dataDirectory, { recursive: true, force: true });
+    } catch (error) {
+        logger.warn(
+            "[Setup] Failed to clear inkline-data during force setup",
+            error,
+        );
+    }
+
+    logger.info(
+        "[Setup] Force setup requested: cleared Inkline user data for clean install flow",
+    );
+};
+
 const bootstrap = async (): Promise<void> => {
     // Register the custom protocol handler first.
     // This handles inkline-asset://local/assets/project/xxx/image.jpg URLs
@@ -873,14 +963,9 @@ const bootstrap = async (): Promise<void> => {
         return net.fetch(pathToFileURL(filePath).toString());
     });
 
-    // Check if this is a first-time run
-    // Use --force-setup flag to force the setup wizard (for testing)
-    const forceSetup = app.commandLine.hasSwitch("force-setup");
-    const isFirstRun = forceSetup || (await setupService.isFirstRun());
+    await applyForcedFreshSetupIfRequested();
 
-    if (forceSetup) {
-        logger.info("Force setup flag detected - showing setup wizard");
-    }
+    const isFirstRun = await setupService.isFirstRun();
 
     if (isFirstRun) {
         // Show setup wizard and wait for completion

@@ -2,9 +2,9 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
     SETUP_CHANNELS,
     type SetupConfig,
+    type LegalPoliciesResponse,
     type DownloadProgress,
     type DownloadRequest,
-    type ModelStatus,
     type ComfyUIStatus,
     type LanguageToolStatus,
     type PlatformInfo,
@@ -16,6 +16,10 @@ const setupApi = {
         return ipcRenderer.invoke(SETUP_CHANNELS.COMPLETE_SETUP, config);
     },
 
+    getLegalPolicies: (): Promise<LegalPoliciesResponse> => {
+        return ipcRenderer.invoke(SETUP_CHANNELS.GET_LEGAL_POLICIES);
+    },
+
     startDownloads: (request: DownloadRequest): Promise<void> => {
         return ipcRenderer.invoke(SETUP_CHANNELS.START_DOWNLOADS, request);
     },
@@ -24,10 +28,6 @@ const setupApi = {
         types?: ("comfyui" | "image" | "audio" | "languagetool")[],
     ): Promise<void> => {
         return ipcRenderer.invoke(SETUP_CHANNELS.CANCEL_DOWNLOADS, types);
-    },
-
-    checkModelStatus: (): Promise<ModelStatus> => {
-        return ipcRenderer.invoke(SETUP_CHANNELS.CHECK_MODEL_STATUS);
     },
 
     checkComfyUIStatus: (): Promise<ComfyUIStatus> => {
