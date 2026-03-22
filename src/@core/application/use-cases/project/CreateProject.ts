@@ -19,7 +19,38 @@ type DefaultTemplateSeed = {
     valueType: "string" | "string[]";
     kind: EditorTemplateFieldKind;
     column: "left" | "right";
+    selectOptions?: string[];
 };
+
+const DEFAULT_PERSONALITY_OPTIONS: string[] = [
+    "Calm",
+    "Curious",
+    "Kind",
+    "Confident",
+    "Loyal",
+    "Strategic",
+    "Reserved",
+    "Optimistic",
+    "Stubborn",
+    "Cunning",
+    "Impulsive",
+    "Compassionate",
+];
+
+const DEFAULT_POWERS_OPTIONS: string[] = [
+    "Swordsmanship",
+    "Alchemy",
+    "Healing",
+    "Stealth",
+    "Illusion",
+    "Telepathy",
+    "Pyrokinesis",
+    "Shadow Manipulation",
+    "Time Perception",
+    "Elemental Control",
+    "Beast Bond",
+    "Rune Craft",
+];
 
 const DEFAULT_TEMPLATE_SEEDS: Record<EditorTemplateType, DefaultTemplateSeed[]> = {
     character: [
@@ -30,12 +61,14 @@ const DEFAULT_TEMPLATE_SEEDS: Record<EditorTemplateType, DefaultTemplateSeed[]> 
             valueType: "string[]",
             kind: "select",
             column: "left",
+            selectOptions: DEFAULT_PERSONALITY_OPTIONS,
         },
         {
             name: "Powers & Abilities",
             valueType: "string[]",
             kind: "select",
             column: "left",
+            selectOptions: DEFAULT_POWERS_OPTIONS,
         },
     ],
     location: [],
@@ -201,11 +234,41 @@ export class CreateProject {
             scope,
             seed.valueType,
             null,
+            this.createSelectOptions(seed.selectOptions ?? [], now),
             now,
             now,
         );
 
         await this.metafieldDefinitionRepository.create(definition);
         return definition;
+    }
+
+    private createSelectOptions(labels: string[], now: Date) {
+        const seen = new Set<string>();
+        const options: MetafieldDefinition["selectOptions"] = [];
+
+        for (const raw of labels) {
+            const label = raw.trim();
+            if (!label) {
+                continue;
+            }
+
+            const normalized = normalizeMetafieldName(label);
+            if (!normalized || seen.has(normalized)) {
+                continue;
+            }
+
+            seen.add(normalized);
+            options.push({
+                id: generateId(),
+                label,
+                labelNormalized: normalized,
+                orderIndex: options.length,
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+
+        return options;
     }
 }

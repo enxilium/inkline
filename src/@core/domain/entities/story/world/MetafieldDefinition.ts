@@ -17,6 +17,16 @@ export type MetafieldTargetEntityKind =
     | "location"
     | "organization";
 
+export type MetafieldSelectOption = {
+    id: string;
+    label: string;
+    labelNormalized: string;
+    orderIndex: number;
+    icon?: string;
+    createdAt: Date;
+    updatedAt: Date;
+};
+
 export class MetafieldDefinition {
     constructor(
         public id: string,
@@ -26,6 +36,7 @@ export class MetafieldDefinition {
         public scope: MetafieldScope,
         public valueType: MetafieldValueType,
         public targetEntityKind: MetafieldTargetEntityKind | null,
+        public selectOptions: MetafieldSelectOption[],
         public createdAt: Date,
         public updatedAt: Date,
     ) {}

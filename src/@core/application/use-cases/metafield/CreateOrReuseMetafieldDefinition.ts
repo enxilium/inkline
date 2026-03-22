@@ -14,6 +14,13 @@ export interface CreateOrReuseMetafieldDefinitionRequest {
     scope: MetafieldScope;
     valueType: MetafieldValueType;
     targetEntityKind?: MetafieldTargetEntityKind;
+    selectOptions?: Array<
+        | string
+        | {
+              label: string;
+              icon?: string | null;
+          }
+    >;
 }
 
 export interface CreateOrReuseMetafieldDefinitionResponse {
@@ -41,6 +48,19 @@ export class CreateOrReuseMetafieldDefinition {
 
         const normalized = normalizeMetafieldName(name);
 
+        const now = new Date();
+
+        const normalizedSelectOptions =
+            request.valueType === "string[]"
+                ? this.normalizeSelectOptions(request.selectOptions ?? [], now)
+                : [];
+
+        if (request.valueType !== "string[]" && request.selectOptions?.length) {
+            throw new Error(
+                "Only select metafields can include select options.",
+            );
+        }
+
         if (
             request.valueType === "entity" ||
             request.valueType === "entity[]"
@@ -61,8 +81,6 @@ export class CreateOrReuseMetafieldDefinition {
                 "Only entity metafields can include a target entity kind.",
             );
         }
-
-        const now = new Date();
 
         const existing =
             await this.definitionRepository.findByProjectAndNameNormalized(
@@ -107,6 +125,40 @@ export class CreateOrReuseMetafieldDefinition {
                 await this.definitionRepository.update(existing);
             }
 
+            if (existing.valueType === "string[]" && normalizedSelectOptions.length) {
+                const byNormalized = new Map(
+                    existing.selectOptions.map((option) => [
+                        option.labelNormalized,
+                        option,
+                    ]),
+                );
+                let nextOrderIndex =
+                    existing.selectOptions.reduce(
+                        (max, option) => Math.max(max, option.orderIndex),
+                        -1,
+                    ) + 1;
+
+                for (const option of normalizedSelectOptions) {
+                    if (byNormalized.has(option.labelNormalized)) {
+                        continue;
+                    }
+
+                    const createdOption = {
+                        ...option,
+                        orderIndex: nextOrderIndex,
+                    };
+                    nextOrderIndex += 1;
+                    existing.selectOptions.push(createdOption);
+                    byNormalized.set(createdOption.labelNormalized, createdOption);
+                }
+
+                existing.selectOptions.sort(
+                    (left, right) => left.orderIndex - right.orderIndex,
+                );
+                existing.updatedAt = now;
+                await this.definitionRepository.update(existing);
+            }
+
             return {
                 definition: existing,
                 created: false,
@@ -121,6 +173,7 @@ export class CreateOrReuseMetafieldDefinition {
             request.scope,
             request.valueType,
             request.targetEntityKind ?? null,
+            normalizedSelectOptions,
             now,
             now,
         );
@@ -131,5 +184,53 @@ export class CreateOrReuseMetafieldDefinition {
             definition,
             created: true,
         };
+    }
+
+    private normalizeSelectOptions(
+        entries: Array<string | { label: string; icon?: string | null }>,
+        now: Date,
+    ) {
+        const seen = new Set<string>();
+        const normalized: Array<{
+            id: string;
+            label: string;
+            labelNormalized: string;
+            orderIndex: number;
+            icon?: string;
+            createdAt: Date;
+            updatedAt: Date;
+        }> = [];
+
+        for (const entry of entries) {
+            const rawLabel =
+                typeof entry === "string" ? entry : String(entry.label ?? "");
+            const label = rawLabel.trim();
+            if (!label) {
+                continue;
+            }
+
+            const normalizedLabel = normalizeMetafieldName(label);
+            if (!normalizedLabel || seen.has(normalizedLabel)) {
+                continue;
+            }
+
+            seen.add(normalizedLabel);
+
+            const rawIcon =
+                typeof entry === "string" ? undefined : entry.icon ?? undefined;
+            const icon = rawIcon?.trim() || undefined;
+
+            normalized.push({
+                id: generateId(),
+                label,
+                labelNormalized: normalizedLabel,
+                orderIndex: normalized.length,
+                ...(icon ? { icon } : {}),
+                createdAt: now,
+                updatedAt: now,
+            });
+        }
+
+        return normalized;
     }
 }

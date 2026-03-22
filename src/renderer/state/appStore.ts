@@ -826,6 +826,7 @@ type AppStore = {
     createOrReuseMetafieldDefinition: RendererApi["metafield"]["createOrReuseMetafieldDefinition"];
     assignMetafieldToEntity: RendererApi["metafield"]["assignMetafieldToEntity"];
     saveMetafieldValue: RendererApi["metafield"]["saveMetafieldValue"];
+    saveMetafieldSelectOptions: RendererApi["metafield"]["saveMetafieldSelectOptions"];
     saveEditorTemplate: RendererApi["metafield"]["saveEditorTemplate"];
     removeMetafieldFromEntity: RendererApi["metafield"]["removeMetafieldFromEntity"];
     deleteMetafieldDefinitionGlobal: RendererApi["metafield"]["deleteMetafieldDefinitionGlobal"];
@@ -2040,11 +2041,20 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             set({ projectsError: null });
             try {
-                await rendererApi.project.createProject({
+                const { project } = await rendererApi.project.createProject({
                     userId: user.id,
                     title,
                 });
-                await get().loadProjects(user.id);
+
+                // Enter the new project immediately after it is created.
+                await loadProjectWorkspace(project.id);
+
+                // Keep the list fresh for the next time project selection is shown.
+                get()
+                    .loadProjects(user.id)
+                    .catch(() => {
+                        /* noop */
+                    });
             } catch (error) {
                 set({
                     projectsError: createErrorMessage(
@@ -4055,6 +4065,9 @@ export const useAppStore = create<AppStore>((set, get) => {
         },
         saveMetafieldValue: async (request) => {
             return rendererApi.metafield.saveMetafieldValue(request);
+        },
+        saveMetafieldSelectOptions: async (request) => {
+            return rendererApi.metafield.saveMetafieldSelectOptions(request);
         },
         saveEditorTemplate: async (request) => {
             return rendererApi.metafield.saveEditorTemplate(request);

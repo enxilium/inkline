@@ -231,7 +231,21 @@ export type RichEditorProps<TValues extends RichEditorBaseValues> = {
             | "image"
             | "image[]";
         targetEntityKind?: "character" | "location" | "organization";
+        selectOptions?: Array<
+            | string
+            | {
+                  label: string;
+                  icon?: string | null;
+              }
+        >;
     }) => Promise<{ definition: WorkspaceMetafieldDefinition }>;
+    onSaveMetafieldSelectOptions: (request: {
+        definitionId: string;
+        options: Array<{ id?: string; label: string; icon?: string | null }>;
+    }) => Promise<{
+        definitionId: string;
+        options: Array<{ id: string; label: string; icon?: string }>;
+    }>;
     onAssignMetafieldToEntity: (request: {
         definitionId: string;
         entityType: "character" | "location" | "organization";
@@ -329,6 +343,7 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     onGeneratePlaylist,
     onImportPlaylist,
     onCreateOrReuseMetafieldDefinition,
+    onSaveMetafieldSelectOptions,
     onAssignMetafieldToEntity,
     onSaveMetafieldValue,
     onRemoveMetafieldFromEntity,
@@ -1239,6 +1254,9 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                                 ...request,
                                 projectId,
                             })
+                        }
+                        onSaveDefinitionSelectOptions={
+                            onSaveMetafieldSelectOptions
                         }
                         onAssignDefinition={onAssignMetafieldToEntity}
                         onSaveValue={onSaveMetafieldValue}

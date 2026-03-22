@@ -3197,12 +3197,52 @@ export class SynchronizationService extends EventEmitter {
         });
     }
 
+    private rehydratePendingPayload(payload: unknown): unknown {
+        return this.rehydrateDateFields(payload);
+    }
+
+    private rehydrateDateFields(value: unknown, key?: string): unknown {
+        if (Array.isArray(value)) {
+            return value.map((entry) => this.rehydrateDateFields(entry));
+        }
+
+        if (value && typeof value === "object") {
+            const obj = value as Record<string, unknown>;
+            const next: Record<string, unknown> = {};
+            for (const [entryKey, entryValue] of Object.entries(obj)) {
+                next[entryKey] = this.rehydrateDateFields(entryValue, entryKey);
+            }
+            return next;
+        }
+
+        if (
+            typeof value === "string" &&
+            this.shouldRehydrateAsDateField(key)
+        ) {
+            const parsed = new Date(value);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed;
+            }
+        }
+
+        return value;
+    }
+
+    private shouldRehydrateAsDateField(key?: string): boolean {
+        if (!key) {
+            return false;
+        }
+
+        return key === "createdAt" || key === "updatedAt" || key === "deletedAt";
+    }
+
     private async replayPendingUpdate(entry: PendingUpdate): Promise<void> {
-        const payload = entry.payload as Record<string, unknown>;
+        const payload = this.rehydratePendingPayload(entry.payload);
+        const payloadRecord = payload as Record<string, unknown>;
 
         switch (entry.entityType) {
             case "project": {
-                const project = entry.payload as Parameters<
+                const project = payload as Parameters<
                     SupabaseProjectRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3216,7 +3256,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "chapter": {
-                const chapter = entry.payload as Parameters<
+                const chapter = payload as Parameters<
                     SupabaseChapterRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3229,16 +3269,18 @@ export class SynchronizationService extends EventEmitter {
                 } else if (entry.operation === "updateContent") {
                     await this.supabaseChapterRepo.updateContent(
                         entry.entityId,
-                        String(payload.content ?? ""),
-                        payload.updatedAt
-                            ? new Date(String(payload.updatedAt))
+                        String(payloadRecord.content ?? ""),
+                        payloadRecord.updatedAt instanceof Date
+                            ? payloadRecord.updatedAt
+                            : payloadRecord.updatedAt
+                              ? new Date(String(payloadRecord.updatedAt))
                             : undefined,
                     );
                 }
                 return;
             }
             case "character": {
-                const character = entry.payload as Parameters<
+                const character = payload as Parameters<
                     SupabaseCharacterRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3252,7 +3294,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "location": {
-                const location = entry.payload as Parameters<
+                const location = payload as Parameters<
                     SupabaseLocationRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3266,7 +3308,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "organization": {
-                const organization = entry.payload as Parameters<
+                const organization = payload as Parameters<
                     SupabaseOrganizationRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3280,7 +3322,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "scrapNote": {
-                const scrapNote = entry.payload as Parameters<
+                const scrapNote = payload as Parameters<
                     SupabaseScrapNoteRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3293,16 +3335,18 @@ export class SynchronizationService extends EventEmitter {
                 } else if (entry.operation === "updateContent") {
                     await this.supabaseScrapNoteRepo.updateContent(
                         entry.entityId,
-                        String(payload.content ?? ""),
-                        payload.updatedAt
-                            ? new Date(String(payload.updatedAt))
+                        String(payloadRecord.content ?? ""),
+                        payloadRecord.updatedAt instanceof Date
+                            ? payloadRecord.updatedAt
+                            : payloadRecord.updatedAt
+                              ? new Date(String(payloadRecord.updatedAt))
                             : undefined,
                     );
                 }
                 return;
             }
             case "editorTemplate": {
-                const template = entry.payload as Parameters<
+                const template = payload as Parameters<
                     SupabaseEditorTemplateRepository["update"]
                 >[0];
 
@@ -3312,13 +3356,13 @@ export class SynchronizationService extends EventEmitter {
                     await this.supabaseEditorTemplateRepo.update(template);
                 } else if (entry.operation === "delete") {
                     await this.supabaseEditorTemplateRepo.delete(
-                        String(payload.id ?? entry.entityId),
+                        String(payloadRecord.id ?? entry.entityId),
                     );
                 }
                 return;
             }
             case "metafieldDefinition": {
-                const definition = entry.payload as Parameters<
+                const definition = payload as Parameters<
                     SupabaseMetafieldDefinitionRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3333,7 +3377,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "metafieldAssignment": {
-                const assignment = entry.payload as Parameters<
+                const assignment = payload as Parameters<
                     SupabaseMetafieldAssignmentRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3348,7 +3392,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "image": {
-                const image = entry.payload as Parameters<
+                const image = payload as Parameters<
                     SupabaseAssetRepository["saveImage"]
                 >[1];
                 if (entry.operation === "save") {
@@ -3360,7 +3404,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "bgm": {
-                const bgm = entry.payload as Parameters<
+                const bgm = payload as Parameters<
                     SupabaseAssetRepository["saveBGM"]
                 >[1];
                 if (entry.operation === "save") {
@@ -3369,7 +3413,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "playlist": {
-                const playlist = entry.payload as Parameters<
+                const playlist = payload as Parameters<
                     SupabaseAssetRepository["savePlaylist"]
                 >[1];
                 if (entry.operation === "save") {

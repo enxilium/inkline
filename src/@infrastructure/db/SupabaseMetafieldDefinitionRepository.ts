@@ -1,5 +1,6 @@
 import {
     MetafieldDefinition,
+    MetafieldSelectOption,
     MetafieldScope,
     MetafieldValueType,
     MetafieldTargetEntityKind,
@@ -16,8 +17,74 @@ type MetafieldDefinitionRow = {
     scope: MetafieldScope;
     value_type: MetafieldValueType;
     target_entity_kind: MetafieldTargetEntityKind | null;
+    select_options_json: unknown;
     created_at: string;
     updated_at: string;
+};
+
+type PersistedSelectOption = {
+    id: string;
+    label: string;
+    label_normalized: string;
+    order_index: number;
+    icon?: string;
+    created_at: string;
+    updated_at: string;
+};
+
+const toPersistedSelectOptions = (
+    options: MetafieldSelectOption[],
+): PersistedSelectOption[] =>
+    options
+        .slice()
+        .sort((left, right) => left.orderIndex - right.orderIndex)
+        .map((option) => ({
+            id: option.id,
+            label: option.label,
+            label_normalized: option.labelNormalized,
+            order_index: option.orderIndex,
+            ...(option.icon ? { icon: option.icon } : {}),
+            created_at: option.createdAt.toISOString(),
+            updated_at: option.updatedAt.toISOString(),
+        }));
+
+const mapPersistedSelectOptions = (value: unknown): MetafieldSelectOption[] => {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    const options: MetafieldSelectOption[] = [];
+    for (const entry of value) {
+        if (!entry || typeof entry !== "object") {
+            continue;
+        }
+
+        const raw = entry as Partial<PersistedSelectOption>;
+        if (
+            typeof raw.id !== "string" ||
+            typeof raw.label !== "string" ||
+            typeof raw.label_normalized !== "string" ||
+            typeof raw.order_index !== "number" ||
+            typeof raw.created_at !== "string" ||
+            typeof raw.updated_at !== "string"
+        ) {
+            continue;
+        }
+
+        options.push({
+            id: raw.id,
+            label: raw.label,
+            labelNormalized: raw.label_normalized,
+            orderIndex: raw.order_index,
+            ...(typeof raw.icon === "string" && raw.icon.trim()
+                ? { icon: raw.icon.trim() }
+                : {}),
+            createdAt: new Date(raw.created_at),
+            updatedAt: new Date(raw.updated_at),
+        });
+    }
+
+    return options.sort((left, right) => left.orderIndex - right.orderIndex);
 };
 
 const mapRowToDefinition = (row: MetafieldDefinitionRow): MetafieldDefinition =>
@@ -29,6 +96,7 @@ const mapRowToDefinition = (row: MetafieldDefinitionRow): MetafieldDefinition =>
         row.scope,
         row.value_type,
         row.target_entity_kind,
+        mapPersistedSelectOptions(row.select_options_json),
         new Date(row.created_at),
         new Date(row.updated_at),
     );
@@ -45,6 +113,9 @@ export class SupabaseMetafieldDefinitionRepository implements IMetafieldDefiniti
             scope: definition.scope,
             value_type: definition.valueType,
             target_entity_kind: definition.targetEntityKind,
+            select_options_json: toPersistedSelectOptions(
+                definition.selectOptions,
+            ),
             created_at: definition.createdAt.toISOString(),
             updated_at: definition.updatedAt.toISOString(),
         });
@@ -130,6 +201,9 @@ export class SupabaseMetafieldDefinitionRepository implements IMetafieldDefiniti
                 scope: definition.scope,
                 value_type: definition.valueType,
                 target_entity_kind: definition.targetEntityKind,
+                select_options_json: toPersistedSelectOptions(
+                    definition.selectOptions,
+                ),
                 updated_at: definition.updatedAt.toISOString(),
             })
             .eq("id", definition.id);

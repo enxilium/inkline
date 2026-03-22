@@ -72,6 +72,7 @@ import { ListProjectMetafields } from "../@core/application/use-cases/metafield/
 import { CreateOrReuseMetafieldDefinition } from "../@core/application/use-cases/metafield/CreateOrReuseMetafieldDefinition";
 import { AssignMetafieldToEntity } from "../@core/application/use-cases/metafield/AssignMetafieldToEntity";
 import { SaveMetafieldValue } from "../@core/application/use-cases/metafield/SaveMetafieldValue";
+import { SaveMetafieldSelectOptions } from "../@core/application/use-cases/metafield/SaveMetafieldSelectOptions";
 import { SaveEditorTemplate } from "../@core/application/use-cases/metafield/SaveEditorTemplate";
 import { RemoveMetafieldFromEntity } from "../@core/application/use-cases/metafield/RemoveMetafieldFromEntity";
 import { DeleteMetafieldDefinitionGlobal } from "../@core/application/use-cases/metafield/DeleteMetafieldDefinitionGlobal";
@@ -145,6 +146,7 @@ import { ListProjectMetafieldsController } from "../@interface-adapters/controll
 import { CreateOrReuseMetafieldDefinitionController } from "../@interface-adapters/controllers/metafield/CreateOrReuseMetafieldDefinitionController";
 import { AssignMetafieldToEntityController } from "../@interface-adapters/controllers/metafield/AssignMetafieldToEntityController";
 import { SaveMetafieldValueController } from "../@interface-adapters/controllers/metafield/SaveMetafieldValueController";
+import { SaveMetafieldSelectOptionsController } from "../@interface-adapters/controllers/metafield/SaveMetafieldSelectOptionsController";
 import { SaveEditorTemplateController } from "../@interface-adapters/controllers/metafield/SaveEditorTemplateController";
 import { RemoveMetafieldFromEntityController } from "../@interface-adapters/controllers/metafield/RemoveMetafieldFromEntityController";
 import { DeleteMetafieldDefinitionGlobalController } from "../@interface-adapters/controllers/metafield/DeleteMetafieldDefinitionGlobalController";
@@ -241,6 +243,7 @@ type UseCaseMap = {
         createOrReuseMetafieldDefinition: CreateOrReuseMetafieldDefinition;
         assignMetafieldToEntity: AssignMetafieldToEntity;
         saveMetafieldValue: SaveMetafieldValue;
+        saveMetafieldSelectOptions: SaveMetafieldSelectOptions;
         saveEditorTemplate: SaveEditorTemplate;
         removeMetafieldFromEntity: RemoveMetafieldFromEntity;
         deleteMetafieldDefinitionGlobal: DeleteMetafieldDefinitionGlobal;
@@ -474,6 +477,10 @@ export class AppBuilder {
                     repo.metafieldAssignment,
                 ),
                 saveMetafieldValue: new SaveMetafieldValue(
+                    repo.metafieldDefinition,
+                    repo.metafieldAssignment,
+                ),
+                saveMetafieldSelectOptions: new SaveMetafieldSelectOptions(
                     repo.metafieldDefinition,
                     repo.metafieldAssignment,
                 ),
@@ -799,6 +806,10 @@ export class AppBuilder {
                 saveMetafieldValue: new SaveMetafieldValueController(
                     useCases.metafield.saveMetafieldValue,
                 ),
+                saveMetafieldSelectOptions:
+                    new SaveMetafieldSelectOptionsController(
+                        useCases.metafield.saveMetafieldSelectOptions,
+                    ),
                 saveEditorTemplate: new SaveEditorTemplateController(
                     useCases.metafield.saveEditorTemplate,
                 ),

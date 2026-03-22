@@ -4783,6 +4783,9 @@ input.toolbar-color:focus {
 .trait-icon {
     font-size: var(--text-base);
     line-height: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .trait-label {
@@ -4828,6 +4831,152 @@ input.toolbar-color:focus {
 .traits-suggestion-item:hover {
     background: color-mix(in srgb, var(--accent) 15%, transparent);
     border-color: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.template-select-options-editor {
+    display: grid;
+    gap: 0.5rem;
+}
+
+.template-select-options-chip-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.template-select-option-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: linear-gradient(
+        135deg,
+        color-mix(in srgb, var(--accent) 15%, transparent),
+        color-mix(in srgb, var(--accent) 5%, transparent)
+    );
+    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    border-radius: var(--radius-xl);
+    padding: 0.2rem 0.35rem 0.2rem 0.35rem;
+}
+
+.template-select-option-chip-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.35rem;
+    height: 1.35rem;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-subtle);
+    cursor: pointer;
+    padding: 0;
+    position: relative;
+}
+
+.template-select-option-chip-icon-default,
+.template-select-option-chip-icon-hover {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+}
+
+.template-select-option-chip-icon-hover {
+    position: absolute;
+    opacity: 0;
+    transition: opacity var(--duration-fast) var(--ease-default);
+}
+
+.template-select-option-chip-icon-btn:hover .template-select-option-chip-icon-default {
+    opacity: 0;
+}
+
+.template-select-option-chip-icon-btn:hover .template-select-option-chip-icon-hover {
+    opacity: 1;
+}
+
+.template-select-option-chip-label-input {
+    min-width: 64px;
+    max-width: 180px;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-size: var(--text-sm2);
+    font-family: inherit;
+}
+
+.template-select-option-chip-label-input:focus {
+    outline: none;
+}
+
+.template-select-option-chip-trash-btn {
+    border: none;
+    background: transparent;
+    color: var(--text-subtle);
+    border-radius: 999px;
+    width: 1.35rem;
+    height: 1.35rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    padding: 0;
+}
+
+.template-select-option-chip-trash-btn:hover {
+    color: var(--text-error);
+    background: var(--overlay-10);
+}
+
+.template-select-options-add-row {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.select-option-icon-dialog {
+    max-width: 720px;
+}
+
+.select-option-icon-dialog-body {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.select-option-icon-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+    gap: 0.5rem;
+    max-height: 360px;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+}
+
+.select-option-icon-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid var(--overlay-12);
+    border-radius: var(--radius-md);
+    background: var(--overlay-4);
+    color: var(--text);
+    padding: 0.45rem 0.55rem;
+    text-align: left;
+    font-size: var(--text-sm2);
+    cursor: pointer;
+    transition:
+        border-color var(--duration-fast) var(--ease-default),
+        background var(--duration-fast) var(--ease-default);
+}
+
+.select-option-icon-cell:hover {
+    border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+    background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.select-option-icon-cell.is-selected {
+    border-color: var(--accent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────

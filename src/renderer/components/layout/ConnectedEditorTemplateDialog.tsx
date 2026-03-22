@@ -29,10 +29,12 @@ import {
     DialogModalEditorContent,
     DialogTitle,
 } from "../ui/Dialog";
-import { GripVerticalIcon, TrashIcon } from "../ui/Icons";
+import { GripVerticalIcon, PenLineIcon, TrashIcon } from "../ui/Icons";
 import { Input } from "../ui/Input";
 import { Label } from "../ui/Label";
 import { normalizeUserFacingError } from "../../utils/userFacingError";
+import { SelectOptionIconPickerDialog } from "./SelectOptionIconPickerDialog";
+import { renderSelectOptionIcon } from "../ui/selectOptionIconCatalog";
 
 type EditorTemplateDialogProps = {
     open: boolean;
@@ -55,6 +57,68 @@ type TemplateStaticCard = {
     id: string;
     title: string;
     column: "left" | "right";
+};
+
+type TemplateSelectOptionDraft = {
+    id?: string;
+    label: string;
+    icon?: string;
+};
+
+const toSortedSelectOptionSnapshot = (
+    selectOptionsByDefinitionId: Record<string, TemplateSelectOptionDraft[]>,
+) => {
+    return Object.keys(selectOptionsByDefinitionId)
+        .sort()
+        .map((definitionId) => ({
+            definitionId,
+            options: normalizeTemplateSelectOptions(
+                selectOptionsByDefinitionId[definitionId] ?? [],
+            ).map((option) => ({
+                ...(option.id ? { id: option.id } : {}),
+                label: option.label,
+                ...(option.icon ? { icon: option.icon } : {}),
+            })),
+        }));
+};
+
+const buildTemplateDraftSignature = (input: {
+    fields: TemplateDraftField[];
+    placement: SectionPlacement;
+    selectOptionsByDefinitionId: Record<string, TemplateSelectOptionDraft[]>;
+    templateNewFieldName: string;
+    templateNewFieldKind: "field" | "paragraph" | "select";
+    templateNewFieldOptionsDraft: TemplateSelectOptionDraft[];
+}): string => {
+    const fields = input.fields
+        .map((field) => ({
+            definitionId: field.definitionId,
+            kind: field.kind,
+            column: field.column,
+        }))
+        .sort((left, right) =>
+            left.definitionId.localeCompare(right.definitionId),
+        );
+
+    return JSON.stringify({
+        fields,
+        placement: {
+            left: input.placement.left,
+            right: input.placement.right,
+        },
+        selectOptionsByDefinitionId: toSortedSelectOptionSnapshot(
+            input.selectOptionsByDefinitionId,
+        ),
+        templateNewFieldName: input.templateNewFieldName.trim(),
+        templateNewFieldKind: input.templateNewFieldKind,
+        templateNewFieldOptionsDraft: normalizeTemplateSelectOptions(
+            input.templateNewFieldOptionsDraft,
+        ).map((option) => ({
+            ...(option.id ? { id: option.id } : {}),
+            label: option.label,
+            ...(option.icon ? { icon: option.icon } : {}),
+        })),
+    });
 };
 
 const TEMPLATE_STATIC_CARD_SETS: Record<
@@ -312,6 +376,54 @@ const renderStaticTemplateCardPlaceholder = (
     return null;
 };
 
+const normalizeTemplateSelectOptions = (
+    options: Array<{
+        id?: string;
+        label: string;
+        icon?: string | null;
+    }>,
+): TemplateSelectOptionDraft[] => {
+    const seen = new Set<string>();
+    const normalizedOptions: TemplateSelectOptionDraft[] = [];
+
+    for (const option of options) {
+        const label = option.label.trim();
+        if (!label) {
+            continue;
+        }
+
+        const normalized = label.toLowerCase();
+        if (seen.has(normalized)) {
+            continue;
+        }
+
+        seen.add(normalized);
+        const icon = option.icon?.trim() || undefined;
+        normalizedOptions.push({
+            ...(option.id ? { id: option.id } : {}),
+            label,
+            ...(icon ? { icon } : {}),
+        });
+    }
+
+    return normalizedOptions;
+};
+
+const sortTemplateSelectOptions = (
+    options: Array<
+        TemplateSelectOptionDraft & {
+            orderIndex?: number;
+        }
+    >,
+): TemplateSelectOptionDraft[] =>
+    options
+        .slice()
+        .sort((left, right) => {
+            const leftOrder = (left as { orderIndex?: number }).orderIndex ?? 0;
+            const rightOrder = (right as { orderIndex?: number }).orderIndex ?? 0;
+            return leftOrder - rightOrder;
+        });
+
 type SortableSectionCardProps = {
     id: string;
     title: string;
@@ -376,6 +488,109 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
     );
 };
 
+type TemplateSelectOptionsEditorProps = {
+    options: TemplateSelectOptionDraft[];
+    disabled: boolean;
+    addPlaceholder?: string;
+    onAddOption: (label: string) => void;
+    onOptionLabelChange: (option: TemplateSelectOptionDraft, label: string) => void;
+    onOptionLabelBlur?: (option: TemplateSelectOptionDraft) => void;
+    onOptionDelete: (option: TemplateSelectOptionDraft) => void;
+    onOptionIconEdit: (option: TemplateSelectOptionDraft, optionIndex: number) => void;
+};
+
+const TemplateSelectOptionsEditor: React.FC<TemplateSelectOptionsEditorProps> = ({
+    options,
+    disabled,
+    addPlaceholder = "Add option and press Enter",
+    onAddOption,
+    onOptionLabelChange,
+    onOptionLabelBlur,
+    onOptionDelete,
+    onOptionIconEdit,
+}) => {
+    const [draft, setDraft] = React.useState("");
+
+    const submitDraft = React.useCallback(() => {
+        const label = draft.trim();
+        if (!label) {
+            return;
+        }
+
+        onAddOption(label);
+        setDraft("");
+    }, [draft, onAddOption]);
+
+    return (
+        <div className="template-select-options-editor">
+            <div className="template-select-options-chip-grid">
+                {options.map((option, index) => (
+                    <div
+                        key={option.id ?? `${option.label}:${index}`}
+                        className="template-select-option-chip"
+                    >
+                        <button
+                            type="button"
+                            className="template-select-option-chip-icon-btn"
+                            onClick={() => onOptionIconEdit(option, index)}
+                            disabled={disabled}
+                            aria-label={`Edit icon for ${option.label}`}
+                        >
+                            <span className="template-select-option-chip-icon-default">
+                                {renderSelectOptionIcon(option.icon, 15)}
+                            </span>
+                            <span className="template-select-option-chip-icon-hover">
+                                <PenLineIcon size={11} />
+                            </span>
+                        </button>
+                        <input
+                            className="template-select-option-chip-label-input"
+                            value={option.label}
+                            onChange={(event) =>
+                                onOptionLabelChange(option, event.target.value)
+                            }
+                            onBlur={() => onOptionLabelBlur?.(option)}
+                            disabled={disabled}
+                        />
+                        <button
+                            type="button"
+                            className="template-select-option-chip-trash-btn"
+                            onClick={() => onOptionDelete(option)}
+                            disabled={disabled}
+                            aria-label={`Delete ${option.label}`}
+                        >
+                            <TrashIcon size={12} />
+                        </button>
+                    </div>
+                ))}
+            </div>
+
+            <div className="template-select-options-add-row">
+                <Input
+                    value={draft}
+                    onChange={(event) => setDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                            event.preventDefault();
+                            submitDraft();
+                        }
+                    }}
+                    placeholder={addPlaceholder}
+                    disabled={disabled}
+                />
+                <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={submitDraft}
+                    disabled={disabled || !draft.trim()}
+                >
+                    Add
+                </Button>
+            </div>
+        </div>
+    );
+};
+
 export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> = ({
     open,
     editorType,
@@ -385,7 +600,9 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         projectId,
         editorTemplates,
         metafieldDefinitions,
+        metafieldAssignments,
         createOrReuseMetafieldDefinition,
+        saveMetafieldSelectOptions,
         saveEditorTemplate,
         reloadProjectTemplateData,
     } = useAppStore();
@@ -398,6 +615,8 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
     const [templateNewFieldKind, setTemplateNewFieldKind] = React.useState<
         "field" | "paragraph" | "select"
     >("field");
+    const [templateNewFieldOptionsDraft, setTemplateNewFieldOptionsDraft] =
+        React.useState<TemplateSelectOptionDraft[]>([]);
     const [createdDefinitionsById, setCreatedDefinitionsById] = React.useState<
         Map<
             string,
@@ -412,9 +631,36 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     | "image"
                     | "image[]";
                 scope: "character" | "location" | "organization" | "project";
+                selectOptions?: Array<{
+                    id: string;
+                    label: string;
+                    orderIndex: number;
+                    icon?: string;
+                }>;
             }
         >
     >(new Map());
+    const [templateSelectOptionsByDefinitionId, setTemplateSelectOptionsByDefinitionId] =
+        React.useState<Record<string, TemplateSelectOptionDraft[]>>({});
+    const [pendingSelectOptionDelete, setPendingSelectOptionDelete] =
+        React.useState<{
+            definitionId: string;
+            optionId: string;
+            optionLabel: string;
+            usageCount: number;
+        } | null>(null);
+    const [iconPickerTarget, setIconPickerTarget] = React.useState<
+        | {
+              kind: "new";
+              optionIndex: number;
+          }
+        | {
+              kind: "existing";
+              definitionId: string;
+              optionId: string;
+          }
+        | null
+    >(null);
     const [templateDraftFields, setTemplateDraftFields] = React.useState<
         TemplateDraftField[]
     >([]);
@@ -465,6 +711,9 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
 
     const [pendingTemplateDeleteDefinitionId, setPendingTemplateDeleteDefinitionId] =
         React.useState<string | null>(null);
+    const [pendingUnsavedCloseConfirm, setPendingUnsavedCloseConfirm] =
+        React.useState(false);
+    const initialTemplateDraftSignatureRef = React.useRef<string | null>(null);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -632,10 +881,47 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         setTemplateSectionPlacement(nextPlacement);
         setTemplateNewFieldName("");
         setTemplateNewFieldKind("field");
+        setTemplateNewFieldOptionsDraft([]);
         setTemplateDraftError(null);
         setPendingTemplateDeleteDefinitionId(null);
+        setPendingSelectOptionDelete(null);
+        setPendingUnsavedCloseConfirm(false);
+        setIconPickerTarget(null);
         setTemplateDragPlacementSnapshot(null);
         lastProcessedDragOverKeyRef.current = null;
+        const nextSelectOptionsByDefinitionId: Record<
+            string,
+            TemplateSelectOptionDraft[]
+        > = {};
+        for (const field of nextDraftFields) {
+            if (field.kind !== "select") {
+                continue;
+            }
+
+            const definition = templateDefinitionById.get(field.definitionId);
+            nextSelectOptionsByDefinitionId[field.definitionId] =
+                sortTemplateSelectOptions(
+                    (definition?.selectOptions as Array<{
+                        id: string;
+                        label: string;
+                        icon?: string;
+                        orderIndex?: number;
+                    }> | undefined) ?? [],
+                ).map((option) => ({
+                    id: option.id,
+                    label: option.label,
+                    ...(option.icon ? { icon: option.icon } : {}),
+                }));
+        }
+        setTemplateSelectOptionsByDefinitionId(nextSelectOptionsByDefinitionId);
+        initialTemplateDraftSignatureRef.current = buildTemplateDraftSignature({
+            fields: nextDraftFields,
+            placement: nextPlacement,
+            selectOptionsByDefinitionId: nextSelectOptionsByDefinitionId,
+            templateNewFieldName: "",
+            templateNewFieldKind: "field",
+            templateNewFieldOptionsDraft: [],
+        });
         setCreatedDefinitionsById((current) =>
             current.size === 0 ? current : new Map(),
         );
@@ -681,6 +967,11 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             return;
         }
 
+        const initialSelectOptions =
+            templateNewFieldKind === "select"
+                ? normalizeTemplateSelectOptions(templateNewFieldOptionsDraft)
+                : [];
+
         setTemplateDraftError(null);
 
         try {
@@ -689,6 +980,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                 name,
                 scope: editorType,
                 valueType: templateNewFieldKind === "select" ? "string[]" : "string",
+                selectOptions: initialSelectOptions,
             });
 
             setCreatedDefinitionsById((current) => {
@@ -698,6 +990,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     name: response.definition.name,
                     valueType: response.definition.valueType,
                     scope: response.definition.scope,
+                    selectOptions: response.definition.selectOptions,
                 });
                 return next;
             });
@@ -728,6 +1021,22 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             }));
             setTemplateNewFieldName("");
             setTemplateNewFieldKind("field");
+            setTemplateNewFieldOptionsDraft([]);
+            setTemplateSelectOptionsByDefinitionId((current) => ({
+                ...current,
+                [definitionId]: sortTemplateSelectOptions(
+                    response.definition.selectOptions as Array<{
+                        id: string;
+                        label: string;
+                        icon?: string;
+                        orderIndex?: number;
+                    }>,
+                ).map((option) => ({
+                    id: option.id,
+                    label: option.label,
+                    ...(option.icon ? { icon: option.icon } : {}),
+                })),
+            }));
         } catch (error) {
             setTemplateDraftError(
                 normalizeUserFacingError(error, "Failed to create metafield."),
@@ -740,6 +1049,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         templateDraftFields,
         templateNewFieldKind,
         templateNewFieldName,
+        templateNewFieldOptionsDraft,
     ]);
 
     const removeTemplateDraftField = React.useCallback((definitionId: string) => {
@@ -751,8 +1061,321 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             left: placement.left.filter((id) => id !== itemId),
             right: placement.right.filter((id) => id !== itemId),
         }));
+        setTemplateSelectOptionsByDefinitionId((current) => {
+            const next = { ...current };
+            delete next[definitionId];
+            return next;
+        });
         setTemplateDraftError(null);
     }, []);
+
+    const persistTemplateSelectOptions = React.useCallback(
+        async (
+            definitionId: string,
+            optionsDraft?: TemplateSelectOptionDraft[],
+        ) => {
+            const options = normalizeTemplateSelectOptions(
+                optionsDraft ??
+                    templateSelectOptionsByDefinitionId[definitionId] ??
+                    [],
+            );
+
+            const definition = templateDefinitionById.get(definitionId);
+            if (!definition || definition.valueType !== "string[]") {
+                return;
+            }
+
+            const existingOptions =
+                (definition.selectOptions as Array<{
+                    id: string;
+                    label: string;
+                    icon?: string;
+                    orderIndex?: number;
+                }> | undefined) ?? [];
+
+            const existingByNormalized = new Map(
+                existingOptions.map((option) => [
+                    option.label.trim().toLowerCase(),
+                    option,
+                ]),
+            );
+
+            const response = await saveMetafieldSelectOptions({
+                definitionId,
+                options: options.map((option) => ({
+                    id:
+                        option.id ??
+                        existingByNormalized.get(option.label.toLowerCase())?.id,
+                    label: option.label,
+                    ...(option.icon ? { icon: option.icon } : {}),
+                })),
+            });
+
+            setTemplateSelectOptionsByDefinitionId((current) => ({
+                ...current,
+                [definitionId]: response.options.map((option) => ({
+                    id: option.id,
+                    label: option.label,
+                    ...(option.icon ? { icon: option.icon } : {}),
+                })),
+            }));
+
+            setCreatedDefinitionsById((current) => {
+                const definitionEntry = current.get(definitionId);
+                if (!definitionEntry) {
+                    return current;
+                }
+
+                const next = new Map(current);
+                next.set(definitionId, {
+                    ...definitionEntry,
+                    selectOptions: response.options.map((option, index) => ({
+                        id: option.id,
+                        label: option.label,
+                        orderIndex: index,
+                        ...(option.icon ? { icon: option.icon } : {}),
+                    })),
+                });
+                return next;
+            });
+
+            return response.options;
+        },
+        [
+            saveMetafieldSelectOptions,
+            templateDefinitionById,
+            templateSelectOptionsByDefinitionId,
+        ],
+    );
+
+    const addNewFieldOption = React.useCallback((label: string) => {
+        const normalized = normalizeTemplateSelectOptions([
+            ...templateNewFieldOptionsDraft,
+            { label },
+        ]);
+        setTemplateNewFieldOptionsDraft(normalized);
+    }, [templateNewFieldOptionsDraft]);
+
+    const updateNewFieldOptionLabel = React.useCallback(
+        (optionIndex: number, label: string) => {
+            const next = templateNewFieldOptionsDraft.map((option, index) =>
+                index === optionIndex
+                    ? {
+                          ...option,
+                          label,
+                      }
+                    : option,
+            );
+            setTemplateNewFieldOptionsDraft(next);
+        },
+        [templateNewFieldOptionsDraft],
+    );
+
+    const blurNewFieldOptionLabel = React.useCallback(() => {
+        setTemplateNewFieldOptionsDraft((current) =>
+            normalizeTemplateSelectOptions(current),
+        );
+    }, []);
+
+    const deleteNewFieldOption = React.useCallback((optionIndex: number) => {
+        setTemplateNewFieldOptionsDraft((current) =>
+            current.filter((_, index) => index !== optionIndex),
+        );
+    }, []);
+
+    const updateNewFieldOptionIcon = React.useCallback(
+        (optionIndex: number, iconKey: string) => {
+            const next = templateNewFieldOptionsDraft.map((option, index) =>
+                index === optionIndex
+                    ? {
+                          ...option,
+                          icon: iconKey,
+                      }
+                    : option,
+            );
+            setTemplateNewFieldOptionsDraft(next);
+        },
+        [templateNewFieldOptionsDraft],
+    );
+
+    const addExistingDefinitionOption = React.useCallback(
+        async (definitionId: string, label: string) => {
+            const current = templateSelectOptionsByDefinitionId[definitionId] ?? [];
+            const next = normalizeTemplateSelectOptions([...current, { label }]);
+            setTemplateSelectOptionsByDefinitionId((prev) => ({
+                ...prev,
+                [definitionId]: next,
+            }));
+            await persistTemplateSelectOptions(definitionId, next);
+        },
+        [persistTemplateSelectOptions, templateSelectOptionsByDefinitionId],
+    );
+
+    const updateExistingDefinitionOptionLabel = React.useCallback(
+        (definitionId: string, optionId: string, label: string) => {
+            setTemplateSelectOptionsByDefinitionId((prev) => {
+                const current = prev[definitionId] ?? [];
+                const next = current.map((option) =>
+                    option.id === optionId
+                        ? {
+                              ...option,
+                              label,
+                          }
+                        : option,
+                );
+                return {
+                    ...prev,
+                    [definitionId]: next,
+                };
+            });
+        },
+        [],
+    );
+
+    const blurExistingDefinitionOptionLabel = React.useCallback(
+        async (definitionId: string) => {
+            const current = templateSelectOptionsByDefinitionId[definitionId] ?? [];
+            await persistTemplateSelectOptions(definitionId, current);
+        },
+        [persistTemplateSelectOptions, templateSelectOptionsByDefinitionId],
+    );
+
+    const requestExistingDefinitionOptionDelete = React.useCallback(
+        (definitionId: string, optionId: string, optionLabel: string) => {
+            const usageCount = metafieldAssignments.filter((assignment) => {
+                if (
+                    assignment.definitionId !== definitionId ||
+                    assignment.entityType !== editorType
+                ) {
+                    return false;
+                }
+
+                const valueJson = assignment.valueJson;
+                if (
+                    valueJson &&
+                    typeof valueJson === "object" &&
+                    "kind" in valueJson &&
+                    "value" in valueJson
+                ) {
+                    const kind = (valueJson as { kind?: unknown }).kind;
+                    const value = (valueJson as { value?: unknown }).value;
+                    if (kind !== "select" || !Array.isArray(value)) {
+                        return false;
+                    }
+
+                    return value.some((entry) => entry === optionId);
+                }
+
+                if (!Array.isArray(valueJson)) {
+                    return false;
+                }
+
+                return valueJson.some((entry) => entry === optionId);
+            }).length;
+
+            if (usageCount === 0) {
+                void (async () => {
+                    const current =
+                        templateSelectOptionsByDefinitionId[definitionId] ?? [];
+                    const next = current.filter((option) => option.id !== optionId);
+                    setTemplateSelectOptionsByDefinitionId((prev) => ({
+                        ...prev,
+                        [definitionId]: next,
+                    }));
+                    try {
+                        await persistTemplateSelectOptions(definitionId, next);
+                    } catch (error) {
+                        setTemplateDraftError(
+                            normalizeUserFacingError(
+                                error,
+                                "Failed to update select options.",
+                            ),
+                        );
+                    }
+                })();
+                return;
+            }
+
+            setPendingSelectOptionDelete({
+                definitionId,
+                optionId,
+                optionLabel,
+                usageCount,
+            });
+        },
+        [
+            editorType,
+            metafieldAssignments,
+            persistTemplateSelectOptions,
+            templateSelectOptionsByDefinitionId,
+        ],
+    );
+
+    const confirmExistingDefinitionOptionDelete = React.useCallback(async () => {
+        if (!pendingSelectOptionDelete) {
+            return;
+        }
+
+        const { definitionId, optionId } = pendingSelectOptionDelete;
+        const current = templateSelectOptionsByDefinitionId[definitionId] ?? [];
+        const next = current.filter((option) => option.id !== optionId);
+
+        setTemplateSelectOptionsByDefinitionId((prev) => ({
+            ...prev,
+            [definitionId]: next,
+        }));
+
+        setPendingSelectOptionDelete(null);
+        await persistTemplateSelectOptions(definitionId, next);
+    }, [
+        pendingSelectOptionDelete,
+        persistTemplateSelectOptions,
+        templateSelectOptionsByDefinitionId,
+    ]);
+
+    const cancelExistingDefinitionOptionDelete = React.useCallback(() => {
+        if (isSavingTemplate) {
+            return;
+        }
+        setPendingSelectOptionDelete(null);
+    }, [isSavingTemplate]);
+
+    const selectIconFromPicker = React.useCallback(
+        async (iconKey: string) => {
+            if (!iconPickerTarget) {
+                return;
+            }
+
+            if (iconPickerTarget.kind === "new") {
+                updateNewFieldOptionIcon(iconPickerTarget.optionIndex, iconKey);
+                return;
+            }
+
+            const { definitionId, optionId } = iconPickerTarget;
+            const current = templateSelectOptionsByDefinitionId[definitionId] ?? [];
+            const next = current.map((option) =>
+                option.id === optionId
+                    ? {
+                          ...option,
+                          icon: iconKey,
+                      }
+                    : option,
+            );
+
+            setTemplateSelectOptionsByDefinitionId((prev) => ({
+                ...prev,
+                [definitionId]: next,
+            }));
+
+            await persistTemplateSelectOptions(definitionId, next);
+        },
+        [
+            iconPickerTarget,
+            persistTemplateSelectOptions,
+            templateSelectOptionsByDefinitionId,
+            updateNewFieldOptionIcon,
+        ],
+    );
 
     const requestTemplateDraftFieldDelete = React.useCallback(
         (definitionId: string) => {
@@ -1150,6 +1773,32 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         };
     }, []);
 
+    const getDefinitionSelectOptionsDraft = React.useCallback(
+        (
+            definitionId: string,
+            definitionSelectOptions?: Array<{
+                id: string;
+                label: string;
+                icon?: string;
+                orderIndex?: number;
+            }>,
+        ): TemplateSelectOptionDraft[] => {
+            const localDraft = templateSelectOptionsByDefinitionId[definitionId];
+            if (localDraft) {
+                return localDraft;
+            }
+
+            return sortTemplateSelectOptions(definitionSelectOptions ?? []).map(
+                (option) => ({
+                    id: option.id,
+                    label: option.label,
+                    ...(option.icon ? { icon: option.icon } : {}),
+                }),
+            );
+        },
+        [templateSelectOptionsByDefinitionId],
+    );
+
     const saveTemplateDraft = React.useCallback(async () => {
         if (!editorType || !projectId) {
             return;
@@ -1223,6 +1872,13 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         setTemplateDraftError(null);
 
         try {
+            const selectFields = dedupedFields.filter(
+                (field) => field.kind === "select",
+            );
+            for (const field of selectFields) {
+                await persistTemplateSelectOptions(field.definitionId);
+            }
+
             await saveEditorTemplate({
                 projectId,
                 editorType,
@@ -1252,6 +1908,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         projectId,
         reloadProjectTemplateData,
         saveEditorTemplate,
+        persistTemplateSelectOptions,
         staticCardIds,
         staticLeftItems,
         staticRightItems,
@@ -1261,6 +1918,91 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         templateSectionPlacement.right,
     ]);
 
+    const iconPickerSelectedIconKey = React.useMemo(() => {
+        if (!iconPickerTarget) {
+            return undefined;
+        }
+
+        if (iconPickerTarget.kind === "new") {
+            return templateNewFieldOptionsDraft[iconPickerTarget.optionIndex]?.icon;
+        }
+
+        const options =
+            templateSelectOptionsByDefinitionId[iconPickerTarget.definitionId] ?? [];
+        return options.find((option) => option.id === iconPickerTarget.optionId)
+            ?.icon;
+    }, [
+        iconPickerTarget,
+        templateNewFieldOptionsDraft,
+        templateSelectOptionsByDefinitionId,
+    ]);
+
+    const currentTemplateDraftSignature = React.useMemo(
+        () =>
+            buildTemplateDraftSignature({
+                fields: templateDraftFields,
+                placement: templateSectionPlacement,
+                selectOptionsByDefinitionId: templateSelectOptionsByDefinitionId,
+                templateNewFieldName,
+                templateNewFieldKind,
+                templateNewFieldOptionsDraft,
+            }),
+        [
+            templateDraftFields,
+            templateSectionPlacement,
+            templateSelectOptionsByDefinitionId,
+            templateNewFieldKind,
+            templateNewFieldName,
+            templateNewFieldOptionsDraft,
+        ],
+    );
+
+    const hasUnsavedTemplateChanges = React.useMemo(() => {
+        const initialSignature = initialTemplateDraftSignatureRef.current;
+        if (!open || !initialSignature) {
+            return false;
+        }
+
+        return initialSignature !== currentTemplateDraftSignature;
+    }, [currentTemplateDraftSignature, open]);
+
+    React.useEffect(() => {
+        if (!open) {
+            setPendingUnsavedCloseConfirm(false);
+            initialTemplateDraftSignatureRef.current = null;
+        }
+    }, [open]);
+
+    const requestTemplateDialogClose = React.useCallback(() => {
+        if (isSavingTemplate) {
+            return;
+        }
+
+        if (hasUnsavedTemplateChanges) {
+            setPendingUnsavedCloseConfirm(true);
+            return;
+        }
+
+        onOpenChange(false);
+    }, [hasUnsavedTemplateChanges, isSavingTemplate, onOpenChange]);
+
+    const cancelUnsavedTemplateClose = React.useCallback(() => {
+        if (isSavingTemplate) {
+            return;
+        }
+
+        setPendingUnsavedCloseConfirm(false);
+    }, [isSavingTemplate]);
+
+    const confirmUnsavedTemplateClose = React.useCallback(() => {
+        if (isSavingTemplate) {
+            return;
+        }
+
+        setPendingUnsavedCloseConfirm(false);
+        onOpenChange(false);
+    }, [isSavingTemplate, onOpenChange]);
+
     if (!editorType) {
         return null;
     }
@@ -1268,14 +2010,16 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
     return (
         <>
             <Dialog
-            open={open}
-            onOpenChange={(nextOpen) => {
-                if (isSavingTemplate && !nextOpen) {
-                    return;
-                }
-                onOpenChange(nextOpen);
-            }}
-        >
+                open={open}
+                onOpenChange={(nextOpen) => {
+                    if (nextOpen) {
+                        onOpenChange(true);
+                        return;
+                    }
+
+                    requestTemplateDialogClose();
+                }}
+            >
             <DialogModalEditorContent ref={dialogModalEditorRef}>
                 <DialogHeader>
                     <DialogTitle>
@@ -1326,6 +2070,42 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                 Create & Add
                             </Button>
                         </div>
+                        {templateNewFieldKind === "select" ? (
+                            <TemplateSelectOptionsEditor
+                                options={templateNewFieldOptionsDraft}
+                                disabled={isSavingTemplate}
+                                addPlaceholder="Add option for this metafield"
+                                onAddOption={addNewFieldOption}
+                                onOptionLabelChange={(option, label) => {
+                                    const optionIndex =
+                                        templateNewFieldOptionsDraft.indexOf(
+                                            option,
+                                        );
+                                    if (optionIndex >= 0) {
+                                        updateNewFieldOptionLabel(
+                                            optionIndex,
+                                            label,
+                                        );
+                                    }
+                                }}
+                                onOptionLabelBlur={blurNewFieldOptionLabel}
+                                onOptionDelete={(option) => {
+                                    const optionIndex =
+                                        templateNewFieldOptionsDraft.indexOf(
+                                            option,
+                                        );
+                                    if (optionIndex >= 0) {
+                                        deleteNewFieldOption(optionIndex);
+                                    }
+                                }}
+                                onOptionIconEdit={(_, optionIndex) =>
+                                    setIconPickerTarget({
+                                        kind: "new",
+                                        optionIndex,
+                                    })
+                                }
+                            />
+                        ) : null}
                     </div>
                     {templateDraftError ? (
                         <span className="card-hint is-error">
@@ -1430,6 +2210,91 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                                             {renderTemplateKindPlaceholder(
                                                                 field.kind,
                                                             )}
+                                                            {field.kind ===
+                                                            "select" ? (
+                                                                <TemplateSelectOptionsEditor
+                                                                    options={getDefinitionSelectOptionsDraft(
+                                                                        definitionId,
+                                                                        definition.selectOptions as Array<{
+                                                                            id: string;
+                                                                            label: string;
+                                                                            icon?: string;
+                                                                            orderIndex?: number;
+                                                                        }>,
+                                                                    )}
+                                                                    disabled={
+                                                                        isSavingTemplate
+                                                                    }
+                                                                    onAddOption={
+                                                                        (label) => {
+                                                                            void addExistingDefinitionOption(
+                                                                                definitionId,
+                                                                                label,
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    onOptionLabelChange={
+                                                                        (
+                                                                            option,
+                                                                            label,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+                                                                            updateExistingDefinitionOptionLabel(
+                                                                                definitionId,
+                                                                                option.id,
+                                                                                label,
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    onOptionLabelBlur={
+                                                                        () => {
+                                                                            void blurExistingDefinitionOptionLabel(
+                                                                                definitionId,
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    onOptionDelete={
+                                                                        (
+                                                                            option,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+
+                                                                            requestExistingDefinitionOptionDelete(
+                                                                                definitionId,
+                                                                                option.id,
+                                                                                option.label,
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    onOptionIconEdit={
+                                                                        (
+                                                                            option,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+
+                                                                            setIconPickerTarget(
+                                                                                {
+                                                                                    kind: "existing",
+                                                                                    definitionId,
+                                                                                    optionId: option.id,
+                                                                                },
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                />
+                                                            ) : null}
                                                         </SortableSectionCard>
                                                     );
                                                 },
@@ -1525,6 +2390,91 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                                             {renderTemplateKindPlaceholder(
                                                                 field.kind,
                                                             )}
+                                                            {field.kind ===
+                                                            "select" ? (
+                                                                <TemplateSelectOptionsEditor
+                                                                    options={getDefinitionSelectOptionsDraft(
+                                                                        definitionId,
+                                                                        definition.selectOptions as Array<{
+                                                                            id: string;
+                                                                            label: string;
+                                                                            icon?: string;
+                                                                            orderIndex?: number;
+                                                                        }>,
+                                                                    )}
+                                                                    disabled={
+                                                                        isSavingTemplate
+                                                                    }
+                                                                    onAddOption={
+                                                                        (label) => {
+                                                                            void addExistingDefinitionOption(
+                                                                                definitionId,
+                                                                                label,
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    onOptionLabelChange={
+                                                                        (
+                                                                            option,
+                                                                            label,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+                                                                            updateExistingDefinitionOptionLabel(
+                                                                                definitionId,
+                                                                                option.id,
+                                                                                label,
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    onOptionLabelBlur={
+                                                                        () => {
+                                                                            void blurExistingDefinitionOptionLabel(
+                                                                                definitionId,
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    onOptionDelete={
+                                                                        (
+                                                                            option,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+
+                                                                            requestExistingDefinitionOptionDelete(
+                                                                                definitionId,
+                                                                                option.id,
+                                                                                option.label,
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                    onOptionIconEdit={
+                                                                        (
+                                                                            option,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+
+                                                                            setIconPickerTarget(
+                                                                                {
+                                                                                    kind: "existing",
+                                                                                    definitionId,
+                                                                                    optionId: option.id,
+                                                                                },
+                                                                            );
+                                                                        }
+                                                                    }
+                                                                />
+                                                            ) : null}
                                                         </SortableSectionCard>
                                                     );
                                                 },
@@ -1539,7 +2489,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                         <Button
                             type="button"
                             variant="secondary"
-                            onClick={() => onOpenChange(false)}
+                            onClick={requestTemplateDialogClose}
                             disabled={isSavingTemplate}
                         >
                             Cancel
@@ -1558,40 +2508,127 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             </DialogModalEditorContent>
             </Dialog>
             <Dialog
-            open={Boolean(pendingTemplateDeleteDefinitionId)}
-            onOpenChange={(nextOpen) => {
-                if (!nextOpen) {
-                    cancelTemplateDraftFieldDelete();
-                }
-            }}
-        >
-            <DialogContent>
-                <DialogHeader>
-                    <DialogTitle>Heads up!</DialogTitle>
-                    <DialogDescription>
-                        Heads up! Deleting this metafield will affect ALL existing items using this template. Any existing information will be discarded.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="dialog-actions">
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        onClick={cancelTemplateDraftFieldDelete}
-                        disabled={isSavingTemplate}
-                    >
-                        Cancel
-                    </Button>
-                    <Button
-                        type="button"
-                        variant="primary"
-                        onClick={confirmTemplateDraftFieldDelete}
-                        disabled={isSavingTemplate}
-                    >
-                        Delete Metafield
-                    </Button>
-                </div>
-            </DialogContent>
+                open={pendingUnsavedCloseConfirm}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen) {
+                        cancelUnsavedTemplateClose();
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Discard Unsaved Changes?</DialogTitle>
+                        <DialogDescription>
+                            You have unsaved template edits. Closing now will
+                            discard them.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="dialog-actions">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={cancelUnsavedTemplateClose}
+                            disabled={isSavingTemplate}
+                        >
+                            Keep Editing
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="primary"
+                            onClick={confirmUnsavedTemplateClose}
+                            disabled={isSavingTemplate}
+                        >
+                            Discard Changes
+                        </Button>
+                    </div>
+                </DialogContent>
             </Dialog>
+            <Dialog
+                open={Boolean(pendingTemplateDeleteDefinitionId)}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen) {
+                        cancelTemplateDraftFieldDelete();
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Heads up!</DialogTitle>
+                        <DialogDescription>
+                            Heads up! Deleting this metafield will affect ALL existing items using this template. Any existing information will be discarded.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="dialog-actions">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={cancelTemplateDraftFieldDelete}
+                            disabled={isSavingTemplate}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="primary"
+                            onClick={confirmTemplateDraftFieldDelete}
+                            disabled={isSavingTemplate}
+                        >
+                            Delete Metafield
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+            <Dialog
+                open={Boolean(pendingSelectOptionDelete)}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen) {
+                        cancelExistingDefinitionOptionDelete();
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Option?</DialogTitle>
+                        <DialogDescription>
+                            This option is used in {pendingSelectOptionDelete?.usageCount ?? 0}{" "}
+                            saved value{(pendingSelectOptionDelete?.usageCount ?? 0) === 1 ? "" : "s"}.
+                            Deleting it will remove it from those assignments.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="dialog-actions">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={cancelExistingDefinitionOptionDelete}
+                            disabled={isSavingTemplate}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="primary"
+                            onClick={() => {
+                                void confirmExistingDefinitionOptionDelete();
+                            }}
+                            disabled={isSavingTemplate}
+                        >
+                            Delete Option
+                        </Button>
+                    </div>
+                </DialogContent>
+            </Dialog>
+            <SelectOptionIconPickerDialog
+                open={Boolean(iconPickerTarget)}
+                selectedIconKey={iconPickerSelectedIconKey}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen) {
+                        setIconPickerTarget(null);
+                    }
+                }}
+                onSelect={(iconKey) => {
+                    void selectIconFromPicker(iconKey);
+                }}
+            />
         </>
     );
 };

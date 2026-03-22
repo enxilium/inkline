@@ -61,7 +61,21 @@ export type CharacterEditorProps = {
             | "image"
             | "image[]";
         targetEntityKind?: "character" | "location" | "organization";
+        selectOptions?: Array<
+            | string
+            | {
+                  label: string;
+                  icon?: string | null;
+              }
+        >;
     }) => Promise<{ definition: WorkspaceMetafieldDefinition }>;
+    onSaveMetafieldSelectOptions: (request: {
+        definitionId: string;
+        options: Array<{ id?: string; label: string; icon?: string | null }>;
+    }) => Promise<{
+        definitionId: string;
+        options: Array<{ id: string; label: string; icon?: string }>;
+    }>;
     onAssignMetafieldToEntity: (request: {
         definitionId: string;
         entityType: "character" | "location" | "organization";
@@ -125,6 +139,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     onGeneratePlaylist,
     onImportPlaylist,
     onCreateOrReuseMetafieldDefinition,
+    onSaveMetafieldSelectOptions,
     onAssignMetafieldToEntity,
     onSaveMetafieldValue,
     onRemoveMetafieldFromEntity,
@@ -265,6 +280,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
             onCreateOrReuseMetafieldDefinition={
                 onCreateOrReuseMetafieldDefinition
             }
+            onSaveMetafieldSelectOptions={onSaveMetafieldSelectOptions}
             onAssignMetafieldToEntity={onAssignMetafieldToEntity}
             onSaveMetafieldValue={onSaveMetafieldValue}
             onRemoveMetafieldFromEntity={onRemoveMetafieldFromEntity}

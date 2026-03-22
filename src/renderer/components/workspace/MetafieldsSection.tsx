@@ -57,7 +57,21 @@ type Props = {
             | "image"
             | "image[]";
         targetEntityKind?: "character" | "location" | "organization";
+        selectOptions?: Array<
+            | string
+            | {
+                  label: string;
+                  icon?: string | null;
+              }
+        >;
     }) => Promise<{ definition: WorkspaceMetafieldDefinition }>;
+    onSaveDefinitionSelectOptions: (request: {
+        definitionId: string;
+        options: Array<{ id?: string; label: string; icon?: string | null }>;
+    }) => Promise<{
+        definitionId: string;
+        options: Array<{ id: string; label: string; icon?: string }>;
+    }>;
     onAssignDefinition: (request: {
         definitionId: string;
         entityType: EditorEntityType;
@@ -343,6 +357,7 @@ export const MetafieldsSection: React.FC<Props> = ({
     availableDocuments = [],
     onNavigateToDocument,
     onCreateOrReuseDefinition,
+    onSaveDefinitionSelectOptions,
     onAssignDefinition,
     onSaveValue,
     onUnassign,
@@ -628,7 +643,54 @@ export const MetafieldsSection: React.FC<Props> = ({
         return (
             <TraitsInput
                 value={staged.value}
+                options={
+                    definition.selectOptions
+                        .slice()
+                        .sort(
+                            (left, right) => left.orderIndex - right.orderIndex,
+                        )
+                        .map((option) => ({
+                            id: option.id,
+                            label: option.label,
+                            ...(option.icon ? { icon: option.icon } : {}),
+                        }))
+                }
                 placeholder="Add options..."
+                onCreateOption={async (label) => {
+                    const existing = definition.selectOptions.find(
+                        (option) =>
+                            option.label.trim().toLowerCase() ===
+                            label.trim().toLowerCase(),
+                    );
+
+                    if (existing) {
+                        return {
+                            id: existing.id,
+                            label: existing.label,
+                            ...(existing.icon ? { icon: existing.icon } : {}),
+                        };
+                    }
+
+                    const response = await onSaveDefinitionSelectOptions({
+                        definitionId: definition.id,
+                        options: [
+                            ...definition.selectOptions.map((option) => ({
+                                id: option.id,
+                                label: option.label,
+                                ...(option.icon ? { icon: option.icon } : {}),
+                            })),
+                            { label },
+                        ],
+                    });
+
+                    const created = response.options.find(
+                        (option) =>
+                            option.label.trim().toLowerCase() ===
+                            label.trim().toLowerCase(),
+                    );
+
+                    return created ?? null;
+                }}
                 onChange={(next) =>
                     void saveValue(assignment.id, {
                         kind: "select",
