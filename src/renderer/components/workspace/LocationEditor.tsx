@@ -70,15 +70,6 @@ export type LocationEditorProps = {
     }) => Promise<void>;
     onImportMetafieldImage: (file: File) => Promise<string>;
     editorTemplate?: WorkspaceEditorTemplate | null;
-    onSaveEditorTemplate?: (request: {
-        projectId: string;
-        editorType: "character" | "location" | "organization";
-        placement: { left: string[]; right: string[] };
-        fields: Array<{
-            definitionId: string;
-            kind: "field" | "paragraph" | "select";
-        }>;
-    }) => Promise<{ template: WorkspaceEditorTemplate }>;
     onDirtyStateChange?: (isDirty: boolean) => void;
     onNavigateToDocument?: (ref: DocumentRef) => void;
     focusTitleOnMount?: boolean;
@@ -120,7 +111,6 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     onDeleteMetafieldDefinitionGlobal,
     onImportMetafieldImage,
     editorTemplate,
-    onSaveEditorTemplate,
     onDirtyStateChange,
     onNavigateToDocument,
     focusTitleOnMount = false,
@@ -194,6 +184,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
             initialValues={initialValues}
             defaultCards={[]}
             customCards={customCards}
+            customRightCardTypes={["presence"]}
             renderDefaultCard={renderDefaultCard}
             onSubmit={onSubmit}
             allCharacters={allCharacters}
@@ -223,7 +214,6 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
             }
             onImportMetafieldImage={onImportMetafieldImage}
             editorTemplate={editorTemplate}
-            onSaveEditorTemplate={onSaveEditorTemplate}
             onDirtyStateChange={onDirtyStateChange}
             focusTitleOnMount={focusTitleOnMount}
             assetText={{

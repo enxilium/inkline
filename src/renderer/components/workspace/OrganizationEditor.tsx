@@ -80,15 +80,6 @@ export type OrganizationEditorProps = {
     }) => Promise<void>;
     onImportMetafieldImage: (file: File) => Promise<string>;
     editorTemplate?: WorkspaceEditorTemplate | null;
-    onSaveEditorTemplate?: (request: {
-        projectId: string;
-        editorType: "character" | "location" | "organization";
-        placement: { left: string[]; right: string[] };
-        fields: Array<{
-            definitionId: string;
-            kind: "field" | "paragraph" | "select";
-        }>;
-    }) => Promise<{ template: WorkspaceEditorTemplate }>;
     onDirtyStateChange?: (isDirty: boolean) => void;
     focusTitleOnMount?: boolean;
 };
@@ -133,7 +124,6 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     onDeleteMetafieldDefinitionGlobal,
     onImportMetafieldImage,
     editorTemplate,
-    onSaveEditorTemplate,
     onDirtyStateChange,
     focusTitleOnMount = false,
 }) => {
@@ -214,7 +204,9 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
             entityId={organization.id}
             initialValues={initialValues}
             defaultCards={DEFAULT_CARDS}
+            defaultRightCardTypes={["locations"]}
             customCards={customCards}
+            customRightCardTypes={["reach"]}
             renderDefaultCard={renderDefaultCard}
             onSubmit={onSubmit}
             allCharacters={allCharacters}
@@ -244,7 +236,6 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
             }
             onImportMetafieldImage={onImportMetafieldImage}
             editorTemplate={editorTemplate}
-            onSaveEditorTemplate={onSaveEditorTemplate}
             onDirtyStateChange={onDirtyStateChange}
             focusTitleOnMount={focusTitleOnMount}
             assetText={{

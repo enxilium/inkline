@@ -32,12 +32,10 @@ export const ConnectedOrganizationEditor: React.FC<
         updateMetafieldAssignmentLocally,
         removeMetafieldAssignmentLocally,
         removeMetafieldDefinitionLocally,
-        reloadProjectTemplateData,
         saveOrganizationInfo,
         createOrReuseMetafieldDefinition,
         assignMetafieldToEntity,
         saveMetafieldValue,
-        saveEditorTemplate,
         removeMetafieldFromEntity,
         deleteMetafieldDefinitionGlobal,
         generateOrganizationImage,
@@ -498,16 +496,6 @@ export const ConnectedOrganizationEditor: React.FC<
         [importAsset, organization, projectId],
     );
 
-    const handleSaveEditorTemplate = React.useCallback(
-        async (request: Parameters<typeof saveEditorTemplate>[0]) => {
-            const response = await saveEditorTemplate(request);
-            await reloadProjectTemplateData(request.projectId);
-
-            return response;
-        },
-        [reloadProjectTemplateData, saveEditorTemplate],
-    );
-
     const availableDocuments: DocumentRef[] = React.useMemo(() => {
         const docs: DocumentRef[] = [];
         for (const ch of chapters) {
@@ -616,7 +604,6 @@ export const ConnectedOrganizationEditor: React.FC<
             }
             onImportMetafieldImage={handleImportMetafieldImage}
             editorTemplate={organizationEditorTemplate}
-            onSaveEditorTemplate={handleSaveEditorTemplate}
             onDirtyStateChange={handleDirtyStateChange}
             focusTitleOnMount={focusTitleOnMount}
         />

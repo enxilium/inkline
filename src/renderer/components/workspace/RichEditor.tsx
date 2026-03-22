@@ -1,22 +1,4 @@
 import React from "react";
-import {
-    DndContext,
-    PointerSensor,
-    closestCenter,
-    useDroppable,
-    useSensor,
-    useSensors,
-    type DragStartEvent,
-    type DragEndEvent,
-    type DragOverEvent,
-} from "@dnd-kit/core";
-import {
-    SortableContext,
-    arrayMove,
-    rectSortingStrategy,
-    useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 import type {
     WorkspaceCharacter,
@@ -27,22 +9,10 @@ import type {
     WorkspaceOrganization,
 } from "../../types";
 import { ActionDropdown } from "../ui/ActionDropdown";
-import { Button } from "../ui/Button";
-import {
-    Dialog,
-    DialogContent,
-    DialogModalEditorContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "../ui/Dialog";
 import {
     ChevronLeftIcon,
     ChevronRightIcon,
-    GripVerticalIcon,
 } from "../ui/Icons";
-import { Input } from "../ui/Input";
-import { Label } from "../ui/Label";
 import type { DocumentRef } from "../ui/ListInput";
 import { showToast } from "../ui/GenerationProgressToast";
 import { MetafieldsSection } from "./MetafieldsSection";
@@ -52,15 +22,7 @@ import {
     type UserErrorContext,
 } from "../../utils/userFacingError";
 
-type NewMetafieldKind = "field" | "paragraph" | "select";
 export type RichEditorColumnId = "left" | "right";
-
-type OptimisticMetafieldCard = {
-    tempAssignmentId: string;
-    name: string;
-    kind: NewMetafieldKind;
-    targetColumn: RichEditorColumnId;
-};
 
 export type RichEditorSectionPlacement = {
     left: string[];
@@ -70,54 +32,6 @@ export type RichEditorSectionPlacement = {
 export type RichEditorActionLog = {
     action: string;
     payload?: Record<string, unknown>;
-};
-
-type TemplateDraftField = {
-    definitionId: string;
-    kind: "field" | "paragraph" | "select";
-    column: RichEditorColumnId;
-};
-
-const TEMPLATE_CORE_LEFT_ITEMS = [
-    "template-core:description",
-] as const;
-const TEMPLATE_CORE_RIGHT_ITEMS = [
-    "template-core:portrait",
-    "template-core:audio",
-] as const;
-const TEMPLATE_CORE_ITEM_IDS = new Set<string>([
-    ...TEMPLATE_CORE_LEFT_ITEMS,
-    ...TEMPLATE_CORE_RIGHT_ITEMS,
-]);
-
-const toTemplateCardItemId = (definitionId: string): string =>
-    `template-field:${definitionId}`;
-
-const toTemplateDefinitionId = (itemId: string): string | null =>
-    itemId.startsWith("template-field:")
-        ? itemId.slice("template-field:".length)
-        : null;
-
-const isTemplateCardItemId = (itemId: string): boolean =>
-    itemId.startsWith("template-field:");
-
-const findTemplateColumnForItem = (
-    placement: RichEditorSectionPlacement,
-    itemId: string,
-): RichEditorColumnId | null => {
-    if (placement.left.includes(itemId)) {
-        return "left";
-    }
-    if (placement.right.includes(itemId)) {
-        return "right";
-    }
-    if (itemId === "rich-editor-template-column-left") {
-        return "left";
-    }
-    if (itemId === "rich-editor-template-column-right") {
-        return "right";
-    }
-    return null;
 };
 
 export type RichEditorBaseValues = {
@@ -189,6 +103,51 @@ const CORE_CARD_CONFIG: RichEditorCardConfig[] = [
 ];
 
 const CORE_RIGHT_CARD_TYPES = new Set(["portrait", "audio"]);
+const TEMPLATE_CORE_PREFIX = "template-core:";
+
+const TEMPLATE_CORE_TYPE_BY_EDITOR: Record<
+    RichEditorProps<RichEditorBaseValues>["entityType"],
+    Record<string, { source: "core" | "default" | "custom"; type: string }>
+> = {
+    character: {
+        description: { source: "core", type: "description" },
+        portrait: { source: "core", type: "portrait" },
+        audio: { source: "core", type: "audio" },
+        "related-locations": { source: "default", type: "relatedLocations" },
+        "related-organizations": {
+            source: "default",
+            type: "relatedOrganizations",
+        },
+    },
+    location: {
+        description: { source: "core", type: "description" },
+        portrait: { source: "core", type: "portrait" },
+        audio: { source: "core", type: "audio" },
+        presence: { source: "custom", type: "presence" },
+    },
+    organization: {
+        description: { source: "core", type: "description" },
+        portrait: { source: "core", type: "portrait" },
+        audio: { source: "core", type: "audio" },
+        "related-locations": { source: "default", type: "locations" },
+        reach: { source: "custom", type: "reach" },
+    },
+};
+
+const TEMPLATE_CORE_TOKEN_ALIASES_BY_EDITOR: Record<
+    RichEditorProps<RichEditorBaseValues>["entityType"],
+    Record<string, string>
+> = {
+    character: {
+        "current-location": "related-locations",
+        "background-location": "related-locations",
+        organization: "related-organizations",
+    },
+    location: {},
+    organization: {
+        locations: "related-locations",
+    },
+};
 
 type InternalCardDefinition<TValues extends RichEditorBaseValues> = {
     id: string;
@@ -199,68 +158,23 @@ type InternalCardDefinition<TValues extends RichEditorBaseValues> = {
 };
 
 type SortableSectionCardProps = {
-    id: string;
     title: string;
     children: React.ReactNode;
     className?: string;
-    disableDrag?: boolean;
-    showDragHandle?: boolean;
-    isActiveDrag?: boolean;
-    dragDimensions?: { width: number; height: number } | null;
 };
 
 const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
-    id,
     title,
     children,
     className,
-    disableDrag = false,
-    showDragHandle = true,
-    isActiveDrag = false,
-    dragDimensions = null,
 }) => {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({
-        id,
-        disabled: disableDrag,
-    });
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        ...(isDragging && isActiveDrag && dragDimensions
-            ? {
-                  width: dragDimensions.width,
-                  height: dragDimensions.height,
-              }
-            : {}),
-    };
-
     return (
         <section
-            ref={setNodeRef}
-            style={style}
-            className={`entity-section-card${className ? ` ${className}` : ""}${isDragging ? " is-dragging" : ""}`}
+            className={`entity-section-card${className ? ` ${className}` : ""}`}
         >
             <div className="entity-section-card-header">
                 <p className="panel-label">{title}</p>
-                {showDragHandle ? (
-                    <button
-                        type="button"
-                        className="entity-section-card-handle"
-                        aria-label={`Reorder ${title} section`}
-                        {...attributes}
-                        {...listeners}
-                    >
-                        <GripVerticalIcon size={14} />
-                    </button>
-                ) : null}
+                <div className="entity-section-card-actions" />
             </div>
             <div className="entity-section-card-body">{children}</div>
         </section>
@@ -281,6 +195,8 @@ export type RichEditorProps<TValues extends RichEditorBaseValues> = {
     entityId: string;
     initialValues: TValues;
     defaultCards: RichEditorCardConfig[];
+    defaultRightCardTypes?: string[];
+    customRightCardTypes?: string[];
     customCards?: RichEditorCustomCard<TValues>[];
     renderDefaultCard: (
         card: RichEditorCardConfig,
@@ -336,15 +252,6 @@ export type RichEditorProps<TValues extends RichEditorBaseValues> = {
     }) => Promise<void>;
     onImportMetafieldImage: (file: File) => Promise<string>;
     editorTemplate?: WorkspaceEditorTemplate | null;
-    onSaveEditorTemplate?: (request: {
-        projectId: string;
-        editorType: "character" | "location" | "organization";
-        placement: RichEditorSectionPlacement;
-        fields: Array<{
-            definitionId: string;
-            kind: "field" | "paragraph" | "select";
-        }>;
-    }) => Promise<{ template: WorkspaceEditorTemplate }>;
     focusTitleOnMount?: boolean;
     initialSectionPlacement?: RichEditorSectionPlacement;
     onSectionLayoutSync?: (
@@ -368,35 +275,6 @@ const toInternalCardId = (
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")}:${index}`;
-
-const isMetafieldItemId = (
-    value: string,
-    assignments: WorkspaceMetafieldAssignment[],
-): boolean => assignments.some((assignment) => assignment.id === value);
-
-const findColumnForSection = (
-    placement: RichEditorSectionPlacement,
-    id: string,
-): RichEditorColumnId | null => {
-    if (placement.left.includes(id)) {
-        return "left";
-    }
-    if (placement.right.includes(id)) {
-        return "right";
-    }
-    if (id === "rich-editor-column-left") {
-        return "left";
-    }
-    if (id === "rich-editor-column-right") {
-        return "right";
-    }
-    return null;
-};
-
-const createOptimisticCardId = (): string =>
-    `optimistic-metafield:${Date.now().toString(36)}:${Math.random()
-        .toString(36)
-        .slice(2, 10)}`;
 
 const resolveMetafieldUiKind = (
     assignment: WorkspaceMetafieldAssignment,
@@ -422,11 +300,6 @@ const resolveMetafieldUiKind = (
     return "field";
 };
 
-const defaultKindForDefinition = (
-    definition: WorkspaceMetafieldDefinition,
-): "field" | "paragraph" | "select" =>
-    definition.valueType === "string[]" ? "select" : "field";
-
 export function RichEditor<TValues extends RichEditorBaseValues>({
     panelLabel,
     projectId,
@@ -434,6 +307,8 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     entityId,
     initialValues,
     defaultCards,
+    defaultRightCardTypes = [],
+    customRightCardTypes = [],
     customCards = [],
     renderDefaultCard,
     onSubmit,
@@ -460,7 +335,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     onDeleteMetafieldDefinitionGlobal,
     onImportMetafieldImage,
     editorTemplate,
-    onSaveEditorTemplate,
     focusTitleOnMount = false,
     initialSectionPlacement,
     onSectionLayoutSync,
@@ -468,6 +342,16 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     onDirtyStateChange,
     assetText,
 }: RichEditorProps<TValues>) {
+        const defaultRightCardTypeSet = React.useMemo(
+            () => new Set(defaultRightCardTypes),
+            [defaultRightCardTypes],
+        );
+
+        const customRightCardTypeSet = React.useMemo(
+            () => new Set(customRightCardTypes),
+            [customRightCardTypes],
+        );
+
     const assetCopy = React.useMemo(
         () => ({ ...DEFAULT_ASSET_TEXT, ...assetText }),
         [assetText],
@@ -477,51 +361,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     const [error, setError] = React.useState<string | null>(null);
     const [assetBusy, setAssetBusy] = React.useState(false);
     const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
-    const [activeDragSectionId, setActiveDragSectionId] = React.useState<
-        string | null
-    >(null);
-    const [dragPreviewDimensions, setDragPreviewDimensions] = React.useState<{
-        width: number;
-        height: number;
-    } | null>(null);
-    const [optimisticMetafields, setOptimisticMetafields] = React.useState<
-        OptimisticMetafieldCard[]
-    >([]);
-    const [pendingMetafieldDraft, setPendingMetafieldDraft] = React.useState<{
-        targetColumn: RichEditorColumnId;
-        kind: NewMetafieldKind;
-        name: string;
-    } | null>(null);
-    const [metafieldDraftError, setMetafieldDraftError] = React.useState<
-        string | null
-    >(null);
-    const [isCreatingMetafield, setIsCreatingMetafield] = React.useState(false);
-    const [isTemplateDialogOpen, setIsTemplateDialogOpen] =
-        React.useState(false);
-    const [isSavingTemplate, setIsSavingTemplate] = React.useState(false);
-    const [templateDraftError, setTemplateDraftError] = React.useState<
-        string | null
-    >(null);
-    const [templateDraftFields, setTemplateDraftFields] = React.useState<
-        TemplateDraftField[]
-    >([]);
-    const [templateFieldToAdd, setTemplateFieldToAdd] = React.useState("");
-    const [templateNewFieldName, setTemplateNewFieldName] = React.useState("");
-    const [templateNewFieldKind, setTemplateNewFieldKind] = React.useState<
-        NewMetafieldKind
-    >("field");
-    const [templateSectionPlacement, setTemplateSectionPlacement] =
-        React.useState<RichEditorSectionPlacement>({
-            left: [...TEMPLATE_CORE_LEFT_ITEMS],
-            right: [...TEMPLATE_CORE_RIGHT_ITEMS],
-        });
-    const [activeTemplateDragId, setActiveTemplateDragId] = React.useState<
-        string | null
-    >(null);
-    const [templateDragPreviewDimensions, setTemplateDragPreviewDimensions] =
-        React.useState<{ width: number; height: number } | null>(null);
-    const [pendingTemplateDeleteDefinitionId, setPendingTemplateDeleteDefinitionId] =
-        React.useState<string | null>(null);
     const [sectionPlacement, setSectionPlacement] =
         React.useState<RichEditorSectionPlacement>(() => {
             const defs = CORE_CARD_CONFIG;
@@ -553,12 +392,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     const isUserChange = React.useRef(false);
     const dirtyStateRef = React.useRef(false);
     const previousEntityId = React.useRef(entityId);
-    const pendingMetafieldColumnsRef = React.useRef<
-        Map<string, RichEditorColumnId>
-    >(new Map());
-
-    const supportsTemplateEditing = Boolean(onSaveEditorTemplate);
-    const isTemplateEditLocked = supportsTemplateEditing;
 
     const toFriendlyError = React.useCallback(
         (err: unknown, fallback: string, context?: UserErrorContext) =>
@@ -643,209 +476,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
         [internalCards],
     );
 
-    const templateDefinitionOptions = React.useMemo(
-        () =>
-            metafieldDefinitions.filter((definition) => {
-                if (definition.name.startsWith("_sys:")) {
-                    return false;
-                }
-
-                if (
-                    definition.valueType !== "string" &&
-                    definition.valueType !== "string[]"
-                ) {
-                    return false;
-                }
-
-                return (
-                    definition.scope === "project" ||
-                    definition.scope === entityType
-                );
-            }),
-        [entityType, metafieldDefinitions],
-    );
-
-    const templateDefinitionById = React.useMemo(
-        () =>
-            new Map(
-                templateDefinitionOptions.map((definition) => [
-                    definition.id,
-                    definition,
-                ]),
-            ),
-        [templateDefinitionOptions],
-    );
-
-    const buildTemplateDraftFields = React.useCallback((): TemplateDraftField[] => {
-        if (editorTemplate && editorTemplate.editorType === entityType) {
-            const left = new Set(editorTemplate.placement.left);
-            const right = new Set(editorTemplate.placement.right);
-            const seenDefinitions = new Set<string>();
-
-            return [...editorTemplate.fields]
-                .sort((a, b) => a.orderIndex - b.orderIndex)
-                .filter((field) => templateDefinitionById.has(field.definitionId))
-                .filter((field) => {
-                    if (seenDefinitions.has(field.definitionId)) {
-                        return false;
-                    }
-                    seenDefinitions.add(field.definitionId);
-                    return true;
-                })
-                .map((field) => ({
-                    definitionId: field.definitionId,
-                    kind: field.kind,
-                    column: right.has(field.definitionId)
-                        ? "right"
-                        : left.has(field.definitionId)
-                          ? "left"
-                          : "left",
-                }));
-        }
-
-        const orderedAssignments = [...metafieldAssignments].sort(
-            (a, b) => a.orderIndex - b.orderIndex,
-        );
-        const seenDefinitions = new Set<string>();
-
-        return orderedAssignments
-            .map((assignment) => {
-                const definition = templateDefinitionById.get(
-                    assignment.definitionId,
-                );
-                if (!definition) {
-                    return null;
-                }
-
-                const column = sectionPlacement.right.includes(assignment.id)
-                    ? "right"
-                    : sectionPlacement.left.includes(assignment.id)
-                      ? "left"
-                      : "left";
-
-                return {
-                    definitionId: assignment.definitionId,
-                    kind: resolveMetafieldUiKind(assignment, definition),
-                    column,
-                } as TemplateDraftField;
-            })
-            .filter((field) => {
-                if (!field) {
-                    return false;
-                }
-                if (seenDefinitions.has(field.definitionId)) {
-                    return false;
-                }
-                seenDefinitions.add(field.definitionId);
-                return true;
-            })
-            .filter((field): field is TemplateDraftField => Boolean(field));
-    }, [
-        editorTemplate,
-        entityType,
-        metafieldAssignments,
-        sectionPlacement.left,
-        sectionPlacement.right,
-        templateDefinitionById,
-    ]);
-
-    const openTemplateDialog = React.useCallback(() => {
-        if (!supportsTemplateEditing) {
-            return;
-        }
-
-        const draftFields = buildTemplateDraftFields();
-        const draftFieldIds = draftFields.map((field) =>
-            toTemplateCardItemId(field.definitionId),
-        );
-        const nextLeft = [
-            ...TEMPLATE_CORE_LEFT_ITEMS,
-            ...draftFields
-                .filter((field) => field.column === "left")
-                .map((field) => toTemplateCardItemId(field.definitionId)),
-        ];
-        const nextRight = [
-            ...TEMPLATE_CORE_RIGHT_ITEMS,
-            ...draftFields
-                .filter((field) => field.column === "right")
-                .map((field) => toTemplateCardItemId(field.definitionId)),
-        ];
-        const placed = new Set([...nextLeft, ...nextRight]);
-        const missing = draftFieldIds.filter((id) => !placed.has(id));
-
-        setTemplateDraftError(null);
-        setTemplateFieldToAdd("");
-        setTemplateNewFieldName("");
-        setTemplateNewFieldKind("field");
-        setPendingTemplateDeleteDefinitionId(null);
-        setTemplateDraftFields(draftFields);
-        setTemplateSectionPlacement({
-            left: nextLeft,
-            right: [...nextRight, ...missing],
-        });
-        setActiveTemplateDragId(null);
-        setTemplateDragPreviewDimensions(null);
-        setIsTemplateDialogOpen(true);
-    }, [buildTemplateDraftFields, supportsTemplateEditing]);
-
-    const closeTemplateDialog = React.useCallback(() => {
-        if (isSavingTemplate) {
-            return;
-        }
-
-        setIsTemplateDialogOpen(false);
-        setTemplateDraftError(null);
-        setTemplateFieldToAdd("");
-        setTemplateNewFieldName("");
-        setTemplateNewFieldKind("field");
-        setPendingTemplateDeleteDefinitionId(null);
-        setActiveTemplateDragId(null);
-        setTemplateDragPreviewDimensions(null);
-    }, [isSavingTemplate]);
-
-    const templateDraftByDefinitionId = React.useMemo(
-        () =>
-            new Map(
-                templateDraftFields.map((field) => [field.definitionId, field]),
-            ),
-        [templateDraftFields],
-    );
-
-    React.useEffect(() => {
-        if (!isTemplateDialogOpen) {
-            return;
-        }
-
-        const templateFieldIds = templateDraftFields.map((field) =>
-            toTemplateCardItemId(field.definitionId),
-        );
-
-        setTemplateSectionPlacement((current) => {
-            const filteredLeft = current.left.filter(
-                (itemId) =>
-                    TEMPLATE_CORE_ITEM_IDS.has(itemId) ||
-                    templateFieldIds.includes(itemId),
-            );
-            const filteredRight = current.right.filter(
-                (itemId) =>
-                    TEMPLATE_CORE_ITEM_IDS.has(itemId) ||
-                    templateFieldIds.includes(itemId),
-            );
-
-            const present = new Set([...filteredLeft, ...filteredRight]);
-            const missing = templateFieldIds.filter((itemId) => !present.has(itemId));
-
-            if (missing.length === 0) {
-                return current;
-            }
-
-            return {
-                left: [...filteredLeft, ...missing],
-                right: filteredRight,
-            };
-        });
-    }, [isTemplateDialogOpen, templateDraftFields]);
-
     const defaultPlacement = React.useMemo<RichEditorSectionPlacement>(() => {
         const left: string[] = [];
         const right: string[] = [];
@@ -858,11 +488,28 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 right.push(card.id);
                 return;
             }
+
+            if (
+                card.source === "default" &&
+                defaultRightCardTypeSet.has(card.type)
+            ) {
+                right.push(card.id);
+                return;
+            }
+
+            if (
+                card.source === "custom" &&
+                customRightCardTypeSet.has(card.type)
+            ) {
+                right.push(card.id);
+                return;
+            }
+
             left.push(card.id);
         });
 
         return { left, right };
-    }, [internalCards]);
+    }, [customRightCardTypeSet, defaultRightCardTypeSet, internalCards]);
 
     React.useEffect(() => {
         const isEntitySwitch = previousEntityId.current !== entityId;
@@ -880,9 +527,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
         }
         setValues(initialValues);
         setError(null);
-        setOptimisticMetafields([]);
-        setActiveDragSectionId(null);
-        setDragPreviewDimensions(null);
         setSectionPlacement(initialSectionPlacement ?? defaultPlacement);
     }, [
         defaultPlacement,
@@ -932,10 +576,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     }, [gallerySources]);
 
     React.useEffect(() => {
-        if (!supportsTemplateEditing) {
-            return;
-        }
-
         if (!editorTemplate || editorTemplate.editorType !== entityType) {
             return;
         }
@@ -947,25 +587,103 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             ]),
         );
 
-        const nextTemplateLeft = editorTemplate.placement.left
-            .map((definitionId) => assignmentByDefinitionId.get(definitionId))
-            .filter((id): id is string => Boolean(id));
-        const nextTemplateRight = editorTemplate.placement.right
-            .map((definitionId) => assignmentByDefinitionId.get(definitionId))
-            .filter((id): id is string => Boolean(id));
+        const templateCoreToInternalId = new Map(
+            internalCards
+                .filter((card) => card.source === "core")
+                .map((card) => [card.type, card.id]),
+        );
+        const defaultTypeToInternalId = new Map(
+            internalCards
+                .filter((card) => card.source === "default")
+                .map((card) => [card.type, card.id]),
+        );
+        const customTypeToInternalId = new Map(
+            internalCards
+                .filter((card) => card.source === "custom")
+                .map((card) => [card.type, card.id]),
+        );
 
-        const placedAssignmentIds = new Set([
+        const resolveTemplatePlacementId = (placementId: string): string | null => {
+            if (!placementId.startsWith(TEMPLATE_CORE_PREFIX)) {
+                return assignmentByDefinitionId.get(placementId) ?? null;
+            }
+
+            const rawToken = placementId.slice(TEMPLATE_CORE_PREFIX.length);
+            const token =
+                TEMPLATE_CORE_TOKEN_ALIASES_BY_EDITOR[entityType][rawToken] ??
+                rawToken;
+            const mapping = TEMPLATE_CORE_TYPE_BY_EDITOR[entityType][token];
+            if (!mapping) {
+                return null;
+            }
+
+            if (mapping.source === "core") {
+                return templateCoreToInternalId.get(mapping.type) ?? null;
+            }
+            if (mapping.source === "default") {
+                return defaultTypeToInternalId.get(mapping.type) ?? null;
+            }
+
+            return customTypeToInternalId.get(mapping.type) ?? null;
+        };
+
+        const dedupeOrderedIds = (ids: Array<string | null>): string[] => {
+            const seen = new Set<string>();
+            const result: string[] = [];
+
+            for (const id of ids) {
+                if (!id || seen.has(id)) {
+                    continue;
+                }
+                seen.add(id);
+                result.push(id);
+            }
+
+            return result;
+        };
+
+        const nextTemplateLeft = dedupeOrderedIds(
+            editorTemplate.placement.left.map(resolveTemplatePlacementId),
+        );
+        const nextTemplateRight = dedupeOrderedIds(
+            editorTemplate.placement.right.map(resolveTemplatePlacementId),
+        );
+
+        const fixedCardIdSet = new Set(internalCards.map((card) => card.id));
+        const hasTemplateFixedPlacement =
+            nextTemplateLeft.some((id) => fixedCardIdSet.has(id)) ||
+            nextTemplateRight.some((id) => fixedCardIdSet.has(id));
+
+        const placedTemplateIds = new Set([
             ...nextTemplateLeft,
             ...nextTemplateRight,
         ]);
         const remainingAssignments = [...metafieldAssignments]
             .sort((a, b) => a.orderIndex - b.orderIndex)
             .map((assignment) => assignment.id)
-            .filter((assignmentId) => !placedAssignmentIds.has(assignmentId));
+            .filter((assignmentId) => !placedTemplateIds.has(assignmentId));
+
+        let nextLeft: string[];
+        let nextRight: string[];
+
+        if (hasTemplateFixedPlacement) {
+            const missingDefaultLeft = defaultPlacement.left.filter(
+                (id) => !placedTemplateIds.has(id),
+            );
+            const missingDefaultRight = defaultPlacement.right.filter(
+                (id) => !placedTemplateIds.has(id),
+            );
+
+            nextLeft = [...nextTemplateLeft, ...missingDefaultLeft, ...remainingAssignments];
+            nextRight = [...nextTemplateRight, ...missingDefaultRight];
+        } else {
+            nextLeft = [...defaultPlacement.left, ...nextTemplateLeft, ...remainingAssignments];
+            nextRight = [...defaultPlacement.right, ...nextTemplateRight];
+        }
 
         const nextPlacement: RichEditorSectionPlacement = {
-            left: [...defaultPlacement.left, ...nextTemplateLeft, ...remainingAssignments],
-            right: [...defaultPlacement.right, ...nextTemplateRight],
+            left: nextLeft,
+            right: nextRight,
         };
 
         setSectionPlacement((current) => {
@@ -989,14 +707,13 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
         defaultPlacement.right,
         editorTemplate,
         entityType,
+        internalCards,
         metafieldAssignments,
-        supportsTemplateEditing,
     ]);
 
     React.useEffect(() => {
         const assignmentIds = [
             ...metafieldAssignments.map((assignment) => assignment.id),
-            ...optimisticMetafields.map((card) => card.tempAssignmentId),
         ];
         const fixedIds = new Set(internalCards.map((card) => card.id));
 
@@ -1036,18 +753,30 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                     missingRight.push(id);
                     continue;
                 }
+
+                if (
+                    card &&
+                    card.source === "default" &&
+                    defaultRightCardTypeSet.has(card.type)
+                ) {
+                    missingRight.push(id);
+                    continue;
+                }
+
+                if (
+                    card &&
+                    card.source === "custom" &&
+                    customRightCardTypeSet.has(card.type)
+                ) {
+                    missingRight.push(id);
+                    continue;
+                }
+
                 missingLeft.push(id);
             }
 
             for (const id of missingAssignments) {
-                const pendingColumn =
-                    pendingMetafieldColumnsRef.current.get(id);
-                if (pendingColumn === "right") {
-                    missingRight.push(id);
-                } else {
-                    missingLeft.push(id);
-                }
-                pendingMetafieldColumnsRef.current.delete(id);
+                missingLeft.push(id);
             }
 
             return {
@@ -1055,7 +784,12 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 right: [...filteredRight, ...missingRight],
             };
         });
-    }, [internalCards, metafieldAssignments, optimisticMetafields]);
+    }, [
+        customRightCardTypeSet,
+        defaultRightCardTypeSet,
+        internalCards,
+        metafieldAssignments,
+    ]);
 
     const handleChange = React.useCallback(
         <K extends keyof TValues>(field: K, value: TValues[K]) => {
@@ -1241,967 +975,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 (prev - 1 + gallerySources.length) % gallerySources.length,
         );
     };
-
-    const createMetafieldInColumn = React.useCallback(
-        async (
-            targetColumn: RichEditorColumnId,
-            kind: NewMetafieldKind,
-            name: string,
-        ): Promise<boolean> => {
-            const candidateName = name.trim();
-            if (!candidateName) {
-                return false;
-            }
-
-            const tempAssignmentId = createOptimisticCardId();
-
-            setOptimisticMetafields((current) => [
-                ...current,
-                {
-                    tempAssignmentId,
-                    name: candidateName,
-                    kind,
-                    targetColumn,
-                },
-            ]);
-
-            setSectionPlacement((current) => {
-                const nextLeft = current.left.filter(
-                    (id) => id !== tempAssignmentId,
-                );
-                const nextRight = current.right.filter(
-                    (id) => id !== tempAssignmentId,
-                );
-
-                return targetColumn === "left"
-                    ? {
-                          left: [...nextLeft, tempAssignmentId],
-                          right: nextRight,
-                      }
-                    : {
-                          left: nextLeft,
-                          right: [...nextRight, tempAssignmentId],
-                      };
-            });
-
-            try {
-                const definitionResponse =
-                    await onCreateOrReuseMetafieldDefinition({
-                        projectId,
-                        name: candidateName,
-                        scope: entityType,
-                        valueType: kind === "select" ? "string[]" : "string",
-                    });
-
-                const assignmentResponse = await onAssignMetafieldToEntity({
-                    definitionId: definitionResponse.definition.id,
-                    entityType,
-                    entityId,
-                });
-
-                pendingMetafieldColumnsRef.current.set(
-                    assignmentResponse.assignment.id,
-                    targetColumn,
-                );
-
-                let nextPlacementToSync: RichEditorSectionPlacement | null =
-                    null;
-
-                setSectionPlacement((current) => {
-                    const nextLeft = current.left.filter(
-                        (id) =>
-                            id !== assignmentResponse.assignment.id &&
-                            id !== tempAssignmentId,
-                    );
-                    const nextRight = current.right.filter(
-                        (id) =>
-                            id !== assignmentResponse.assignment.id &&
-                            id !== tempAssignmentId,
-                    );
-
-                    const nextPlacement =
-                        targetColumn === "left"
-                            ? {
-                                  left: [
-                                      ...nextLeft,
-                                      assignmentResponse.assignment.id,
-                                  ],
-                                  right: nextRight,
-                              }
-                            : {
-                                  left: nextLeft,
-                                  right: [
-                                      ...nextRight,
-                                      assignmentResponse.assignment.id,
-                                  ],
-                              };
-
-                    nextPlacementToSync = nextPlacement;
-                    return nextPlacement;
-                });
-
-                setOptimisticMetafields((current) =>
-                    current.filter(
-                        (card) => card.tempAssignmentId !== tempAssignmentId,
-                    ),
-                );
-
-                if (nextPlacementToSync) {
-                    await onSectionLayoutSync?.(nextPlacementToSync);
-                }
-
-                const initialValue =
-                    kind === "select"
-                        ? { kind: "select", value: [] as string[] }
-                        : { kind, value: "" };
-
-                await onSaveMetafieldValue({
-                    assignmentId: assignmentResponse.assignment.id,
-                    value: initialValue,
-                });
-
-                await onActionLog?.({
-                    action: "metafield_created",
-                    payload: {
-                        assignmentId: assignmentResponse.assignment.id,
-                        definitionId: definitionResponse.definition.id,
-                        name: candidateName,
-                        kind,
-                        targetColumn,
-                    },
-                });
-                return true;
-            } catch (createError) {
-                setOptimisticMetafields((current) =>
-                    current.filter(
-                        (card) => card.tempAssignmentId !== tempAssignmentId,
-                    ),
-                );
-                setSectionPlacement((current) => ({
-                    left: current.left.filter((id) => id !== tempAssignmentId),
-                    right: current.right.filter(
-                        (id) => id !== tempAssignmentId,
-                    ),
-                }));
-                const message = toFriendlyError(
-                    createError,
-                    "Failed to create metafield.",
-                );
-                setError(message);
-                showToast({
-                    id: `metafield-create-${entityType}`,
-                    variant: "error",
-                    title: "Metafield creation failed",
-                    description: message,
-                    durationMs: 6000,
-                });
-                return false;
-            }
-        },
-        [
-            entityId,
-            entityType,
-            metafieldDefinitions,
-            onActionLog,
-            onAssignMetafieldToEntity,
-            onCreateOrReuseMetafieldDefinition,
-            onSaveMetafieldValue,
-            onSectionLayoutSync,
-            toFriendlyError,
-            projectId,
-        ],
-    );
-
-    const getSuggestedMetafieldName = React.useCallback((): string => {
-        const existingNames = new Set(
-            metafieldDefinitions
-                .filter(
-                    (definition) =>
-                        definition.scope === entityType &&
-                        !definition.name.startsWith("_sys:"),
-                )
-                .map((definition) => definition.name.trim().toLowerCase()),
-        );
-
-        optimisticMetafields.forEach((card) => {
-            existingNames.add(card.name.trim().toLowerCase());
-        });
-
-        let candidateIndex = Math.max(1, existingNames.size + 1);
-        let candidateName = `Metafield ${candidateIndex}`;
-        while (existingNames.has(candidateName.toLowerCase())) {
-            candidateIndex += 1;
-            candidateName = `Metafield ${candidateIndex}`;
-        }
-
-        return candidateName;
-    }, [entityType, metafieldDefinitions, optimisticMetafields]);
-
-    const openMetafieldNameDialog = React.useCallback(
-        (targetColumn: RichEditorColumnId, kind: NewMetafieldKind): void => {
-            setMetafieldDraftError(null);
-            setPendingMetafieldDraft({
-                targetColumn,
-                kind,
-                name: getSuggestedMetafieldName(),
-            });
-        },
-        [getSuggestedMetafieldName],
-    );
-
-    const closeMetafieldNameDialog = React.useCallback((): void => {
-        if (isCreatingMetafield) {
-            return;
-        }
-
-        setPendingMetafieldDraft(null);
-        setMetafieldDraftError(null);
-    }, [isCreatingMetafield]);
-
-    const confirmMetafieldCreation =
-        React.useCallback(async (): Promise<void> => {
-            if (!pendingMetafieldDraft || isCreatingMetafield) {
-                return;
-            }
-
-            const name = pendingMetafieldDraft.name.trim();
-            if (!name) {
-                setMetafieldDraftError("Metafield name is required.");
-                return;
-            }
-
-            setIsCreatingMetafield(true);
-            setMetafieldDraftError(null);
-
-            try {
-                const created = await createMetafieldInColumn(
-                    pendingMetafieldDraft.targetColumn,
-                    pendingMetafieldDraft.kind,
-                    name,
-                );
-
-                if (created) {
-                    setPendingMetafieldDraft(null);
-                }
-            } finally {
-                setIsCreatingMetafield(false);
-            }
-        }, [
-            createMetafieldInColumn,
-            isCreatingMetafield,
-            pendingMetafieldDraft,
-        ]);
-
-    const addTemplateField = React.useCallback(() => {
-        const definitionId = templateFieldToAdd.trim();
-        if (!definitionId) {
-            setTemplateDraftError("Choose a metafield to add.");
-            return;
-        }
-
-        if (templateDraftFields.some((field) => field.definitionId === definitionId)) {
-            setTemplateDraftError("This metafield is already in the template.");
-            return;
-        }
-
-        const definition = templateDefinitionById.get(definitionId);
-        if (!definition) {
-            setTemplateDraftError("Selected metafield is no longer available.");
-            return;
-        }
-
-        setTemplateDraftFields((current) => [
-            ...current,
-            {
-                definitionId,
-                kind: defaultKindForDefinition(definition),
-                column: "left",
-            },
-        ]);
-        setTemplateSectionPlacement((current) => ({
-            left: [...current.left, toTemplateCardItemId(definitionId)],
-            right: current.right,
-        }));
-        setTemplateFieldToAdd("");
-        setTemplateDraftError(null);
-    }, [templateDefinitionById, templateDraftFields, templateFieldToAdd]);
-
-    const createAndAddTemplateField = React.useCallback(async () => {
-        const name = templateNewFieldName.trim();
-        if (!name) {
-            setTemplateDraftError("Metafield name is required.");
-            return;
-        }
-
-        setTemplateDraftError(null);
-
-        try {
-            const response = await onCreateOrReuseMetafieldDefinition({
-                projectId,
-                name,
-                scope: entityType,
-                valueType: templateNewFieldKind === "select" ? "string[]" : "string",
-            });
-
-            const definitionId = response.definition.id;
-            if (
-                templateDraftFields.some(
-                    (field) => field.definitionId === definitionId,
-                )
-            ) {
-                setTemplateDraftError(
-                    "This metafield is already in the template.",
-                );
-                return;
-            }
-
-            setTemplateDraftFields((current) => [
-                ...current,
-                {
-                    definitionId,
-                    kind: templateNewFieldKind,
-                    column: "left",
-                },
-            ]);
-            setTemplateSectionPlacement((current) => ({
-                left: [...current.left, toTemplateCardItemId(definitionId)],
-                right: current.right,
-            }));
-            setTemplateNewFieldName("");
-            setTemplateNewFieldKind("field");
-        } catch (createError) {
-            setTemplateDraftError(
-                toFriendlyError(createError, "Failed to create metafield."),
-            );
-        }
-    }, [
-        entityType,
-        onCreateOrReuseMetafieldDefinition,
-        projectId,
-        templateDraftFields,
-        templateNewFieldKind,
-        templateNewFieldName,
-        toFriendlyError,
-    ]);
-
-    const updateTemplateDraftField = React.useCallback(
-        (
-            index: number,
-            patch: Partial<Pick<TemplateDraftField, "kind" | "column">>,
-        ) => {
-            setTemplateDraftFields((current) =>
-                current.map((field, fieldIndex) =>
-                    fieldIndex === index
-                        ? {
-                              ...field,
-                              ...patch,
-                          }
-                        : field,
-                ),
-            );
-            if (templateDraftError) {
-                setTemplateDraftError(null);
-            }
-        },
-        [templateDraftError],
-    );
-
-    const removeTemplateDraftField = React.useCallback((index: number) => {
-        setTemplateDraftFields((current) => {
-            const field = current[index];
-            if (field) {
-                const itemId = toTemplateCardItemId(field.definitionId);
-                setTemplateSectionPlacement((placement) => ({
-                    left: placement.left.filter((id) => id !== itemId),
-                    right: placement.right.filter((id) => id !== itemId),
-                }));
-            }
-
-            return current.filter((_, fieldIndex) => fieldIndex !== index);
-        });
-        if (templateDraftError) {
-            setTemplateDraftError(null);
-        }
-    }, [templateDraftError]);
-
-    const requestTemplateDraftFieldDelete = React.useCallback(
-        (definitionId: string) => {
-            setPendingTemplateDeleteDefinitionId(definitionId);
-        },
-        [],
-    );
-
-    const cancelTemplateDraftFieldDelete = React.useCallback(() => {
-        if (isSavingTemplate) {
-            return;
-        }
-        setPendingTemplateDeleteDefinitionId(null);
-    }, [isSavingTemplate]);
-
-    const confirmTemplateDraftFieldDelete = React.useCallback(() => {
-        if (!pendingTemplateDeleteDefinitionId) {
-            return;
-        }
-
-        const index = templateDraftFields.findIndex(
-            (field) => field.definitionId === pendingTemplateDeleteDefinitionId,
-        );
-        if (index >= 0) {
-            removeTemplateDraftField(index);
-        }
-
-        setPendingTemplateDeleteDefinitionId(null);
-    }, [
-        pendingTemplateDeleteDefinitionId,
-        removeTemplateDraftField,
-        templateDraftFields,
-    ]);
-
-    const handleTemplateSectionDragStart = React.useCallback(
-        (event: DragStartEvent) => {
-            const activeId = String(event.active.id);
-            if (!isTemplateCardItemId(activeId) || isSavingTemplate) {
-                return;
-            }
-
-            setActiveTemplateDragId(activeId);
-
-            const initialRect = event.active.rect.current.initial;
-            if (
-                initialRect &&
-                initialRect.width > 0 &&
-                initialRect.height > 0
-            ) {
-                setTemplateDragPreviewDimensions({
-                    width: initialRect.width,
-                    height: initialRect.height,
-                });
-                return;
-            }
-
-            setTemplateDragPreviewDimensions(null);
-        },
-        [isSavingTemplate],
-    );
-
-    const handleTemplateSectionDragOver = React.useCallback(
-        (event: DragOverEvent) => {
-            if (isSavingTemplate) {
-                return;
-            }
-
-            const { active, over } = event;
-            if (!over) {
-                return;
-            }
-
-            const activeId = String(active.id);
-            const overId = String(over.id);
-
-            if (
-                !isTemplateCardItemId(activeId) ||
-                !isTemplateCardItemId(overId)
-            ) {
-                return;
-            }
-
-            setTemplateSectionPlacement((current) => {
-                const sourceColumn = findTemplateColumnForItem(current, activeId);
-                const targetColumn = findTemplateColumnForItem(current, overId);
-
-                if (
-                    !sourceColumn ||
-                    !targetColumn ||
-                    sourceColumn === targetColumn
-                ) {
-                    return current;
-                }
-
-                const sourceItems = current[sourceColumn].filter(
-                    (id) => id !== activeId,
-                );
-                const targetItems = [...current[targetColumn]];
-                const targetIndex = targetItems.includes(overId)
-                    ? targetItems.indexOf(overId)
-                    : targetItems.length;
-
-                if (targetIndex < 0) {
-                    targetItems.push(activeId);
-                } else {
-                    targetItems.splice(targetIndex, 0, activeId);
-                }
-
-                return {
-                    ...current,
-                    [sourceColumn]: sourceItems,
-                    [targetColumn]: targetItems,
-                };
-            });
-        },
-        [isSavingTemplate],
-    );
-
-    const handleTemplateSectionDragEnd = React.useCallback(
-        (event: DragEndEvent) => {
-            setActiveTemplateDragId(null);
-            setTemplateDragPreviewDimensions(null);
-
-            if (isSavingTemplate) {
-                return;
-            }
-
-            const { active, over } = event;
-            if (!over) {
-                return;
-            }
-
-            const activeId = String(active.id);
-            const overId = String(over.id);
-
-            if (!isTemplateCardItemId(activeId)) {
-                return;
-            }
-
-            let nextPlacement: RichEditorSectionPlacement | null = null;
-
-            setTemplateSectionPlacement((current) => {
-                const sourceColumn = findTemplateColumnForItem(current, activeId);
-                const targetColumn = findTemplateColumnForItem(current, overId);
-                if (!sourceColumn || !targetColumn) {
-                    return current;
-                }
-
-                if (sourceColumn === targetColumn) {
-                    const sourceItems = current[sourceColumn];
-                    const oldIndex = sourceItems.indexOf(activeId);
-                    if (oldIndex < 0) {
-                        return current;
-                    }
-
-                    const newIndex = sourceItems.includes(overId)
-                        ? sourceItems.indexOf(overId)
-                        : sourceItems.length - 1;
-
-                    if (newIndex < 0 || oldIndex === newIndex) {
-                        return current;
-                    }
-
-                    const reordered = arrayMove(sourceItems, oldIndex, newIndex);
-                    nextPlacement = {
-                        ...current,
-                        [sourceColumn]: reordered,
-                    };
-                    return nextPlacement;
-                }
-
-                const sourceItems = current[sourceColumn].filter(
-                    (id) => id !== activeId,
-                );
-                const targetItems = [...current[targetColumn]];
-                const targetIndex = targetItems.includes(overId)
-                    ? targetItems.indexOf(overId)
-                    : targetItems.length;
-
-                if (targetIndex < 0) {
-                    targetItems.push(activeId);
-                } else {
-                    targetItems.splice(targetIndex, 0, activeId);
-                }
-
-                nextPlacement = {
-                    ...current,
-                    [sourceColumn]: sourceItems,
-                    [targetColumn]: targetItems,
-                };
-                return nextPlacement;
-            });
-
-            if (!nextPlacement) {
-                return;
-            }
-
-            const orderedTemplateItemIds = [
-                ...nextPlacement.left,
-                ...nextPlacement.right,
-            ].filter((itemId) => isTemplateCardItemId(itemId));
-
-            const leftSet = new Set(nextPlacement.left);
-            setTemplateDraftFields((current) => {
-                const byDefinition = new Map(
-                    current.map((field) => [field.definitionId, field]),
-                );
-                return orderedTemplateItemIds
-                    .map((itemId) => {
-                        const definitionId = toTemplateDefinitionId(itemId);
-                        if (!definitionId) {
-                            return null;
-                        }
-
-                        const existing = byDefinition.get(definitionId);
-                        if (!existing) {
-                            return null;
-                        }
-
-                        return {
-                            ...existing,
-                            column: leftSet.has(itemId) ? "left" : "right",
-                        };
-                    })
-                    .filter((field): field is TemplateDraftField => Boolean(field));
-            });
-        },
-        [isSavingTemplate],
-    );
-
-    const handleTemplateSectionDragCancel = React.useCallback(() => {
-        setActiveTemplateDragId(null);
-        setTemplateDragPreviewDimensions(null);
-    }, []);
-
-    const saveTemplateDraft = React.useCallback(async () => {
-        if (!onSaveEditorTemplate) {
-            return;
-        }
-
-        const dedupedFields: TemplateDraftField[] = [];
-        const seenDefinitions = new Set<string>();
-        const orderedTemplateDefinitionIds = [
-            ...templateSectionPlacement.left,
-            ...templateSectionPlacement.right,
-        ]
-            .map((itemId) => toTemplateDefinitionId(itemId))
-            .filter((definitionId): definitionId is string => Boolean(definitionId));
-
-        for (const orderedDefinitionId of orderedTemplateDefinitionIds) {
-            const field = templateDraftByDefinitionId.get(orderedDefinitionId);
-            if (!field) {
-                continue;
-            }
-
-            const trimmedDefinitionId = field.definitionId.trim();
-            if (
-                !trimmedDefinitionId ||
-                seenDefinitions.has(trimmedDefinitionId)
-            ) {
-                continue;
-            }
-
-            seenDefinitions.add(trimmedDefinitionId);
-            dedupedFields.push({
-                definitionId: trimmedDefinitionId,
-                kind: field.kind,
-                column: templateSectionPlacement.left.includes(
-                    toTemplateCardItemId(trimmedDefinitionId),
-                )
-                    ? "left"
-                    : "right",
-            });
-        }
-
-        setIsSavingTemplate(true);
-        setTemplateDraftError(null);
-
-        try {
-            await onSaveEditorTemplate({
-                projectId,
-                editorType: entityType,
-                placement: {
-                    left: dedupedFields
-                        .filter((field) => field.column === "left")
-                        .map((field) => field.definitionId),
-                    right: dedupedFields
-                        .filter((field) => field.column === "right")
-                        .map((field) => field.definitionId),
-                },
-                fields: dedupedFields.map((field) => ({
-                    definitionId: field.definitionId,
-                    kind: field.kind,
-                })),
-            });
-
-            setIsTemplateDialogOpen(false);
-            setTemplateFieldToAdd("");
-        } catch (templateError) {
-            setTemplateDraftError(
-                toFriendlyError(templateError, "Failed to save editor template."),
-            );
-        } finally {
-            setIsSavingTemplate(false);
-        }
-    }, [
-        entityType,
-        onSaveEditorTemplate,
-        projectId,
-        templateDraftByDefinitionId,
-        templateSectionPlacement.left,
-        templateSectionPlacement.right,
-        toFriendlyError,
-    ]);
-
-    const buildAddSectionOptions = React.useCallback(
-        (targetColumn: RichEditorColumnId) => [
-            {
-                label: "Add Field Metafield",
-                onClick: () => {
-                    openMetafieldNameDialog(targetColumn, "field");
-                },
-            },
-            {
-                label: "Add Paragraph Metafield",
-                onClick: () => {
-                    openMetafieldNameDialog(targetColumn, "paragraph");
-                },
-            },
-            {
-                label: "Add Select Metafield",
-                onClick: () => {
-                    openMetafieldNameDialog(targetColumn, "select");
-                },
-            },
-        ],
-        [openMetafieldNameDialog],
-    );
-
-    const handleSectionDragStart = React.useCallback(
-        (event: DragStartEvent) => {
-            if (isTemplateEditLocked) {
-                return;
-            }
-
-            setActiveDragSectionId(String(event.active.id));
-
-            const initialRect = event.active.rect.current.initial;
-            if (
-                initialRect &&
-                initialRect.width > 0 &&
-                initialRect.height > 0
-            ) {
-                setDragPreviewDimensions({
-                    width: initialRect.width,
-                    height: initialRect.height,
-                });
-                return;
-            }
-
-            setDragPreviewDimensions(null);
-        },
-        [isTemplateEditLocked],
-    );
-
-    const handleSectionDragEnd = React.useCallback(
-        (event: DragEndEvent) => {
-            if (isTemplateEditLocked) {
-                return;
-            }
-
-            const { active, over } = event;
-            setActiveDragSectionId(null);
-            setDragPreviewDimensions(null);
-            if (!over) {
-                return;
-            }
-
-            const activeId = String(active.id);
-            const overId = String(over.id);
-            let nextPlacement: RichEditorSectionPlacement | null = null;
-
-            setSectionPlacement((current) => {
-                const sourceColumn = findColumnForSection(current, activeId);
-                const targetColumn = findColumnForSection(current, overId);
-                if (!sourceColumn || !targetColumn) {
-                    return current;
-                }
-
-                if (sourceColumn === targetColumn) {
-                    const sourceItems = current[sourceColumn];
-                    const oldIndex = sourceItems.indexOf(activeId);
-                    if (oldIndex < 0) {
-                        return current;
-                    }
-
-                    const newIndex = sourceItems.includes(overId)
-                        ? sourceItems.indexOf(overId)
-                        : sourceItems.length - 1;
-
-                    if (newIndex < 0 || oldIndex === newIndex) {
-                        return current;
-                    }
-
-                    const reordered = arrayMove(
-                        sourceItems,
-                        oldIndex,
-                        newIndex,
-                    );
-                    nextPlacement = {
-                        ...current,
-                        [sourceColumn]: reordered,
-                    };
-                    return nextPlacement;
-                }
-
-                const sourceItems = current[sourceColumn].filter(
-                    (id) => id !== activeId,
-                );
-                const targetItems = [...current[targetColumn]];
-                const targetIndex = targetItems.includes(overId)
-                    ? targetItems.indexOf(overId)
-                    : targetItems.length;
-
-                if (targetIndex < 0) {
-                    targetItems.push(activeId);
-                } else {
-                    targetItems.splice(targetIndex, 0, activeId);
-                }
-
-                nextPlacement = {
-                    ...current,
-                    [sourceColumn]: sourceItems,
-                    [targetColumn]: targetItems,
-                };
-                return nextPlacement;
-            });
-
-            if (!nextPlacement) {
-                return;
-            }
-
-            if (supportsTemplateEditing) {
-                return;
-            }
-
-            void onSectionLayoutSync?.(nextPlacement);
-
-            void onActionLog?.({
-                action: "section_moved",
-                payload: {
-                    activeId,
-                    overId,
-                },
-            });
-
-            const orderedMetafieldIds = [
-                ...nextPlacement.left,
-                ...nextPlacement.right,
-            ].filter((id) => isMetafieldItemId(id, metafieldAssignments));
-
-            void (async () => {
-                try {
-                    await Promise.all(
-                        orderedMetafieldIds.map((assignmentId, orderIndex) => {
-                            const assignment = metafieldAssignments.find(
-                                (item) => item.id === assignmentId,
-                            );
-                            if (
-                                !assignment ||
-                                assignment.orderIndex === orderIndex
-                            ) {
-                                return Promise.resolve();
-                            }
-
-                            return onSaveMetafieldValue({
-                                assignmentId,
-                                orderIndex,
-                            });
-                        }),
-                    );
-                } catch (dragSaveError) {
-                    const message = toFriendlyError(
-                        dragSaveError,
-                        "The card moved locally but failed to sync to cloud. Please resolve the sync conflict or retry.",
-                    );
-                    setError(message);
-                    showToast({
-                        id: `metafield-reorder-sync-${entityType}`,
-                        variant: "error",
-                        title: "Metafield reorder sync failed",
-                        description: message,
-                        durationMs: 6000,
-                    });
-                }
-            })();
-        },
-        [
-            entityType,
-            isTemplateEditLocked,
-            metafieldAssignments,
-            onActionLog,
-            onSaveMetafieldValue,
-            onSectionLayoutSync,
-            supportsTemplateEditing,
-            toFriendlyError,
-        ],
-    );
-
-    const handleSectionDragOver = React.useCallback((event: DragOverEvent) => {
-        if (isTemplateEditLocked) {
-            return;
-        }
-
-        const { active, over } = event;
-        if (!over) {
-            return;
-        }
-
-        const activeId = String(active.id);
-        const overId = String(over.id);
-
-        setSectionPlacement((current) => {
-            const sourceColumn = findColumnForSection(current, activeId);
-            const targetColumn = findColumnForSection(current, overId);
-
-            if (
-                !sourceColumn ||
-                !targetColumn ||
-                sourceColumn === targetColumn
-            ) {
-                return current;
-            }
-
-            const sourceItems = current[sourceColumn].filter(
-                (id) => id !== activeId,
-            );
-            const targetItems = [...current[targetColumn]];
-            const targetIndex = targetItems.includes(overId)
-                ? targetItems.indexOf(overId)
-                : targetItems.length;
-
-            if (targetIndex < 0) {
-                targetItems.push(activeId);
-            } else {
-                targetItems.splice(targetIndex, 0, activeId);
-            }
-
-            return {
-                ...current,
-                [sourceColumn]: sourceItems,
-                [targetColumn]: targetItems,
-            };
-        });
-    }, [isTemplateEditLocked]);
-
-    const handleSectionDragCancel = React.useCallback(() => {
-        if (isTemplateEditLocked) {
-            return;
-        }
-
-        setActiveDragSectionId(null);
-        setDragPreviewDimensions(null);
-    }, [isTemplateEditLocked]);
-
-    const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: { distance: 6 },
-        }),
-    );
-
-    const leftDroppable = useDroppable({ id: "rich-editor-column-left" });
-    const rightDroppable = useDroppable({ id: "rich-editor-column-right" });
-    const templateLeftDroppable = useDroppable({
-        id: "rich-editor-template-column-left",
-    });
-    const templateRightDroppable = useDroppable({
-        id: "rich-editor-template-column-right",
-    });
 
     const renderSection = React.useCallback(
         (itemId: string): React.ReactNode => {
@@ -2411,44 +1184,9 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 return (
                     <SortableSectionCard
                         key={fixedCard.id}
-                        id={fixedCard.id}
                         title={fixedCard.title}
-                        disableDrag={isTemplateEditLocked}
-                        showDragHandle={!isTemplateEditLocked}
-                        isActiveDrag={activeDragSectionId === fixedCard.id}
-                        dragDimensions={dragPreviewDimensions}
                     >
                         {content}
-                    </SortableSectionCard>
-                );
-            }
-
-            const optimisticCard = optimisticMetafields.find(
-                (card) => card.tempAssignmentId === itemId,
-            );
-
-            if (optimisticCard) {
-                return (
-                    <SortableSectionCard
-                        key={optimisticCard.tempAssignmentId}
-                        id={optimisticCard.tempAssignmentId}
-                        title={optimisticCard.name}
-                        className={
-                            optimisticCard.kind === "field"
-                                ? "entity-section-card--half"
-                                : "entity-section-card--full"
-                        }
-                        disableDrag
-                        showDragHandle={false}
-                        isActiveDrag={
-                            activeDragSectionId ===
-                            optimisticCard.tempAssignmentId
-                        }
-                        dragDimensions={dragPreviewDimensions}
-                    >
-                        <div className="entity-metafield-pending">
-                            Creating metafield...
-                        </div>
                     </SortableSectionCard>
                 );
             }
@@ -2527,16 +1265,12 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             entityId,
             entityType,
             gallerySources,
-            dragPreviewDimensions,
             handleAssetAction,
             handleChange,
             imageOptions,
-            isTemplateEditLocked,
             internalCardById,
             metafieldAssignments,
             metafieldDefinitions,
-            optimisticMetafields,
-            activeDragSectionId,
             onAssignMetafieldToEntity,
             onCreateOrReuseMetafieldDefinition,
             onDeleteMetafieldDefinitionGlobal,
@@ -2561,572 +1295,44 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     return (
         <div className="entity-editor-panel">
             <form className="entity-editor" onSubmit={handleSubmit}>
-                <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragStart={
-                        isTemplateEditLocked ? undefined : handleSectionDragStart
-                    }
-                    onDragOver={
-                        isTemplateEditLocked ? undefined : handleSectionDragOver
-                    }
-                    onDragEnd={
-                        isTemplateEditLocked ? undefined : handleSectionDragEnd
-                    }
-                    onDragCancel={
-                        isTemplateEditLocked ? undefined : handleSectionDragCancel
-                    }
-                >
-                    <div className="entity-editor-grid entity-editor-grid--balanced">
-                        <div className="entity-header entity-header--lhs">
-                            <div className="entity-header-title">
-                                <p className="panel-label">{panelLabel}</p>
-                                <input
-                                    ref={titleInputRef}
-                                    type="text"
-                                    className="entity-name-input"
-                                    value={values.name}
-                                    onChange={(e) =>
-                                        handleChange(
-                                            "name",
-                                            e.target.value as TValues["name"],
-                                        )
-                                    }
-                                    placeholder={`Untitled ${panelLabel}`}
-                                />
-                            </div>
+                <div className="entity-editor-grid entity-editor-grid--balanced">
+                    <div className="entity-header entity-header--lhs">
+                        <div className="entity-header-title">
+                            <p className="panel-label">{panelLabel}</p>
+                            <input
+                                ref={titleInputRef}
+                                type="text"
+                                className="entity-name-input"
+                                value={values.name}
+                                onChange={(e) =>
+                                    handleChange(
+                                        "name",
+                                        e.target.value as TValues["name"],
+                                    )
+                                }
+                                placeholder={`Untitled ${panelLabel}`}
+                            />
                         </div>
-                        <div className="entity-column-shell entity-column-shell--lhs">
-                            <div
-                                ref={leftDroppable.setNodeRef}
-                                className="entity-column-dropzone"
-                            >
-                                <SortableContext
-                                    items={sectionPlacement.left}
-                                    strategy={rectSortingStrategy}
-                                >
-                                    <div className="entity-column entity-column--sortable">
-                                        {sectionPlacement.left.map(
-                                            renderSection,
-                                        )}
-                                    </div>
-                                </SortableContext>
-                            </div>
-                            <div className="entity-column-add">
-                                {!supportsTemplateEditing ? (
-                                    <ActionDropdown
-                                        options={buildAddSectionOptions("left")}
-                                        size={14}
-                                    />
-                                ) : null}
-                            </div>
-                        </div>
-                        <div className="entity-column-shell entity-column-shell--rhs">
-                            <div
-                                ref={rightDroppable.setNodeRef}
-                                className="entity-column-dropzone"
-                            >
-                                <SortableContext
-                                    items={sectionPlacement.right}
-                                    strategy={rectSortingStrategy}
-                                >
-                                    <div className="entity-column entity-column--sortable">
-                                        {sectionPlacement.right.map(
-                                            renderSection,
-                                        )}
-                                    </div>
-                                </SortableContext>
-                            </div>
-                            <div className="entity-column-add">
-                                {!supportsTemplateEditing ? (
-                                    <ActionDropdown
-                                        options={buildAddSectionOptions("right")}
-                                        size={14}
-                                    />
-                                ) : null}
+                    </div>
+                    <div className="entity-column-shell entity-column-shell--lhs">
+                        <div className="entity-column-dropzone">
+                            <div className="entity-column entity-column--sortable">
+                                {sectionPlacement.left.map(renderSection)}
                             </div>
                         </div>
                     </div>
-                </DndContext>
+                    <div className="entity-column-shell entity-column-shell--rhs">
+                        <div className="entity-column-dropzone">
+                            <div className="entity-column entity-column--sortable">
+                                {sectionPlacement.right.map(renderSection)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 {error ? (
                     <span className="card-hint is-error">{error}</span>
                 ) : null}
             </form>
-            <Dialog
-                open={Boolean(pendingMetafieldDraft)}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        closeMetafieldNameDialog();
-                    }
-                }}
-            >
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Create Metafield</DialogTitle>
-                        <DialogDescription>
-                            Choose a name for the new metafield.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="dialog-form">
-                        <div className="dialog-field">
-                            <Label htmlFor="metafield-name">Name</Label>
-                            <Input
-                                id="metafield-name"
-                                autoFocus
-                                value={pendingMetafieldDraft?.name ?? ""}
-                                onChange={(event) => {
-                                    const nextName = event.target.value;
-                                    setPendingMetafieldDraft((current) =>
-                                        current
-                                            ? {
-                                                  ...current,
-                                                  name: nextName,
-                                              }
-                                            : current,
-                                    );
-                                    if (metafieldDraftError) {
-                                        setMetafieldDraftError(null);
-                                    }
-                                }}
-                                onKeyDown={(event) => {
-                                    if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        void confirmMetafieldCreation();
-                                    }
-                                }}
-                                placeholder="Metafield name"
-                                disabled={isCreatingMetafield}
-                            />
-                        </div>
-                        {metafieldDraftError ? (
-                            <span className="card-hint is-error">
-                                {metafieldDraftError}
-                            </span>
-                        ) : null}
-                        <div className="dialog-actions">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={closeMetafieldNameDialog}
-                                disabled={isCreatingMetafield}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="primary"
-                                onClick={() => {
-                                    void confirmMetafieldCreation();
-                                }}
-                                disabled={
-                                    isCreatingMetafield ||
-                                    !(pendingMetafieldDraft?.name ?? "").trim()
-                                }
-                            >
-                                {isCreatingMetafield
-                                    ? "Creating..."
-                                    : "Create Metafield"}
-                            </Button>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
-            <Dialog
-                open={isTemplateDialogOpen}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        closeTemplateDialog();
-                    }
-                }}
-            >
-                <DialogModalEditorContent>
-                    <DialogHeader>
-                        <DialogTitle>Edit {panelLabel} Template</DialogTitle>
-                        <DialogDescription>
-                            Changes apply to every {entityType} and become the default for newly created entries.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="dialog-form">
-                        <div className="dialog-field">
-                            <Label htmlFor="template-new-metafield-name">
-                                Create New Metafield
-                            </Label>
-                            <div className="metafield-create-grid">
-                                <Input
-                                    id="template-new-metafield-name"
-                                    value={templateNewFieldName}
-                                    onChange={(event) =>
-                                        setTemplateNewFieldName(event.target.value)
-                                    }
-                                    placeholder="Metafield name"
-                                    disabled={isSavingTemplate}
-                                />
-                                <select
-                                    className="input"
-                                    value={templateNewFieldKind}
-                                    onChange={(event) =>
-                                        setTemplateNewFieldKind(
-                                            event.target.value as NewMetafieldKind,
-                                        )
-                                    }
-                                    disabled={isSavingTemplate}
-                                >
-                                    <option value="field">Field</option>
-                                    <option value="paragraph">Paragraph</option>
-                                    <option value="select">Select</option>
-                                </select>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    onClick={() => {
-                                        void createAndAddTemplateField();
-                                    }}
-                                    disabled={
-                                        isSavingTemplate ||
-                                        !templateNewFieldName.trim()
-                                    }
-                                >
-                                    Create & Add
-                                </Button>
-                            </div>
-                        </div>
-                        <div className="dialog-field">
-                            {templateDraftFields.length === 0 ? (
-                                <span className="card-hint">
-                                    No metafields yet. Add existing or create one, then drag it into place.
-                                </span>
-                            ) : null}
-                                <DndContext
-                                    sensors={sensors}
-                                    collisionDetection={closestCenter}
-                                    onDragStart={handleTemplateSectionDragStart}
-                                    onDragOver={handleTemplateSectionDragOver}
-                                    onDragEnd={handleTemplateSectionDragEnd}
-                                    onDragCancel={handleTemplateSectionDragCancel}
-                                >
-                                    <div className="entity-editor-grid entity-editor-grid--balanced">
-                                        <div className="entity-column-shell entity-column-shell--lhs">
-                                            <div
-                                                className="entity-column-dropzone"
-                                                ref={templateLeftDroppable.setNodeRef}
-                                            >
-                                                <SortableContext
-                                                    items={templateSectionPlacement.left}
-                                                    strategy={rectSortingStrategy}
-                                                >
-                                                    <div className="entity-column entity-column--sortable">
-                                                        {templateSectionPlacement.left.map(
-                                                            (itemId) => {
-                                                                if (
-                                                                    itemId ===
-                                                                    "template-core:description"
-                                                                ) {
-                                                                    return (
-                                                                        <SortableSectionCard
-                                                                            key={itemId}
-                                                                            id={itemId}
-                                                                            title="Description"
-                                                                            className="is-static"
-                                                                            disableDrag
-                                                                            showDragHandle={false}
-                                                                        >
-                                                                            <div className="entity-metafield-static">
-                                                                                Core card preview
-                                                                            </div>
-                                                                        </SortableSectionCard>
-                                                                    );
-                                                                }
-
-                                                                const definitionId =
-                                                                    toTemplateDefinitionId(
-                                                                        itemId,
-                                                                    );
-                                                                if (!definitionId) {
-                                                                    return null;
-                                                                }
-                                                                const field =
-                                                                    templateDraftByDefinitionId.get(
-                                                                        definitionId,
-                                                                    );
-                                                                const definition =
-                                                                    templateDefinitionById.get(
-                                                                        definitionId,
-                                                                    );
-                                                                if (!field || !definition) {
-                                                                    return null;
-                                                                }
-
-                                                                return (
-                                                                    <SortableSectionCard
-                                                                        key={itemId}
-                                                                        id={itemId}
-                                                                        title={definition.name}
-                                                                        disableDrag={isSavingTemplate}
-                                                                        showDragHandle={!isSavingTemplate}
-                                                                        isActiveDrag={
-                                                                            activeTemplateDragId ===
-                                                                            itemId
-                                                                        }
-                                                                        dragDimensions={
-                                                                            templateDragPreviewDimensions
-                                                                        }
-                                                                    >
-                                                                        <div className="metafield-create-grid">
-                                                                            <select
-                                                                                className="input"
-                                                                                value={field.kind}
-                                                                                onChange={(event) =>
-                                                                                    updateTemplateDraftField(
-                                                                                        templateDraftFields.findIndex(
-                                                                                            (
-                                                                                                item,
-                                                                                            ) =>
-                                                                                                item.definitionId ===
-                                                                                                definitionId,
-                                                                                        ),
-                                                                                        {
-                                                                                            kind: event.target
-                                                                                                .value as TemplateDraftField["kind"],
-                                                                                        },
-                                                                                    )
-                                                                                }
-                                                                                disabled={isSavingTemplate}
-                                                                            >
-                                                                                <option value="field">
-                                                                                    Field
-                                                                                </option>
-                                                                                <option value="paragraph">
-                                                                                    Paragraph
-                                                                                </option>
-                                                                                <option value="select">
-                                                                                    Select
-                                                                                </option>
-                                                                            </select>
-                                                                            <Button
-                                                                                type="button"
-                                                                                size="sm"
-                                                                                variant="ghost"
-                                                                                onClick={() =>
-                                                                                    requestTemplateDraftFieldDelete(
-                                                                                        definitionId,
-                                                                                    )
-                                                                                }
-                                                                                disabled={isSavingTemplate}
-                                                                            >
-                                                                                Remove
-                                                                            </Button>
-                                                                        </div>
-                                                                    </SortableSectionCard>
-                                                                );
-                                                            },
-                                                        )}
-                                                    </div>
-                                                </SortableContext>
-                                            </div>
-                                        </div>
-                                        <div className="entity-column-shell entity-column-shell--rhs">
-                                            <div
-                                                className="entity-column-dropzone"
-                                                ref={templateRightDroppable.setNodeRef}
-                                            >
-                                                <SortableContext
-                                                    items={templateSectionPlacement.right}
-                                                    strategy={rectSortingStrategy}
-                                                >
-                                                    <div className="entity-column entity-column--sortable">
-                                                        {templateSectionPlacement.right.map(
-                                                            (itemId) => {
-                                                                if (
-                                                                    itemId ===
-                                                                    "template-core:portrait"
-                                                                ) {
-                                                                    return (
-                                                                        <SortableSectionCard
-                                                                            key={itemId}
-                                                                            id={itemId}
-                                                                            title="Portrait"
-                                                                            className="is-static"
-                                                                            disableDrag
-                                                                            showDragHandle={false}
-                                                                        >
-                                                                            <div className="entity-metafield-static">
-                                                                                Core card preview
-                                                                            </div>
-                                                                        </SortableSectionCard>
-                                                                    );
-                                                                }
-
-                                                                if (
-                                                                    itemId ===
-                                                                    "template-core:audio"
-                                                                ) {
-                                                                    return (
-                                                                        <SortableSectionCard
-                                                                            key={itemId}
-                                                                            id={itemId}
-                                                                            title="Audio Assets"
-                                                                            className="is-static"
-                                                                            disableDrag
-                                                                            showDragHandle={false}
-                                                                        >
-                                                                            <div className="entity-metafield-static">
-                                                                                Core card preview
-                                                                            </div>
-                                                                        </SortableSectionCard>
-                                                                    );
-                                                                }
-
-                                                                const definitionId =
-                                                                    toTemplateDefinitionId(
-                                                                        itemId,
-                                                                    );
-                                                                if (!definitionId) {
-                                                                    return null;
-                                                                }
-                                                                const field =
-                                                                    templateDraftByDefinitionId.get(
-                                                                        definitionId,
-                                                                    );
-                                                                const definition =
-                                                                    templateDefinitionById.get(
-                                                                        definitionId,
-                                                                    );
-                                                                if (!field || !definition) {
-                                                                    return null;
-                                                                }
-
-                                                                return (
-                                                                    <SortableSectionCard
-                                                                        key={itemId}
-                                                                        id={itemId}
-                                                                        title={definition.name}
-                                                                        disableDrag={isSavingTemplate}
-                                                                        showDragHandle={!isSavingTemplate}
-                                                                        isActiveDrag={
-                                                                            activeTemplateDragId ===
-                                                                            itemId
-                                                                        }
-                                                                        dragDimensions={
-                                                                            templateDragPreviewDimensions
-                                                                        }
-                                                                    >
-                                                                        <div className="metafield-create-grid">
-                                                                            <select
-                                                                                className="input"
-                                                                                value={field.kind}
-                                                                                onChange={(event) =>
-                                                                                    updateTemplateDraftField(
-                                                                                        templateDraftFields.findIndex(
-                                                                                            (
-                                                                                                item,
-                                                                                            ) =>
-                                                                                                item.definitionId ===
-                                                                                                definitionId,
-                                                                                        ),
-                                                                                        {
-                                                                                            kind: event.target
-                                                                                                .value as TemplateDraftField["kind"],
-                                                                                        },
-                                                                                    )
-                                                                                }
-                                                                                disabled={isSavingTemplate}
-                                                                            >
-                                                                                <option value="field">
-                                                                                    Field
-                                                                                </option>
-                                                                                <option value="paragraph">
-                                                                                    Paragraph
-                                                                                </option>
-                                                                                <option value="select">
-                                                                                    Select
-                                                                                </option>
-                                                                            </select>
-                                                                            <Button
-                                                                                type="button"
-                                                                                size="sm"
-                                                                                variant="ghost"
-                                                                                onClick={() =>
-                                                                                    requestTemplateDraftFieldDelete(
-                                                                                        definitionId,
-                                                                                    )
-                                                                                }
-                                                                                disabled={isSavingTemplate}
-                                                                            >
-                                                                                Remove
-                                                                            </Button>
-                                                                        </div>
-                                                                    </SortableSectionCard>
-                                                                );
-                                                            },
-                                                        )}
-                                                    </div>
-                                                </SortableContext>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </DndContext>
-                        </div>
-                        {templateDraftError ? (
-                            <span className="card-hint is-error">{templateDraftError}</span>
-                        ) : null}
-                        <div className="dialog-actions">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={closeTemplateDialog}
-                                disabled={isSavingTemplate}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="primary"
-                                onClick={() => {
-                                    void saveTemplateDraft();
-                                }}
-                                disabled={isSavingTemplate}
-                            >
-                                {isSavingTemplate ? "Saving..." : "Save Template"}
-                            </Button>
-                        </div>
-                    </div>
-                </DialogModalEditorContent>
-            </Dialog>
-            <Dialog
-                open={Boolean(pendingTemplateDeleteDefinitionId)}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        cancelTemplateDraftFieldDelete();
-                    }
-                }}
-            >
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Heads up!</DialogTitle>
-                        <DialogDescription>
-                            Heads up! Deleting this metafield will affect ALL existing items using this template. Any existing information will be discarded.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="dialog-actions">
-                        <Button
-                            type="button"
-                            variant="ghost"
-                            onClick={cancelTemplateDraftFieldDelete}
-                            disabled={isSavingTemplate}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            variant="primary"
-                            onClick={confirmTemplateDraftFieldDelete}
-                            disabled={isSavingTemplate}
-                        >
-                            Delete Metafield
-                        </Button>
-                    </div>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

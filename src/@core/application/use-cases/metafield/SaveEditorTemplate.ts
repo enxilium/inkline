@@ -95,6 +95,80 @@ const uniqueStrings = (items: string[]): string[] => {
     return result;
 };
 
+const TEMPLATE_CORE_PREFIX = "template-core:";
+
+const isTemplateCorePlacementId = (id: string): boolean =>
+    id.startsWith(TEMPLATE_CORE_PREFIX);
+
+const TEMPLATE_CORE_TOKEN_ALLOWLIST: Record<EditorTemplateType, Set<string>> = {
+    character: new Set([
+        "description",
+        "portrait",
+        "audio",
+        "related-locations",
+        "related-organizations",
+    ]),
+    location: new Set(["description", "portrait", "audio", "presence"]),
+    organization: new Set([
+        "description",
+        "portrait",
+        "audio",
+        "related-locations",
+        "reach",
+    ]),
+};
+
+const TEMPLATE_CORE_TOKEN_ALIASES: Record<
+    EditorTemplateType,
+    Record<string, string>
+> = {
+    character: {
+        "current-location": "related-locations",
+        "background-location": "related-locations",
+        organization: "related-organizations",
+    },
+    location: {},
+    organization: {
+        locations: "related-locations",
+    },
+};
+
+const isAllowedTemplateCorePlacementId = (
+    id: string,
+    editorType: EditorTemplateType,
+): boolean => {
+    if (!isTemplateCorePlacementId(id)) {
+        return false;
+    }
+
+    const token = id.slice(TEMPLATE_CORE_PREFIX.length);
+    return TEMPLATE_CORE_TOKEN_ALLOWLIST[editorType].has(token);
+};
+
+const normalizeTemplatePlacementId = (
+    rawId: string,
+    editorType: EditorTemplateType,
+): string | null => {
+    const id = rawId.trim();
+    if (!id) {
+        return null;
+    }
+
+    if (!isTemplateCorePlacementId(id)) {
+        return id;
+    }
+
+    const rawToken = id.slice(TEMPLATE_CORE_PREFIX.length);
+    const token = TEMPLATE_CORE_TOKEN_ALIASES[editorType][rawToken] ?? rawToken;
+    const normalizedId = `${TEMPLATE_CORE_PREFIX}${token}`;
+
+    if (!isAllowedTemplateCorePlacementId(normalizedId, editorType)) {
+        return null;
+    }
+
+    return normalizedId;
+};
+
 export class SaveEditorTemplate {
     constructor(
         private readonly templateRepository: IEditorTemplateRepository,
@@ -169,11 +243,28 @@ export class SaveEditorTemplate {
         );
         const orderedDefinitionIdSet = new Set(orderedDefinitionIds);
 
-        const placementLeft = uniqueStrings(request.placement.left).filter((id) =>
-            orderedDefinitionIdSet.has(id),
+        const placementLeft = uniqueStrings(
+            request.placement.left
+                .map((id) =>
+                    normalizeTemplatePlacementId(id, request.editorType),
+                )
+                .filter((id): id is string => Boolean(id)),
+        ).filter(
+            (id) =>
+                isAllowedTemplateCorePlacementId(id, request.editorType) ||
+                orderedDefinitionIdSet.has(id),
         );
-        const placementRight = uniqueStrings(request.placement.right).filter(
-            (id) => orderedDefinitionIdSet.has(id) && !placementLeft.includes(id),
+        const placementRight = uniqueStrings(
+            request.placement.right
+                .map((id) =>
+                    normalizeTemplatePlacementId(id, request.editorType),
+                )
+                .filter((id): id is string => Boolean(id)),
+        ).filter(
+            (id) =>
+                (isAllowedTemplateCorePlacementId(id, request.editorType) ||
+                    orderedDefinitionIdSet.has(id)) &&
+                !placementLeft.includes(id),
         );
 
         const unplacedIds = orderedDefinitionIds.filter(

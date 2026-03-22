@@ -32,12 +32,10 @@ export const ConnectedLocationEditor: React.FC<
         updateMetafieldAssignmentLocally,
         removeMetafieldAssignmentLocally,
         removeMetafieldDefinitionLocally,
-        reloadProjectTemplateData,
         saveLocationInfo,
         createOrReuseMetafieldDefinition,
         assignMetafieldToEntity,
         saveMetafieldValue,
-        saveEditorTemplate,
         removeMetafieldFromEntity,
         deleteMetafieldDefinitionGlobal,
         generateLocationImage,
@@ -494,16 +492,6 @@ export const ConnectedLocationEditor: React.FC<
         [importAsset, location, projectId],
     );
 
-    const handleSaveEditorTemplate = React.useCallback(
-        async (request: Parameters<typeof saveEditorTemplate>[0]) => {
-            const response = await saveEditorTemplate(request);
-            await reloadProjectTemplateData(request.projectId);
-
-            return response;
-        },
-        [reloadProjectTemplateData, saveEditorTemplate],
-    );
-
     if (!location) {
         return <div className="empty-editor">Location not found.</div>;
     }
@@ -618,7 +606,6 @@ export const ConnectedLocationEditor: React.FC<
             }
             onImportMetafieldImage={handleImportMetafieldImage}
             editorTemplate={locationEditorTemplate}
-            onSaveEditorTemplate={handleSaveEditorTemplate}
             onDirtyStateChange={handleDirtyStateChange}
             onNavigateToDocument={handleNavigateToDocument}
             focusTitleOnMount={focusTitleOnMount}

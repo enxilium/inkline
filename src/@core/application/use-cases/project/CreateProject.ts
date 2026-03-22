@@ -18,21 +18,24 @@ type DefaultTemplateSeed = {
     name: string;
     valueType: "string" | "string[]";
     kind: EditorTemplateFieldKind;
+    column: "left" | "right";
 };
 
 const DEFAULT_TEMPLATE_SEEDS: Record<EditorTemplateType, DefaultTemplateSeed[]> = {
     character: [
-        { name: "Race", valueType: "string", kind: "field" },
-        { name: "Age", valueType: "string", kind: "field" },
+        { name: "Age", valueType: "string", kind: "field", column: "left" },
+        { name: "Race", valueType: "string", kind: "field", column: "left" },
         {
             name: "Personality",
             valueType: "string[]",
             kind: "select",
+            column: "left",
         },
         {
             name: "Powers & Abilities",
             valueType: "string[]",
             kind: "select",
+            column: "left",
         },
     ],
     location: [],
@@ -136,6 +139,7 @@ export class CreateProject {
 
             const seeds = DEFAULT_TEMPLATE_SEEDS[editorType];
             const fields: EditorTemplate["fields"] = [];
+            const placementLeft: string[] = [];
             const placementRight: string[] = [];
 
             for (const seed of seeds) {
@@ -151,14 +155,18 @@ export class CreateProject {
                     kind: seed.kind,
                     orderIndex: fields.length,
                 });
-                placementRight.push(definition.id);
+                if (seed.column === "left") {
+                    placementLeft.push(definition.id);
+                } else {
+                    placementRight.push(definition.id);
+                }
             }
 
             const template = new EditorTemplate(
                 generateId(),
                 projectId,
                 editorType,
-                { left: [], right: placementRight },
+                { left: placementLeft, right: placementRight },
                 fields,
                 now,
                 now,
