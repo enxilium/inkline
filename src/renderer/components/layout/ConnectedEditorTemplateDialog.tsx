@@ -2,20 +2,20 @@ import React from "react";
 import {
     DndContext,
     PointerSensor,
-    closestCorners,
+    closestCenter,
     useSensor,
     useSensors,
     type DragEndEvent,
+    type DragMoveEvent,
     type DragOverEvent,
     type DragStartEvent,
 } from "@dnd-kit/core";
 import {
     SortableContext,
     arrayMove,
-    rectSortingStrategy,
+    verticalListSortingStrategy,
     useSortable,
 } from "@dnd-kit/sortable";
-import { restrictToFirstScrollableAncestor } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 
 import { useAppStore } from "../../state/appStore";
@@ -164,6 +164,90 @@ const findTemplateColumnForItem = (
         return "right";
     }
     return null;
+};
+
+const areSamePlacement = (
+    a: SectionPlacement,
+    b: SectionPlacement,
+): boolean => {
+    if (a.left.length !== b.left.length || a.right.length !== b.right.length) {
+        return false;
+    }
+
+    const sameLeft = a.left.every((itemId, index) => itemId === b.left[index]);
+    if (!sameLeft) {
+        return false;
+    }
+
+    return a.right.every((itemId, index) => itemId === b.right[index]);
+};
+
+const normalizeTemplatePlacement = ({
+    left,
+    right,
+    staticLeftItems,
+    staticRightItems,
+    validFieldItemIds,
+}: {
+    left: string[];
+    right: string[];
+    staticLeftItems: string[];
+    staticRightItems: string[];
+    validFieldItemIds: string[];
+}): SectionPlacement => {
+    const allowedItemIds = new Set([
+        ...staticLeftItems,
+        ...staticRightItems,
+        ...validFieldItemIds,
+    ]);
+    const seen = new Set<string>();
+
+    const normalizedLeft: string[] = [];
+    for (const itemId of left) {
+        if (!allowedItemIds.has(itemId) || seen.has(itemId)) {
+            continue;
+        }
+        seen.add(itemId);
+        normalizedLeft.push(itemId);
+    }
+
+    const normalizedRight: string[] = [];
+    for (const itemId of right) {
+        if (!allowedItemIds.has(itemId) || seen.has(itemId)) {
+            continue;
+        }
+        seen.add(itemId);
+        normalizedRight.push(itemId);
+    }
+
+    for (const itemId of staticLeftItems) {
+        if (seen.has(itemId)) {
+            continue;
+        }
+        seen.add(itemId);
+        normalizedLeft.push(itemId);
+    }
+
+    for (const itemId of staticRightItems) {
+        if (seen.has(itemId)) {
+            continue;
+        }
+        seen.add(itemId);
+        normalizedRight.push(itemId);
+    }
+
+    for (const itemId of validFieldItemIds) {
+        if (seen.has(itemId)) {
+            continue;
+        }
+        seen.add(itemId);
+        normalizedLeft.push(itemId);
+    }
+
+    return {
+        left: normalizedLeft,
+        right: normalizedRight,
+    };
 };
 
 const editorTypeLabel = (editorType: WorkspaceEditorTemplateType): string => {
@@ -339,33 +423,45 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             left: [],
             right: [],
         });
-        const staticCards = React.useMemo<TemplateStaticCard[]>(() => {
-            if (!editorType) {
-                return [];
-            }
+    const dialogModalEditorRef = React.useRef<HTMLDivElement | null>(null);
+    const templateDragScrollBoundsRef = React.useRef<
+        { min: number; max: number } | null
+    >(null);
+    const [templateDragPlacementSnapshot, setTemplateDragPlacementSnapshot] =
+        React.useState<SectionPlacement | null>(null);
+    const lastProcessedDragOverKeyRef = React.useRef<string | null>(null);
+    const templateInitSignatureRef = React.useRef<string | null>(null);
+    const dragOverRafRef = React.useRef<number | null>(null);
+    const pendingDragOverRef = React.useRef<
+        { activeId: string; overId: string } | null
+    >(null);
+    const staticCards = React.useMemo<TemplateStaticCard[]>(() => {
+        if (!editorType) {
+            return [];
+        }
 
-            return TEMPLATE_STATIC_CARD_SETS[editorType];
-        }, [editorType]);
+        return TEMPLATE_STATIC_CARD_SETS[editorType];
+    }, [editorType]);
 
-        const staticCardIds = React.useMemo(
-            () => new Set(staticCards.map((card) => card.id)),
-            [staticCards],
-        );
+    const staticCardIds = React.useMemo(
+        () => new Set(staticCards.map((card) => card.id)),
+        [staticCards],
+    );
 
-        const staticLeftItems = React.useMemo(
-            () => staticCards.filter((card) => card.column === "left").map((card) => card.id),
-            [staticCards],
-        );
+    const staticLeftItems = React.useMemo(
+        () => staticCards.filter((card) => card.column === "left").map((card) => card.id),
+        [staticCards],
+    );
 
-        const staticRightItems = React.useMemo(
-            () => staticCards.filter((card) => card.column === "right").map((card) => card.id),
-            [staticCards],
-        );
+    const staticRightItems = React.useMemo(
+        () => staticCards.filter((card) => card.column === "right").map((card) => card.id),
+        [staticCards],
+    );
 
-        const staticCardById = React.useMemo(
-            () => new Map(staticCards.map((card) => [card.id, card])),
-            [staticCards],
-        );
+    const staticCardById = React.useMemo(
+        () => new Map(staticCards.map((card) => [card.id, card])),
+        [staticCards],
+    );
 
     const [pendingTemplateDeleteDefinitionId, setPendingTemplateDeleteDefinitionId] =
         React.useState<string | null>(null);
@@ -466,8 +562,15 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
 
     React.useEffect(() => {
         if (!open || !editorType) {
+            templateInitSignatureRef.current = null;
             return;
         }
+
+        const templateSignature = `${editorType}:${template?.id ?? "none"}:${template?.fields.length ?? 0}:${template?.placement.left.join(",") ?? ""}:${template?.placement.right.join(",") ?? ""}:${metafieldDefinitions.length}`;
+        if (templateInitSignatureRef.current === templateSignature) {
+            return;
+        }
+        templateInitSignatureRef.current = templateSignature;
 
         const placementIdToItemId = (placementId: string): string | null => {
             if (placementId.startsWith("template-core:")) {
@@ -514,38 +617,32 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                   .filter((itemId): itemId is string => Boolean(itemId))
             : [];
 
-        const present = new Set([...nextLeftFromTemplate, ...nextRightFromTemplate]);
-        const missingStaticLeft = staticLeftItems.filter(
-            (itemId) => !present.has(itemId),
-        );
-        const missingStaticRight = staticRightItems.filter(
-            (itemId) => !present.has(itemId),
-        );
         const fieldItemIds = nextDraftFields.map((field) =>
             toTemplateCardItemId(field.definitionId),
         );
-        const missingFields = fieldItemIds.filter((itemId) => !present.has(itemId));
-
-        const nextLeft = [
-            ...staticLeftItems,
-            ...nextLeftFromTemplate.filter((itemId) => !staticCardIds.has(itemId)),
-            ...missingFields,
-        ];
-        const nextRight = [...nextRightFromTemplate, ...missingStaticRight];
+        const nextPlacement = normalizeTemplatePlacement({
+            left: nextLeftFromTemplate,
+            right: nextRightFromTemplate,
+            staticLeftItems,
+            staticRightItems,
+            validFieldItemIds: fieldItemIds,
+        });
 
         setTemplateDraftFields(nextDraftFields);
-        setTemplateSectionPlacement({ left: nextLeft, right: nextRight });
+        setTemplateSectionPlacement(nextPlacement);
         setTemplateNewFieldName("");
         setTemplateNewFieldKind("field");
         setTemplateDraftError(null);
         setPendingTemplateDeleteDefinitionId(null);
+        setTemplateDragPlacementSnapshot(null);
+        lastProcessedDragOverKeyRef.current = null;
         setCreatedDefinitionsById((current) =>
             current.size === 0 ? current : new Map(),
         );
     }, [
         editorType,
+        metafieldDefinitions.length,
         open,
-        staticCardIds,
         staticLeftItems,
         staticRightItems,
         template,
@@ -562,32 +659,16 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         );
 
         setTemplateSectionPlacement((current) => {
-            const filteredLeft = current.left.filter(
-                (itemId) =>
-                    staticCardIds.has(itemId) ||
-                    templateFieldIds.includes(itemId),
-            );
-            const filteredRight = current.right.filter(
-                (itemId) =>
-                    staticCardIds.has(itemId) ||
-                    templateFieldIds.includes(itemId),
-            );
-
-            const present = new Set([...filteredLeft, ...filteredRight]);
-            const missing = templateFieldIds.filter(
-                (itemId) => !present.has(itemId),
-            );
-
-            if (missing.length === 0) {
-                return current;
-            }
-
-            return {
-                left: [...filteredLeft, ...missing],
-                right: filteredRight,
-            };
+            const normalized = normalizeTemplatePlacement({
+                left: current.left,
+                right: current.right,
+                staticLeftItems,
+                staticRightItems,
+                validFieldItemIds: templateFieldIds,
+            });
+            return areSamePlacement(normalized, current) ? current : normalized;
         });
-    }, [open, staticCardIds, templateDraftFields]);
+    }, [open, staticLeftItems, staticRightItems, templateDraftFields]);
 
     const createAndAddTemplateField = React.useCallback(async () => {
         if (!editorType || !projectId) {
@@ -702,8 +783,39 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             if (!isTemplateSortableItemId(activeId) || isSavingTemplate) {
                 return;
             }
+
+            setTemplateDragPlacementSnapshot(templateSectionPlacement);
+            lastProcessedDragOverKeyRef.current = null;
+
+            const modal = dialogModalEditorRef.current;
+            if (!modal) {
+                templateDragScrollBoundsRef.current = null;
+                return;
+            }
+
+            templateDragScrollBoundsRef.current = {
+                min: 0,
+                max: Math.max(0, modal.scrollHeight - modal.clientHeight),
+            };
         },
-        [isSavingTemplate, isTemplateSortableItemId],
+        [isSavingTemplate, isTemplateSortableItemId, templateSectionPlacement],
+    );
+
+    const handleTemplateSectionDragMove = React.useCallback(
+        (_event: DragMoveEvent) => {
+            const modal = dialogModalEditorRef.current;
+            const bounds = templateDragScrollBoundsRef.current;
+            if (!modal || !bounds) {
+                return;
+            }
+
+            if (modal.scrollTop < bounds.min) {
+                modal.scrollTop = bounds.min;
+            } else if (modal.scrollTop > bounds.max) {
+                modal.scrollTop = bounds.max;
+            }
+        },
+        [],
     );
 
     const handleTemplateSectionDragOver = React.useCallback(
@@ -728,53 +840,106 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                 return;
             }
 
-            setTemplateSectionPlacement((current) => {
-                const sourceColumn = findTemplateColumnForItem(current, activeId);
-                const targetColumn = findTemplateColumnForItem(current, overId);
+            pendingDragOverRef.current = { activeId, overId };
 
-                if (!sourceColumn || !targetColumn || sourceColumn === targetColumn) {
-                    return current;
+            if (dragOverRafRef.current !== null) {
+                return;
+            }
+
+            dragOverRafRef.current = window.requestAnimationFrame(() => {
+                dragOverRafRef.current = null;
+
+                const pending = pendingDragOverRef.current;
+                if (!pending) {
+                    return;
                 }
 
-                const sourceItems = current[sourceColumn].filter(
-                    (id) => id !== activeId,
-                );
-                const targetItems = current[targetColumn].filter(
-                    (id) => id !== activeId,
-                );
-                const targetIndex = targetItems.includes(overId)
-                    ? targetItems.indexOf(overId)
-                    : targetItems.length;
+                pendingDragOverRef.current = null;
 
-                if (targetIndex < 0 || targetIndex > targetItems.length) {
-                    return current;
-                }
-
-                targetItems.splice(targetIndex, 0, activeId);
-
-                const nextPlacement = {
-                    ...current,
-                    [sourceColumn]: sourceItems,
-                    [targetColumn]: targetItems,
-                };
-
-                const unchangedLeft =
-                    nextPlacement.left.length === current.left.length &&
-                    nextPlacement.left.every((id, index) => id === current.left[index]);
-                const unchangedRight =
-                    nextPlacement.right.length === current.right.length &&
-                    nextPlacement.right.every(
-                        (id, index) => id === current.right[index],
+                let nextProcessedKey: string | null = null;
+                setTemplateSectionPlacement((current) => {
+                    const sourceColumn = findTemplateColumnForItem(
+                        current,
+                        pending.activeId,
+                    );
+                    const targetColumn = findTemplateColumnForItem(
+                        current,
+                        pending.overId,
                     );
 
-                if (unchangedLeft && unchangedRight) {
-                    return current;
-                }
+                    if (
+                        !sourceColumn ||
+                        !targetColumn ||
+                        sourceColumn === targetColumn
+                    ) {
+                        return current;
+                    }
 
-                return nextPlacement;
+                    if (current[sourceColumn].length <= 1) {
+                        return current;
+                    }
+
+                    const sourceItems = current[sourceColumn].filter(
+                        (id) => id !== pending.activeId,
+                    );
+                    const targetItems = current[targetColumn].filter(
+                        (id) => id !== pending.activeId,
+                    );
+                    const targetIndex = targetItems.includes(pending.overId)
+                        ? targetItems.indexOf(pending.overId)
+                        : targetItems.length;
+
+                    if (targetIndex < 0 || targetIndex > targetItems.length) {
+                        return current;
+                    }
+
+                    const dragOverTransitionKey = `${pending.activeId}->${pending.overId}:${sourceColumn}->${targetColumn}:idx:${targetIndex}`;
+                    if (lastProcessedDragOverKeyRef.current === dragOverTransitionKey) {
+                        return current;
+                    }
+
+                    targetItems.splice(targetIndex, 0, pending.activeId);
+
+                    const nextPlacement = normalizeTemplatePlacement({
+                        left:
+                            sourceColumn === "left"
+                                ? sourceItems
+                                : targetColumn === "left"
+                                  ? targetItems
+                                  : current.left,
+                        right:
+                            sourceColumn === "right"
+                                ? sourceItems
+                                : targetColumn === "right"
+                                  ? targetItems
+                                  : current.right,
+                        staticLeftItems,
+                        staticRightItems,
+                        validFieldItemIds: templateDraftFields.map((field) =>
+                            toTemplateCardItemId(field.definitionId),
+                        ),
+                    });
+
+                    if (areSamePlacement(nextPlacement, current)) {
+                        return current;
+                    }
+
+                    nextProcessedKey = dragOverTransitionKey;
+                    return nextPlacement;
+                });
+
+                if (nextProcessedKey) {
+                    lastProcessedDragOverKeyRef.current = nextProcessedKey;
+                }
             });
         },
-        [isSavingTemplate, isTemplateSortableItemId],
+        [
+            isSavingTemplate,
+            isTemplateSortableItemId,
+            staticLeftItems,
+            staticRightItems,
+            templateDraftFields,
+        ],
     );
 
     const handleTemplateSectionDragEnd = React.useCallback(
@@ -785,6 +950,17 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
 
             const { active, over } = event;
             if (!over) {
+                if (templateDragPlacementSnapshot) {
+                    setTemplateSectionPlacement(templateDragPlacementSnapshot);
+                }
+                setTemplateDragPlacementSnapshot(null);
+                templateDragScrollBoundsRef.current = null;
+                lastProcessedDragOverKeyRef.current = null;
+                pendingDragOverRef.current = null;
+                if (dragOverRafRef.current !== null) {
+                    window.cancelAnimationFrame(dragOverRafRef.current);
+                    dragOverRafRef.current = null;
+                }
                 return;
             }
 
@@ -792,10 +968,26 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             const overId = String(over.id);
 
             if (activeId === overId) {
+                setTemplateDragPlacementSnapshot(null);
+                templateDragScrollBoundsRef.current = null;
+                lastProcessedDragOverKeyRef.current = null;
+                pendingDragOverRef.current = null;
+                if (dragOverRafRef.current !== null) {
+                    window.cancelAnimationFrame(dragOverRafRef.current);
+                    dragOverRafRef.current = null;
+                }
                 return;
             }
 
             if (!isTemplateSortableItemId(activeId)) {
+                setTemplateDragPlacementSnapshot(null);
+                templateDragScrollBoundsRef.current = null;
+                lastProcessedDragOverKeyRef.current = null;
+                pendingDragOverRef.current = null;
+                if (dragOverRafRef.current !== null) {
+                    window.cancelAnimationFrame(dragOverRafRef.current);
+                    dragOverRafRef.current = null;
+                }
                 return;
             }
 
@@ -824,11 +1016,23 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     }
 
                     const reordered = arrayMove(sourceItems, oldIndex, newIndex);
-                    nextPlacement = {
-                        ...current,
-                        [sourceColumn]: reordered,
-                    };
-                    return nextPlacement;
+                    const normalized = normalizeTemplatePlacement({
+                        left: sourceColumn === "left" ? reordered : current.left,
+                        right: sourceColumn === "right" ? reordered : current.right,
+                        staticLeftItems,
+                        staticRightItems,
+                        validFieldItemIds: templateDraftFields.map((field) =>
+                            toTemplateCardItemId(field.definitionId),
+                        ),
+                    });
+                    nextPlacement = normalized;
+                    return areSamePlacement(normalized, current)
+                        ? current
+                        : normalized;
+                }
+
+                if (current[sourceColumn].length <= 1) {
+                    return current;
                 }
 
                 const sourceItems = current[sourceColumn].filter((id) => id !== activeId);
@@ -843,13 +1047,37 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     targetItems.splice(targetIndex, 0, activeId);
                 }
 
-                nextPlacement = {
-                    ...current,
-                    [sourceColumn]: sourceItems,
-                    [targetColumn]: targetItems,
-                };
-                return nextPlacement;
+                const normalized = normalizeTemplatePlacement({
+                    left:
+                        sourceColumn === "left"
+                            ? sourceItems
+                            : targetColumn === "left"
+                              ? targetItems
+                              : current.left,
+                    right:
+                        sourceColumn === "right"
+                            ? sourceItems
+                            : targetColumn === "right"
+                              ? targetItems
+                              : current.right,
+                    staticLeftItems,
+                    staticRightItems,
+                    validFieldItemIds: templateDraftFields.map((field) =>
+                        toTemplateCardItemId(field.definitionId),
+                    ),
+                });
+                nextPlacement = normalized;
+                return areSamePlacement(normalized, current) ? current : normalized;
             });
+
+            setTemplateDragPlacementSnapshot(null);
+            templateDragScrollBoundsRef.current = null;
+            lastProcessedDragOverKeyRef.current = null;
+            pendingDragOverRef.current = null;
+            if (dragOverRafRef.current !== null) {
+                window.cancelAnimationFrame(dragOverRafRef.current);
+                dragOverRafRef.current = null;
+            }
 
             if (!nextPlacement) {
                 return;
@@ -889,21 +1117,59 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     .filter((field): field is TemplateDraftField => Boolean(field));
             });
         },
-        [isSavingTemplate, isTemplateSortableItemId],
+        [
+            isSavingTemplate,
+            isTemplateSortableItemId,
+            staticLeftItems,
+            staticRightItems,
+            templateDraftFields,
+            templateDragPlacementSnapshot,
+        ],
     );
 
-    const handleTemplateSectionDragCancel = React.useCallback(() => {}, []);
+    const handleTemplateSectionDragCancel = React.useCallback(() => {
+        if (templateDragPlacementSnapshot) {
+            setTemplateSectionPlacement(templateDragPlacementSnapshot);
+        }
+        setTemplateDragPlacementSnapshot(null);
+        templateDragScrollBoundsRef.current = null;
+        lastProcessedDragOverKeyRef.current = null;
+        pendingDragOverRef.current = null;
+        if (dragOverRafRef.current !== null) {
+            window.cancelAnimationFrame(dragOverRafRef.current);
+            dragOverRafRef.current = null;
+        }
+    }, [templateDragPlacementSnapshot]);
+
+    React.useEffect(() => {
+        return () => {
+            if (dragOverRafRef.current !== null) {
+                window.cancelAnimationFrame(dragOverRafRef.current);
+                dragOverRafRef.current = null;
+            }
+        };
+    }, []);
 
     const saveTemplateDraft = React.useCallback(async () => {
         if (!editorType || !projectId) {
             return;
         }
 
+        const normalizedPlacement = normalizeTemplatePlacement({
+            left: templateSectionPlacement.left,
+            right: templateSectionPlacement.right,
+            staticLeftItems,
+            staticRightItems,
+            validFieldItemIds: templateDraftFields.map((field) =>
+                toTemplateCardItemId(field.definitionId),
+            ),
+        });
+
         const placementLeft: string[] = [];
         const placementRight: string[] = [];
         const seenPlacementIds = new Set<string>();
 
-        for (const itemId of templateSectionPlacement.left) {
+        for (const itemId of normalizedPlacement.left) {
             const placementId = staticCardIds.has(itemId)
                 ? itemId
                 : toTemplateDefinitionId(itemId);
@@ -914,7 +1180,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             placementLeft.push(placementId);
         }
 
-        for (const itemId of templateSectionPlacement.right) {
+        for (const itemId of normalizedPlacement.right) {
             const placementId = staticCardIds.has(itemId)
                 ? itemId
                 : toTemplateDefinitionId(itemId);
@@ -945,7 +1211,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             seenDefinitions.add(definitionId);
             dedupedFields.push({
                 ...field,
-                column: templateSectionPlacement.left.includes(
+                column: normalizedPlacement.left.includes(
                     toTemplateCardItemId(definitionId),
                 )
                     ? "left"
@@ -987,7 +1253,10 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         reloadProjectTemplateData,
         saveEditorTemplate,
         staticCardIds,
+        staticLeftItems,
+        staticRightItems,
         templateDraftByDefinitionId,
+        templateDraftFields,
         templateSectionPlacement.left,
         templateSectionPlacement.right,
     ]);
@@ -1007,7 +1276,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                 onOpenChange(nextOpen);
             }}
         >
-            <DialogModalEditorContent>
+            <DialogModalEditorContent ref={dialogModalEditorRef}>
                 <DialogHeader>
                     <DialogTitle>
                         Edit {editorTypeLabel(editorType)} Template
@@ -1065,10 +1334,10 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     ) : null}
                     <DndContext
                         sensors={sensors}
-                        modifiers={[restrictToFirstScrollableAncestor]}
-                        collisionDetection={closestCorners}
-                        autoScroll={false}
+                        collisionDetection={closestCenter}
+                        autoScroll={!isSavingTemplate}
                         onDragStart={handleTemplateSectionDragStart}
+                        onDragMove={handleTemplateSectionDragMove}
                         onDragOver={handleTemplateSectionDragOver}
                         onDragEnd={handleTemplateSectionDragEnd}
                         onDragCancel={handleTemplateSectionDragCancel}
@@ -1080,7 +1349,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                 >
                                     <SortableContext
                                         items={templateSectionPlacement.left}
-                                        strategy={rectSortingStrategy}
+                                        strategy={verticalListSortingStrategy}
                                     >
                                         <div className="entity-column entity-column--sortable">
                                             {templateSectionPlacement.left.map(
@@ -1175,7 +1444,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                 >
                                     <SortableContext
                                         items={templateSectionPlacement.right}
-                                        strategy={rectSortingStrategy}
+                                        strategy={verticalListSortingStrategy}
                                     >
                                         <div className="entity-column entity-column--sortable">
                                             {templateSectionPlacement.right.map(
