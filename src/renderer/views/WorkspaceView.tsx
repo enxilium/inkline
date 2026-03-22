@@ -3,11 +3,12 @@ import React from "react";
 import { useAppStore } from "../state/appStore";
 import { WorkspaceLayout } from "../components/layout/WorkspaceLayout";
 import { ConnectedDocumentBinder } from "../components/layout/ConnectedDocumentBinder";
+import { ConnectedEditorTemplateDialog } from "../components/layout/ConnectedEditorTemplateDialog";
 import { ChatPanel } from "../components/workspace/ChatPanel";
 import { WorkspaceFooter } from "../components/layout/WorkspaceFooter";
 import { ConflictResolutionDialog } from "../components/dialogs/ConflictResolutionDialog";
 import TimelineView from "./TimelineView";
-import type { WorkspaceDocumentKind } from "../types";
+import type { WorkspaceDocumentKind, WorkspaceEditorTemplateType } from "../types";
 
 type ContextMenuEntityKind =
     | "chapter"
@@ -109,6 +110,8 @@ export const WorkspaceView: React.FC = () => {
         React.useState<WorkspaceDocumentKind>(
             activeDocument?.kind ?? "chapter",
         );
+    const [templateDialogEditorType, setTemplateDialogEditorType] =
+        React.useState<WorkspaceEditorTemplateType | null>(null);
 
     const [isPeeking, setIsPeeking] = React.useState(false);
     const peekTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -221,6 +224,13 @@ export const WorkspaceView: React.FC = () => {
     const binderWidth = isBinderOpen ? binderWidthState : 12;
     const chatWidth = isChatOpen ? chatWidthState : 0;
 
+    const handleEditTemplate = React.useCallback(
+        (kind: "character" | "location" | "organization") => {
+            setTemplateDialogEditorType(kind);
+        },
+        [],
+    );
+
     return (
         <div
             className="workspace-view"
@@ -245,6 +255,7 @@ export const WorkspaceView: React.FC = () => {
                                     activeKind={binderActiveKind}
                                     onActiveKindChange={setBinderActiveKind}
                                     showTabbar={false}
+                                    onEditTemplate={handleEditTemplate}
                                 />
                                 <div
                                     className="workspace-binder-resizer"
@@ -273,6 +284,7 @@ export const WorkspaceView: React.FC = () => {
                                                 setBinderActiveKind
                                             }
                                             showTabbar={true}
+                                            onEditTemplate={handleEditTemplate}
                                         />
                                     </div>
                                 </div>
@@ -317,6 +329,15 @@ export const WorkspaceView: React.FC = () => {
             />
 
             <ConflictResolutionDialog />
+            <ConnectedEditorTemplateDialog
+                open={templateDialogEditorType !== null}
+                editorType={templateDialogEditorType}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen) {
+                        setTemplateDialogEditorType(null);
+                    }
+                }}
+            />
         </div>
     );
 };

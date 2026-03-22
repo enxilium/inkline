@@ -42,7 +42,10 @@ import { SupabaseTimelineRepository } from "../@infrastructure/db/SupabaseTimeli
 import { SupabaseEventRepository } from "../@infrastructure/db/SupabaseEventRepository";
 import { SupabaseMetafieldDefinitionRepository } from "../@infrastructure/db/SupabaseMetafieldDefinitionRepository";
 import { SupabaseMetafieldAssignmentRepository } from "../@infrastructure/db/SupabaseMetafieldAssignmentRepository";
+import { SupabaseEditorTemplateRepository } from "../@infrastructure/db/SupabaseEditorTemplateRepository";
 import { SupabaseBugReportRepository } from "../@infrastructure/db/SupabaseBugReportRepository";
+import { FileSystemEditorTemplateRepository } from "../@infrastructure/db/filesystem/FileSystemEditorTemplateRepository";
+import { OfflineFirstEditorTemplateRepository } from "../@infrastructure/db/offline/OfflineFirstEditorTemplateRepository";
 
 export function resolveDependencies(): AppBuilderDependencies {
     const supabaseProjectRepo = new SupabaseProjectRepository();
@@ -139,10 +142,12 @@ export function resolveDependencies(): AppBuilderDependencies {
     const supabaseMetafieldAssignmentRepo =
         new SupabaseMetafieldAssignmentRepository();
     const supabaseBugReportRepo = new SupabaseBugReportRepository();
+    const supabaseEditorTemplateRepo = new SupabaseEditorTemplateRepository();
     const fsMetafieldDefinitionRepo =
         new FileSystemMetafieldDefinitionRepository();
     const fsMetafieldAssignmentRepo =
         new FileSystemMetafieldAssignmentRepository();
+    const fsEditorTemplateRepo = new FileSystemEditorTemplateRepository();
     const metafieldDefinitionRepository =
         new OfflineFirstMetafieldDefinitionRepository(
             supabaseMetafieldDefinitionRepo,
@@ -153,6 +158,10 @@ export function resolveDependencies(): AppBuilderDependencies {
             supabaseMetafieldAssignmentRepo,
             fsMetafieldAssignmentRepo,
         );
+    const editorTemplateRepository = new OfflineFirstEditorTemplateRepository(
+        supabaseEditorTemplateRepo,
+        fsEditorTemplateRepo,
+    );
 
     const syncService = new SynchronizationService(
         supabaseProjectRepo,
@@ -173,6 +182,8 @@ export function resolveDependencies(): AppBuilderDependencies {
         fsMetafieldDefinitionRepo,
         supabaseMetafieldAssignmentRepo,
         fsMetafieldAssignmentRepo,
+        supabaseEditorTemplateRepo,
+        fsEditorTemplateRepo,
         supabaseDeletionLogRepo,
     );
 
@@ -188,6 +199,7 @@ export function resolveDependencies(): AppBuilderDependencies {
             event: supabaseEventRepo,
             metafieldDefinition: metafieldDefinitionRepository,
             metafieldAssignment: metafieldAssignmentRepository,
+            editorTemplate: editorTemplateRepository,
             bugReport: supabaseBugReportRepo,
             project: projectRepository,
             scrapNote: scrapNoteRepository,

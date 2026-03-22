@@ -24,6 +24,7 @@ export const ConnectedOrganizationEditor: React.FC<
         assets,
         metafieldDefinitions,
         metafieldAssignments,
+        editorTemplates,
         activeDocument,
         updateOrganizationLocally,
         addOrUpdateMetafieldDefinitionLocally,
@@ -33,6 +34,7 @@ export const ConnectedOrganizationEditor: React.FC<
         removeMetafieldDefinitionLocally,
         saveOrganizationInfo,
         createOrReuseMetafieldDefinition,
+        saveMetafieldSelectOptions,
         assignMetafieldToEntity,
         saveMetafieldValue,
         removeMetafieldFromEntity,
@@ -129,6 +131,14 @@ export const ConnectedOrganizationEditor: React.FC<
                     assignment.entityId === organizationId,
             ),
         [metafieldAssignments, organizationId],
+    );
+
+    const organizationEditorTemplate = React.useMemo(
+        () =>
+            editorTemplates.find(
+                (template) => template.editorType === "organization",
+            ) ?? null,
+        [editorTemplates],
     );
 
     const handleSubmit = React.useCallback(
@@ -395,6 +405,38 @@ export const ConnectedOrganizationEditor: React.FC<
         [assignMetafieldToEntity, addOrUpdateMetafieldAssignmentLocally],
     );
 
+    const handleSaveMetafieldSelectOptions = React.useCallback(
+        async (request: Parameters<typeof saveMetafieldSelectOptions>[0]) => {
+            const response = await saveMetafieldSelectOptions(request);
+            const definition = metafieldDefinitions.find(
+                (item) => item.id === request.definitionId,
+            );
+
+            if (definition) {
+                addOrUpdateMetafieldDefinitionLocally({
+                    ...definition,
+                    selectOptions: response.options.map((option, index) => ({
+                        id: option.id,
+                        label: option.label,
+                        labelNormalized: option.label.trim().toLowerCase(),
+                        orderIndex: index,
+                        ...(option.icon ? { icon: option.icon } : {}),
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    })),
+                    updatedAt: new Date(),
+                });
+            }
+
+            return response;
+        },
+        [
+            addOrUpdateMetafieldDefinitionLocally,
+            metafieldDefinitions,
+            saveMetafieldSelectOptions,
+        ],
+    );
+
     const handleSaveMetafieldValue = React.useCallback(
         async (request: Parameters<typeof saveMetafieldValue>[0]) => {
             const original = organizationMetafieldAssignments.find(
@@ -587,6 +629,7 @@ export const ConnectedOrganizationEditor: React.FC<
             onCreateOrReuseMetafieldDefinition={
                 handleCreateOrReuseMetafieldDefinition
             }
+            onSaveMetafieldSelectOptions={handleSaveMetafieldSelectOptions}
             onAssignMetafieldToEntity={handleAssignMetafieldToEntity}
             onSaveMetafieldValue={handleSaveMetafieldValue}
             onRemoveMetafieldFromEntity={handleRemoveMetafieldFromEntity}
@@ -594,6 +637,7 @@ export const ConnectedOrganizationEditor: React.FC<
                 handleDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={handleImportMetafieldImage}
+            editorTemplate={organizationEditorTemplate}
             onDirtyStateChange={handleDirtyStateChange}
             focusTitleOnMount={focusTitleOnMount}
         />

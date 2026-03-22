@@ -1,5 +1,6 @@
 import {
     MetafieldDefinition,
+    MetafieldSelectOption,
     MetafieldScope,
 } from "../../../@core/domain/entities/story/world/MetafieldDefinition";
 import { IMetafieldDefinitionRepository } from "../../../@core/domain/repositories/IMetafieldDefinitionRepository";
@@ -21,6 +22,15 @@ type FileSystemMetafieldDefinition = {
         | "image"
         | "image[]";
     targetEntityKind: "character" | "location" | "organization" | null;
+    selectOptions: Array<{
+        id: string;
+        label: string;
+        labelNormalized: string;
+        orderIndex: number;
+        icon?: string;
+        createdAt: string;
+        updatedAt: string;
+    }>;
     createdAt: string;
     updatedAt: string;
 };
@@ -152,6 +162,18 @@ export class FileSystemMetafieldDefinitionRepository implements IMetafieldDefini
             scope: definition.scope,
             valueType: definition.valueType,
             targetEntityKind: definition.targetEntityKind,
+            selectOptions: definition.selectOptions
+                .slice()
+                .sort((left, right) => left.orderIndex - right.orderIndex)
+                .map((option) => ({
+                    id: option.id,
+                    label: option.label,
+                    labelNormalized: option.labelNormalized,
+                    orderIndex: option.orderIndex,
+                    ...(option.icon ? { icon: option.icon } : {}),
+                    createdAt: option.createdAt.toISOString(),
+                    updatedAt: option.updatedAt.toISOString(),
+                })),
             createdAt: definition.createdAt.toISOString(),
             updatedAt: definition.updatedAt.toISOString(),
         };
@@ -209,6 +231,34 @@ export class FileSystemMetafieldDefinitionRepository implements IMetafieldDefini
     private mapToEntity(
         dto: FileSystemMetafieldDefinition,
     ): MetafieldDefinition {
+        const selectOptions: MetafieldSelectOption[] = Array.isArray(
+            dto.selectOptions,
+        )
+            ? dto.selectOptions
+                  .filter(
+                      (option) =>
+                          option &&
+                          typeof option.id === "string" &&
+                          typeof option.label === "string" &&
+                          typeof option.labelNormalized === "string" &&
+                          typeof option.orderIndex === "number" &&
+                          typeof option.createdAt === "string" &&
+                          typeof option.updatedAt === "string",
+                  )
+                  .map((option) => ({
+                      id: option.id,
+                      label: option.label,
+                      labelNormalized: option.labelNormalized,
+                      orderIndex: option.orderIndex,
+                      ...(typeof option.icon === "string" && option.icon.trim()
+                          ? { icon: option.icon.trim() }
+                          : {}),
+                      createdAt: new Date(option.createdAt),
+                      updatedAt: new Date(option.updatedAt),
+                  }))
+                  .sort((left, right) => left.orderIndex - right.orderIndex)
+            : [];
+
         return new MetafieldDefinition(
             dto.id,
             dto.projectId,
@@ -217,6 +267,7 @@ export class FileSystemMetafieldDefinitionRepository implements IMetafieldDefini
             dto.scope,
             dto.valueType,
             dto.targetEntityKind,
+            selectOptions,
             new Date(dto.createdAt),
             new Date(dto.updatedAt),
         );

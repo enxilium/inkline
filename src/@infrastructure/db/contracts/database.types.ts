@@ -487,6 +487,7 @@ export type Database = {
           name: string
           name_normalized: string
           project_id: string
+          select_options_json: Json
           scope: string
           target_entity_kind: string | null
           updated_at: string
@@ -498,6 +499,7 @@ export type Database = {
           name: string
           name_normalized: string
           project_id: string
+          select_options_json?: Json
           scope: string
           target_entity_kind?: string | null
           updated_at?: string
@@ -509,6 +511,7 @@ export type Database = {
           name?: string
           name_normalized?: string
           project_id?: string
+          select_options_json?: Json
           scope?: string
           target_entity_kind?: string | null
           updated_at?: string

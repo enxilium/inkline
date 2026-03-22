@@ -2,6 +2,7 @@ import React from "react";
 
 import type {
     WorkspaceCharacter,
+    WorkspaceEditorTemplate,
     WorkspaceLocation,
     WorkspaceMetafieldAssignment,
     WorkspaceMetafieldDefinition,
@@ -58,7 +59,21 @@ export type OrganizationEditorProps = {
             | "image"
             | "image[]";
         targetEntityKind?: "character" | "location" | "organization";
+        selectOptions?: Array<
+            | string
+            | {
+                  label: string;
+                  icon?: string | null;
+              }
+        >;
     }) => Promise<{ definition: WorkspaceMetafieldDefinition }>;
+    onSaveMetafieldSelectOptions: (request: {
+        definitionId: string;
+        options: Array<{ id?: string; label: string; icon?: string | null }>;
+    }) => Promise<{
+        definitionId: string;
+        options: Array<{ id: string; label: string; icon?: string }>;
+    }>;
     onAssignMetafieldToEntity: (request: {
         definitionId: string;
         entityType: "character" | "location" | "organization";
@@ -78,6 +93,7 @@ export type OrganizationEditorProps = {
         definitionId: string;
     }) => Promise<void>;
     onImportMetafieldImage: (file: File) => Promise<string>;
+    editorTemplate?: WorkspaceEditorTemplate | null;
     onDirtyStateChange?: (isDirty: boolean) => void;
     focusTitleOnMount?: boolean;
 };
@@ -116,11 +132,13 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     onGeneratePlaylist,
     onImportPlaylist,
     onCreateOrReuseMetafieldDefinition,
+    onSaveMetafieldSelectOptions,
     onAssignMetafieldToEntity,
     onSaveMetafieldValue,
     onRemoveMetafieldFromEntity,
     onDeleteMetafieldDefinitionGlobal,
     onImportMetafieldImage,
+    editorTemplate,
     onDirtyStateChange,
     focusTitleOnMount = false,
 }) => {
@@ -201,7 +219,9 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
             entityId={organization.id}
             initialValues={initialValues}
             defaultCards={DEFAULT_CARDS}
+            defaultRightCardTypes={["locations"]}
             customCards={customCards}
+            customRightCardTypes={["reach"]}
             renderDefaultCard={renderDefaultCard}
             onSubmit={onSubmit}
             allCharacters={allCharacters}
@@ -223,6 +243,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
             onCreateOrReuseMetafieldDefinition={
                 onCreateOrReuseMetafieldDefinition
             }
+            onSaveMetafieldSelectOptions={onSaveMetafieldSelectOptions}
             onAssignMetafieldToEntity={onAssignMetafieldToEntity}
             onSaveMetafieldValue={onSaveMetafieldValue}
             onRemoveMetafieldFromEntity={onRemoveMetafieldFromEntity}
@@ -230,6 +251,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
                 onDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={onImportMetafieldImage}
+            editorTemplate={editorTemplate}
             onDirtyStateChange={onDirtyStateChange}
             focusTitleOnMount={focusTitleOnMount}
             assetText={{

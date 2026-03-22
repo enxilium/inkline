@@ -7,6 +7,7 @@ export type PendingUpdateEntityType =
     | "location"
     | "organization"
     | "scrapNote"
+    | "editorTemplate"
     | "metafieldDefinition"
     | "metafieldAssignment"
     | "image"
@@ -17,7 +18,7 @@ export type PendingUpdate = {
     entityType: PendingUpdateEntityType;
     entityId: string;
     projectId: string;
-    operation: "create" | "update" | "updateContent" | "save";
+    operation: "create" | "update" | "delete" | "updateContent" | "save";
     payload: unknown;
     attempts: number;
     createdAt: number;

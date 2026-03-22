@@ -22,6 +22,8 @@ import { IMetafieldDefinitionRepository } from "../../../domain/repositories/IMe
 import { IMetafieldAssignmentRepository } from "../../../domain/repositories/IMetafieldAssignmentRepository";
 import { MetafieldDefinition } from "../../../domain/entities/story/world/MetafieldDefinition";
 import { MetafieldAssignment } from "../../../domain/entities/story/world/MetafieldAssignment";
+import { IEditorTemplateRepository } from "../../../domain/repositories/IEditorTemplateRepository";
+import { EditorTemplate } from "../../../domain/entities/story/world/EditorTemplate";
 
 export interface OpenProjectRequest {
     projectId: string;
@@ -38,6 +40,7 @@ export interface OpenProjectResponse {
     events: Event[];
     metafieldDefinitions: MetafieldDefinition[];
     metafieldAssignments: MetafieldAssignment[];
+    editorTemplates: EditorTemplate[];
     assets: ProjectAssetBundle;
 }
 
@@ -60,6 +63,7 @@ export class OpenProject {
         private readonly eventRepository: IEventRepository,
         private readonly metafieldDefinitionRepository: IMetafieldDefinitionRepository,
         private readonly metafieldAssignmentRepository: IMetafieldAssignmentRepository,
+        private readonly editorTemplateRepository: IEditorTemplateRepository,
     ) {}
 
     async execute(request: OpenProjectRequest): Promise<OpenProjectResponse> {
@@ -82,6 +86,7 @@ export class OpenProject {
             timelines,
             metafieldDefinitions,
             metafieldAssignments,
+            editorTemplates,
         ] = await Promise.all([
             this.chapterRepository.findByProjectId(projectId),
             this.characterRepository.findByProjectId(projectId),
@@ -91,6 +96,7 @@ export class OpenProject {
             this.timelineRepository.findByProjectId(projectId),
             this.metafieldDefinitionRepository.findByProjectId(projectId),
             this.metafieldAssignmentRepository.findByProjectId(projectId),
+            this.editorTemplateRepository.findByProjectId(projectId),
         ]);
 
         chapters.sort((a, b) => a.order - b.order);
@@ -179,6 +185,7 @@ export class OpenProject {
             events,
             metafieldDefinitions,
             metafieldAssignments,
+            editorTemplates,
             assets: assetBundle,
         };
     }

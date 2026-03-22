@@ -1,46 +1,18 @@
 import React from "react";
-import {
-    DndContext,
-    PointerSensor,
-    closestCenter,
-    useDroppable,
-    useSensor,
-    useSensors,
-    type DragStartEvent,
-    type DragEndEvent,
-    type DragOverEvent,
-} from "@dnd-kit/core";
-import {
-    SortableContext,
-    arrayMove,
-    rectSortingStrategy,
-    useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 
 import type {
     WorkspaceCharacter,
+    WorkspaceEditorTemplate,
     WorkspaceLocation,
     WorkspaceMetafieldAssignment,
     WorkspaceMetafieldDefinition,
     WorkspaceOrganization,
 } from "../../types";
 import { ActionDropdown } from "../ui/ActionDropdown";
-import { Button } from "../ui/Button";
-import {
-    Dialog,
-    DialogContent,
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from "../ui/Dialog";
 import {
     ChevronLeftIcon,
     ChevronRightIcon,
-    GripVerticalIcon,
 } from "../ui/Icons";
-import { Input } from "../ui/Input";
-import { Label } from "../ui/Label";
 import type { DocumentRef } from "../ui/ListInput";
 import { showToast } from "../ui/GenerationProgressToast";
 import { MetafieldsSection } from "./MetafieldsSection";
@@ -50,15 +22,7 @@ import {
     type UserErrorContext,
 } from "../../utils/userFacingError";
 
-type NewMetafieldKind = "field" | "paragraph" | "select";
 export type RichEditorColumnId = "left" | "right";
-
-type OptimisticMetafieldCard = {
-    tempAssignmentId: string;
-    name: string;
-    kind: NewMetafieldKind;
-    targetColumn: RichEditorColumnId;
-};
 
 export type RichEditorSectionPlacement = {
     left: string[];
@@ -139,6 +103,51 @@ const CORE_CARD_CONFIG: RichEditorCardConfig[] = [
 ];
 
 const CORE_RIGHT_CARD_TYPES = new Set(["portrait", "audio"]);
+const TEMPLATE_CORE_PREFIX = "template-core:";
+
+const TEMPLATE_CORE_TYPE_BY_EDITOR: Record<
+    RichEditorProps<RichEditorBaseValues>["entityType"],
+    Record<string, { source: "core" | "default" | "custom"; type: string }>
+> = {
+    character: {
+        description: { source: "core", type: "description" },
+        portrait: { source: "core", type: "portrait" },
+        audio: { source: "core", type: "audio" },
+        "related-locations": { source: "default", type: "relatedLocations" },
+        "related-organizations": {
+            source: "default",
+            type: "relatedOrganizations",
+        },
+    },
+    location: {
+        description: { source: "core", type: "description" },
+        portrait: { source: "core", type: "portrait" },
+        audio: { source: "core", type: "audio" },
+        presence: { source: "custom", type: "presence" },
+    },
+    organization: {
+        description: { source: "core", type: "description" },
+        portrait: { source: "core", type: "portrait" },
+        audio: { source: "core", type: "audio" },
+        "related-locations": { source: "default", type: "locations" },
+        reach: { source: "custom", type: "reach" },
+    },
+};
+
+const TEMPLATE_CORE_TOKEN_ALIASES_BY_EDITOR: Record<
+    RichEditorProps<RichEditorBaseValues>["entityType"],
+    Record<string, string>
+> = {
+    character: {
+        "current-location": "related-locations",
+        "background-location": "related-locations",
+        organization: "related-organizations",
+    },
+    location: {},
+    organization: {
+        locations: "related-locations",
+    },
+};
 
 type InternalCardDefinition<TValues extends RichEditorBaseValues> = {
     id: string;
@@ -149,64 +158,23 @@ type InternalCardDefinition<TValues extends RichEditorBaseValues> = {
 };
 
 type SortableSectionCardProps = {
-    id: string;
     title: string;
     children: React.ReactNode;
     className?: string;
-    disableDrag?: boolean;
-    isActiveDrag?: boolean;
-    dragDimensions?: { width: number; height: number } | null;
 };
 
 const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
-    id,
     title,
     children,
     className,
-    disableDrag = false,
-    isActiveDrag = false,
-    dragDimensions = null,
 }) => {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({
-        id,
-        disabled: disableDrag,
-    });
-
-    const style = {
-        transform: CSS.Transform.toString(transform),
-        transition,
-        ...(isDragging && isActiveDrag && dragDimensions
-            ? {
-                  width: dragDimensions.width,
-                  height: dragDimensions.height,
-              }
-            : {}),
-    };
-
     return (
         <section
-            ref={setNodeRef}
-            style={style}
-            className={`entity-section-card${className ? ` ${className}` : ""}${isDragging ? " is-dragging" : ""}`}
+            className={`entity-section-card${className ? ` ${className}` : ""}`}
         >
             <div className="entity-section-card-header">
-                <h3 className="entity-section-card-title">{title}</h3>
-                <button
-                    type="button"
-                    className="entity-section-card-handle"
-                    aria-label={`Reorder ${title} section`}
-                    {...attributes}
-                    {...listeners}
-                >
-                    <GripVerticalIcon size={14} />
-                </button>
+                <p className="panel-label">{title}</p>
+                <div className="entity-section-card-actions" />
             </div>
             <div className="entity-section-card-body">{children}</div>
         </section>
@@ -227,6 +195,8 @@ export type RichEditorProps<TValues extends RichEditorBaseValues> = {
     entityId: string;
     initialValues: TValues;
     defaultCards: RichEditorCardConfig[];
+    defaultRightCardTypes?: string[];
+    customRightCardTypes?: string[];
     customCards?: RichEditorCustomCard<TValues>[];
     renderDefaultCard: (
         card: RichEditorCardConfig,
@@ -261,7 +231,21 @@ export type RichEditorProps<TValues extends RichEditorBaseValues> = {
             | "image"
             | "image[]";
         targetEntityKind?: "character" | "location" | "organization";
+        selectOptions?: Array<
+            | string
+            | {
+                  label: string;
+                  icon?: string | null;
+              }
+        >;
     }) => Promise<{ definition: WorkspaceMetafieldDefinition }>;
+    onSaveMetafieldSelectOptions: (request: {
+        definitionId: string;
+        options: Array<{ id?: string; label: string; icon?: string | null }>;
+    }) => Promise<{
+        definitionId: string;
+        options: Array<{ id: string; label: string; icon?: string }>;
+    }>;
     onAssignMetafieldToEntity: (request: {
         definitionId: string;
         entityType: "character" | "location" | "organization";
@@ -281,6 +265,7 @@ export type RichEditorProps<TValues extends RichEditorBaseValues> = {
         definitionId: string;
     }) => Promise<void>;
     onImportMetafieldImage: (file: File) => Promise<string>;
+    editorTemplate?: WorkspaceEditorTemplate | null;
     focusTitleOnMount?: boolean;
     initialSectionPlacement?: RichEditorSectionPlacement;
     onSectionLayoutSync?: (
@@ -304,35 +289,6 @@ const toInternalCardId = (
         .trim()
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")}:${index}`;
-
-const isMetafieldItemId = (
-    value: string,
-    assignments: WorkspaceMetafieldAssignment[],
-): boolean => assignments.some((assignment) => assignment.id === value);
-
-const findColumnForSection = (
-    placement: RichEditorSectionPlacement,
-    id: string,
-): RichEditorColumnId | null => {
-    if (placement.left.includes(id)) {
-        return "left";
-    }
-    if (placement.right.includes(id)) {
-        return "right";
-    }
-    if (id === "rich-editor-column-left") {
-        return "left";
-    }
-    if (id === "rich-editor-column-right") {
-        return "right";
-    }
-    return null;
-};
-
-const createOptimisticCardId = (): string =>
-    `optimistic-metafield:${Date.now().toString(36)}:${Math.random()
-        .toString(36)
-        .slice(2, 10)}`;
 
 const resolveMetafieldUiKind = (
     assignment: WorkspaceMetafieldAssignment,
@@ -365,6 +321,8 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     entityId,
     initialValues,
     defaultCards,
+    defaultRightCardTypes = [],
+    customRightCardTypes = [],
     customCards = [],
     renderDefaultCard,
     onSubmit,
@@ -385,11 +343,13 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     onGeneratePlaylist,
     onImportPlaylist,
     onCreateOrReuseMetafieldDefinition,
+    onSaveMetafieldSelectOptions,
     onAssignMetafieldToEntity,
     onSaveMetafieldValue,
     onRemoveMetafieldFromEntity,
     onDeleteMetafieldDefinitionGlobal,
     onImportMetafieldImage,
+    editorTemplate,
     focusTitleOnMount = false,
     initialSectionPlacement,
     onSectionLayoutSync,
@@ -397,6 +357,16 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     onDirtyStateChange,
     assetText,
 }: RichEditorProps<TValues>) {
+        const defaultRightCardTypeSet = React.useMemo(
+            () => new Set(defaultRightCardTypes),
+            [defaultRightCardTypes],
+        );
+
+        const customRightCardTypeSet = React.useMemo(
+            () => new Set(customRightCardTypes),
+            [customRightCardTypes],
+        );
+
     const assetCopy = React.useMemo(
         () => ({ ...DEFAULT_ASSET_TEXT, ...assetText }),
         [assetText],
@@ -406,25 +376,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     const [error, setError] = React.useState<string | null>(null);
     const [assetBusy, setAssetBusy] = React.useState(false);
     const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
-    const [activeDragSectionId, setActiveDragSectionId] = React.useState<
-        string | null
-    >(null);
-    const [dragPreviewDimensions, setDragPreviewDimensions] = React.useState<{
-        width: number;
-        height: number;
-    } | null>(null);
-    const [optimisticMetafields, setOptimisticMetafields] = React.useState<
-        OptimisticMetafieldCard[]
-    >([]);
-    const [pendingMetafieldDraft, setPendingMetafieldDraft] = React.useState<{
-        targetColumn: RichEditorColumnId;
-        kind: NewMetafieldKind;
-        name: string;
-    } | null>(null);
-    const [metafieldDraftError, setMetafieldDraftError] = React.useState<
-        string | null
-    >(null);
-    const [isCreatingMetafield, setIsCreatingMetafield] = React.useState(false);
     const [sectionPlacement, setSectionPlacement] =
         React.useState<RichEditorSectionPlacement>(() => {
             const defs = CORE_CARD_CONFIG;
@@ -456,9 +407,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     const isUserChange = React.useRef(false);
     const dirtyStateRef = React.useRef(false);
     const previousEntityId = React.useRef(entityId);
-    const pendingMetafieldColumnsRef = React.useRef<
-        Map<string, RichEditorColumnId>
-    >(new Map());
 
     const toFriendlyError = React.useCallback(
         (err: unknown, fallback: string, context?: UserErrorContext) =>
@@ -555,11 +503,28 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 right.push(card.id);
                 return;
             }
+
+            if (
+                card.source === "default" &&
+                defaultRightCardTypeSet.has(card.type)
+            ) {
+                right.push(card.id);
+                return;
+            }
+
+            if (
+                card.source === "custom" &&
+                customRightCardTypeSet.has(card.type)
+            ) {
+                right.push(card.id);
+                return;
+            }
+
             left.push(card.id);
         });
 
         return { left, right };
-    }, [internalCards]);
+    }, [customRightCardTypeSet, defaultRightCardTypeSet, internalCards]);
 
     React.useEffect(() => {
         const isEntitySwitch = previousEntityId.current !== entityId;
@@ -577,9 +542,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
         }
         setValues(initialValues);
         setError(null);
-        setOptimisticMetafields([]);
-        setActiveDragSectionId(null);
-        setDragPreviewDimensions(null);
         setSectionPlacement(initialSectionPlacement ?? defaultPlacement);
     }, [
         defaultPlacement,
@@ -629,9 +591,144 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     }, [gallerySources]);
 
     React.useEffect(() => {
+        if (!editorTemplate || editorTemplate.editorType !== entityType) {
+            return;
+        }
+
+        const assignmentByDefinitionId = new Map(
+            metafieldAssignments.map((assignment) => [
+                assignment.definitionId,
+                assignment.id,
+            ]),
+        );
+
+        const templateCoreToInternalId = new Map(
+            internalCards
+                .filter((card) => card.source === "core")
+                .map((card) => [card.type, card.id]),
+        );
+        const defaultTypeToInternalId = new Map(
+            internalCards
+                .filter((card) => card.source === "default")
+                .map((card) => [card.type, card.id]),
+        );
+        const customTypeToInternalId = new Map(
+            internalCards
+                .filter((card) => card.source === "custom")
+                .map((card) => [card.type, card.id]),
+        );
+
+        const resolveTemplatePlacementId = (placementId: string): string | null => {
+            if (!placementId.startsWith(TEMPLATE_CORE_PREFIX)) {
+                return assignmentByDefinitionId.get(placementId) ?? null;
+            }
+
+            const rawToken = placementId.slice(TEMPLATE_CORE_PREFIX.length);
+            const token =
+                TEMPLATE_CORE_TOKEN_ALIASES_BY_EDITOR[entityType][rawToken] ??
+                rawToken;
+            const mapping = TEMPLATE_CORE_TYPE_BY_EDITOR[entityType][token];
+            if (!mapping) {
+                return null;
+            }
+
+            if (mapping.source === "core") {
+                return templateCoreToInternalId.get(mapping.type) ?? null;
+            }
+            if (mapping.source === "default") {
+                return defaultTypeToInternalId.get(mapping.type) ?? null;
+            }
+
+            return customTypeToInternalId.get(mapping.type) ?? null;
+        };
+
+        const dedupeOrderedIds = (ids: Array<string | null>): string[] => {
+            const seen = new Set<string>();
+            const result: string[] = [];
+
+            for (const id of ids) {
+                if (!id || seen.has(id)) {
+                    continue;
+                }
+                seen.add(id);
+                result.push(id);
+            }
+
+            return result;
+        };
+
+        const nextTemplateLeft = dedupeOrderedIds(
+            editorTemplate.placement.left.map(resolveTemplatePlacementId),
+        );
+        const nextTemplateRight = dedupeOrderedIds(
+            editorTemplate.placement.right.map(resolveTemplatePlacementId),
+        );
+
+        const fixedCardIdSet = new Set(internalCards.map((card) => card.id));
+        const hasTemplateFixedPlacement =
+            nextTemplateLeft.some((id) => fixedCardIdSet.has(id)) ||
+            nextTemplateRight.some((id) => fixedCardIdSet.has(id));
+
+        const placedTemplateIds = new Set([
+            ...nextTemplateLeft,
+            ...nextTemplateRight,
+        ]);
+        const remainingAssignments = [...metafieldAssignments]
+            .sort((a, b) => a.orderIndex - b.orderIndex)
+            .map((assignment) => assignment.id)
+            .filter((assignmentId) => !placedTemplateIds.has(assignmentId));
+
+        let nextLeft: string[];
+        let nextRight: string[];
+
+        if (hasTemplateFixedPlacement) {
+            const missingDefaultLeft = defaultPlacement.left.filter(
+                (id) => !placedTemplateIds.has(id),
+            );
+            const missingDefaultRight = defaultPlacement.right.filter(
+                (id) => !placedTemplateIds.has(id),
+            );
+
+            nextLeft = [...nextTemplateLeft, ...missingDefaultLeft, ...remainingAssignments];
+            nextRight = [...nextTemplateRight, ...missingDefaultRight];
+        } else {
+            nextLeft = [...defaultPlacement.left, ...nextTemplateLeft, ...remainingAssignments];
+            nextRight = [...defaultPlacement.right, ...nextTemplateRight];
+        }
+
+        const nextPlacement: RichEditorSectionPlacement = {
+            left: nextLeft,
+            right: nextRight,
+        };
+
+        setSectionPlacement((current) => {
+            const isSameLeft =
+                current.left.length === nextPlacement.left.length &&
+                current.left.every((id, index) => id === nextPlacement.left[index]);
+            const isSameRight =
+                current.right.length === nextPlacement.right.length &&
+                current.right.every(
+                    (id, index) => id === nextPlacement.right[index],
+                );
+
+            if (isSameLeft && isSameRight) {
+                return current;
+            }
+
+            return nextPlacement;
+        });
+    }, [
+        defaultPlacement.left,
+        defaultPlacement.right,
+        editorTemplate,
+        entityType,
+        internalCards,
+        metafieldAssignments,
+    ]);
+
+    React.useEffect(() => {
         const assignmentIds = [
             ...metafieldAssignments.map((assignment) => assignment.id),
-            ...optimisticMetafields.map((card) => card.tempAssignmentId),
         ];
         const fixedIds = new Set(internalCards.map((card) => card.id));
 
@@ -671,18 +768,30 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                     missingRight.push(id);
                     continue;
                 }
+
+                if (
+                    card &&
+                    card.source === "default" &&
+                    defaultRightCardTypeSet.has(card.type)
+                ) {
+                    missingRight.push(id);
+                    continue;
+                }
+
+                if (
+                    card &&
+                    card.source === "custom" &&
+                    customRightCardTypeSet.has(card.type)
+                ) {
+                    missingRight.push(id);
+                    continue;
+                }
+
                 missingLeft.push(id);
             }
 
             for (const id of missingAssignments) {
-                const pendingColumn =
-                    pendingMetafieldColumnsRef.current.get(id);
-                if (pendingColumn === "right") {
-                    missingRight.push(id);
-                } else {
-                    missingLeft.push(id);
-                }
-                pendingMetafieldColumnsRef.current.delete(id);
+                missingLeft.push(id);
             }
 
             return {
@@ -690,7 +799,12 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 right: [...filteredRight, ...missingRight],
             };
         });
-    }, [internalCards, metafieldAssignments, optimisticMetafields]);
+    }, [
+        customRightCardTypeSet,
+        defaultRightCardTypeSet,
+        internalCards,
+        metafieldAssignments,
+    ]);
 
     const handleChange = React.useCallback(
         <K extends keyof TValues>(field: K, value: TValues[K]) => {
@@ -876,493 +990,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 (prev - 1 + gallerySources.length) % gallerySources.length,
         );
     };
-
-    const createMetafieldInColumn = React.useCallback(
-        async (
-            targetColumn: RichEditorColumnId,
-            kind: NewMetafieldKind,
-            name: string,
-        ): Promise<boolean> => {
-            const candidateName = name.trim();
-            if (!candidateName) {
-                return false;
-            }
-
-            const tempAssignmentId = createOptimisticCardId();
-
-            setOptimisticMetafields((current) => [
-                ...current,
-                {
-                    tempAssignmentId,
-                    name: candidateName,
-                    kind,
-                    targetColumn,
-                },
-            ]);
-
-            setSectionPlacement((current) => {
-                const nextLeft = current.left.filter(
-                    (id) => id !== tempAssignmentId,
-                );
-                const nextRight = current.right.filter(
-                    (id) => id !== tempAssignmentId,
-                );
-
-                return targetColumn === "left"
-                    ? {
-                          left: [...nextLeft, tempAssignmentId],
-                          right: nextRight,
-                      }
-                    : {
-                          left: nextLeft,
-                          right: [...nextRight, tempAssignmentId],
-                      };
-            });
-
-            try {
-                const definitionResponse =
-                    await onCreateOrReuseMetafieldDefinition({
-                        projectId,
-                        name: candidateName,
-                        scope: entityType,
-                        valueType: kind === "select" ? "string[]" : "string",
-                    });
-
-                const assignmentResponse = await onAssignMetafieldToEntity({
-                    definitionId: definitionResponse.definition.id,
-                    entityType,
-                    entityId,
-                });
-
-                pendingMetafieldColumnsRef.current.set(
-                    assignmentResponse.assignment.id,
-                    targetColumn,
-                );
-
-                let nextPlacementToSync: RichEditorSectionPlacement | null =
-                    null;
-
-                setSectionPlacement((current) => {
-                    const nextLeft = current.left.filter(
-                        (id) =>
-                            id !== assignmentResponse.assignment.id &&
-                            id !== tempAssignmentId,
-                    );
-                    const nextRight = current.right.filter(
-                        (id) =>
-                            id !== assignmentResponse.assignment.id &&
-                            id !== tempAssignmentId,
-                    );
-
-                    const nextPlacement =
-                        targetColumn === "left"
-                            ? {
-                                  left: [
-                                      ...nextLeft,
-                                      assignmentResponse.assignment.id,
-                                  ],
-                                  right: nextRight,
-                              }
-                            : {
-                                  left: nextLeft,
-                                  right: [
-                                      ...nextRight,
-                                      assignmentResponse.assignment.id,
-                                  ],
-                              };
-
-                    nextPlacementToSync = nextPlacement;
-                    return nextPlacement;
-                });
-
-                setOptimisticMetafields((current) =>
-                    current.filter(
-                        (card) => card.tempAssignmentId !== tempAssignmentId,
-                    ),
-                );
-
-                if (nextPlacementToSync) {
-                    await onSectionLayoutSync?.(nextPlacementToSync);
-                }
-
-                const initialValue =
-                    kind === "select"
-                        ? { kind: "select", value: [] as string[] }
-                        : { kind, value: "" };
-
-                await onSaveMetafieldValue({
-                    assignmentId: assignmentResponse.assignment.id,
-                    value: initialValue,
-                });
-
-                await onActionLog?.({
-                    action: "metafield_created",
-                    payload: {
-                        assignmentId: assignmentResponse.assignment.id,
-                        definitionId: definitionResponse.definition.id,
-                        name: candidateName,
-                        kind,
-                        targetColumn,
-                    },
-                });
-                return true;
-            } catch (createError) {
-                setOptimisticMetafields((current) =>
-                    current.filter(
-                        (card) => card.tempAssignmentId !== tempAssignmentId,
-                    ),
-                );
-                setSectionPlacement((current) => ({
-                    left: current.left.filter((id) => id !== tempAssignmentId),
-                    right: current.right.filter(
-                        (id) => id !== tempAssignmentId,
-                    ),
-                }));
-                const message = toFriendlyError(
-                    createError,
-                    "Failed to create metafield.",
-                );
-                setError(message);
-                showToast({
-                    id: `metafield-create-${entityType}`,
-                    variant: "error",
-                    title: "Metafield creation failed",
-                    description: message,
-                    durationMs: 6000,
-                });
-                return false;
-            }
-        },
-        [
-            entityId,
-            entityType,
-            metafieldDefinitions,
-            onActionLog,
-            onAssignMetafieldToEntity,
-            onCreateOrReuseMetafieldDefinition,
-            onSaveMetafieldValue,
-            onSectionLayoutSync,
-            toFriendlyError,
-            projectId,
-        ],
-    );
-
-    const getSuggestedMetafieldName = React.useCallback((): string => {
-        const existingNames = new Set(
-            metafieldDefinitions
-                .filter(
-                    (definition) =>
-                        definition.scope === entityType &&
-                        !definition.name.startsWith("_sys:"),
-                )
-                .map((definition) => definition.name.trim().toLowerCase()),
-        );
-
-        optimisticMetafields.forEach((card) => {
-            existingNames.add(card.name.trim().toLowerCase());
-        });
-
-        let candidateIndex = Math.max(1, existingNames.size + 1);
-        let candidateName = `Metafield ${candidateIndex}`;
-        while (existingNames.has(candidateName.toLowerCase())) {
-            candidateIndex += 1;
-            candidateName = `Metafield ${candidateIndex}`;
-        }
-
-        return candidateName;
-    }, [entityType, metafieldDefinitions, optimisticMetafields]);
-
-    const openMetafieldNameDialog = React.useCallback(
-        (targetColumn: RichEditorColumnId, kind: NewMetafieldKind): void => {
-            setMetafieldDraftError(null);
-            setPendingMetafieldDraft({
-                targetColumn,
-                kind,
-                name: getSuggestedMetafieldName(),
-            });
-        },
-        [getSuggestedMetafieldName],
-    );
-
-    const closeMetafieldNameDialog = React.useCallback((): void => {
-        if (isCreatingMetafield) {
-            return;
-        }
-
-        setPendingMetafieldDraft(null);
-        setMetafieldDraftError(null);
-    }, [isCreatingMetafield]);
-
-    const confirmMetafieldCreation =
-        React.useCallback(async (): Promise<void> => {
-            if (!pendingMetafieldDraft || isCreatingMetafield) {
-                return;
-            }
-
-            const name = pendingMetafieldDraft.name.trim();
-            if (!name) {
-                setMetafieldDraftError("Metafield name is required.");
-                return;
-            }
-
-            setIsCreatingMetafield(true);
-            setMetafieldDraftError(null);
-
-            try {
-                const created = await createMetafieldInColumn(
-                    pendingMetafieldDraft.targetColumn,
-                    pendingMetafieldDraft.kind,
-                    name,
-                );
-
-                if (created) {
-                    setPendingMetafieldDraft(null);
-                }
-            } finally {
-                setIsCreatingMetafield(false);
-            }
-        }, [
-            createMetafieldInColumn,
-            isCreatingMetafield,
-            pendingMetafieldDraft,
-        ]);
-
-    const buildAddSectionOptions = React.useCallback(
-        (targetColumn: RichEditorColumnId) => [
-            {
-                label: "Add Field Metafield",
-                onClick: () => {
-                    openMetafieldNameDialog(targetColumn, "field");
-                },
-            },
-            {
-                label: "Add Paragraph Metafield",
-                onClick: () => {
-                    openMetafieldNameDialog(targetColumn, "paragraph");
-                },
-            },
-            {
-                label: "Add Select Metafield",
-                onClick: () => {
-                    openMetafieldNameDialog(targetColumn, "select");
-                },
-            },
-        ],
-        [openMetafieldNameDialog],
-    );
-
-    const handleSectionDragStart = React.useCallback(
-        (event: DragStartEvent) => {
-            setActiveDragSectionId(String(event.active.id));
-
-            const initialRect = event.active.rect.current.initial;
-            if (
-                initialRect &&
-                initialRect.width > 0 &&
-                initialRect.height > 0
-            ) {
-                setDragPreviewDimensions({
-                    width: initialRect.width,
-                    height: initialRect.height,
-                });
-                return;
-            }
-
-            setDragPreviewDimensions(null);
-        },
-        [],
-    );
-
-    const handleSectionDragEnd = React.useCallback(
-        (event: DragEndEvent) => {
-            const { active, over } = event;
-            setActiveDragSectionId(null);
-            setDragPreviewDimensions(null);
-            if (!over) {
-                return;
-            }
-
-            const activeId = String(active.id);
-            const overId = String(over.id);
-            let nextPlacement: RichEditorSectionPlacement | null = null;
-
-            setSectionPlacement((current) => {
-                const sourceColumn = findColumnForSection(current, activeId);
-                const targetColumn = findColumnForSection(current, overId);
-                if (!sourceColumn || !targetColumn) {
-                    return current;
-                }
-
-                if (sourceColumn === targetColumn) {
-                    const sourceItems = current[sourceColumn];
-                    const oldIndex = sourceItems.indexOf(activeId);
-                    if (oldIndex < 0) {
-                        return current;
-                    }
-
-                    const newIndex = sourceItems.includes(overId)
-                        ? sourceItems.indexOf(overId)
-                        : sourceItems.length - 1;
-
-                    if (newIndex < 0 || oldIndex === newIndex) {
-                        return current;
-                    }
-
-                    const reordered = arrayMove(
-                        sourceItems,
-                        oldIndex,
-                        newIndex,
-                    );
-                    nextPlacement = {
-                        ...current,
-                        [sourceColumn]: reordered,
-                    };
-                    return nextPlacement;
-                }
-
-                const sourceItems = current[sourceColumn].filter(
-                    (id) => id !== activeId,
-                );
-                const targetItems = [...current[targetColumn]];
-                const targetIndex = targetItems.includes(overId)
-                    ? targetItems.indexOf(overId)
-                    : targetItems.length;
-
-                if (targetIndex < 0) {
-                    targetItems.push(activeId);
-                } else {
-                    targetItems.splice(targetIndex, 0, activeId);
-                }
-
-                nextPlacement = {
-                    ...current,
-                    [sourceColumn]: sourceItems,
-                    [targetColumn]: targetItems,
-                };
-                return nextPlacement;
-            });
-
-            if (!nextPlacement) {
-                return;
-            }
-
-            void onSectionLayoutSync?.(nextPlacement);
-
-            void onActionLog?.({
-                action: "section_moved",
-                payload: {
-                    activeId,
-                    overId,
-                },
-            });
-
-            const orderedMetafieldIds = [
-                ...nextPlacement.left,
-                ...nextPlacement.right,
-            ].filter((id) => isMetafieldItemId(id, metafieldAssignments));
-
-            void (async () => {
-                try {
-                    await Promise.all(
-                        orderedMetafieldIds.map((assignmentId, orderIndex) => {
-                            const assignment = metafieldAssignments.find(
-                                (item) => item.id === assignmentId,
-                            );
-                            if (
-                                !assignment ||
-                                assignment.orderIndex === orderIndex
-                            ) {
-                                return Promise.resolve();
-                            }
-
-                            return onSaveMetafieldValue({
-                                assignmentId,
-                                orderIndex,
-                            });
-                        }),
-                    );
-                } catch (dragSaveError) {
-                    const message = toFriendlyError(
-                        dragSaveError,
-                        "The card moved locally but failed to sync to cloud. Please resolve the sync conflict or retry.",
-                    );
-                    setError(message);
-                    showToast({
-                        id: `metafield-reorder-sync-${entityType}`,
-                        variant: "error",
-                        title: "Metafield reorder sync failed",
-                        description: message,
-                        durationMs: 6000,
-                    });
-                }
-            })();
-        },
-        [
-            entityType,
-            metafieldAssignments,
-            onActionLog,
-            onSaveMetafieldValue,
-            onSectionLayoutSync,
-            toFriendlyError,
-        ],
-    );
-
-    const handleSectionDragOver = React.useCallback((event: DragOverEvent) => {
-        const { active, over } = event;
-        if (!over) {
-            return;
-        }
-
-        const activeId = String(active.id);
-        const overId = String(over.id);
-
-        setSectionPlacement((current) => {
-            const sourceColumn = findColumnForSection(current, activeId);
-            const targetColumn = findColumnForSection(current, overId);
-
-            if (
-                !sourceColumn ||
-                !targetColumn ||
-                sourceColumn === targetColumn
-            ) {
-                return current;
-            }
-
-            const sourceItems = current[sourceColumn].filter(
-                (id) => id !== activeId,
-            );
-            const targetItems = [...current[targetColumn]];
-            const targetIndex = targetItems.includes(overId)
-                ? targetItems.indexOf(overId)
-                : targetItems.length;
-
-            if (targetIndex < 0) {
-                targetItems.push(activeId);
-            } else {
-                targetItems.splice(targetIndex, 0, activeId);
-            }
-
-            return {
-                ...current,
-                [sourceColumn]: sourceItems,
-                [targetColumn]: targetItems,
-            };
-        });
-    }, []);
-
-    const handleSectionDragCancel = React.useCallback(() => {
-        setActiveDragSectionId(null);
-        setDragPreviewDimensions(null);
-    }, []);
-
-    const sensors = useSensors(
-        useSensor(PointerSensor, {
-            activationConstraint: { distance: 6 },
-        }),
-    );
-
-    const leftDroppable = useDroppable({ id: "rich-editor-column-left" });
-    const rightDroppable = useDroppable({ id: "rich-editor-column-right" });
 
     const renderSection = React.useCallback(
         (itemId: string): React.ReactNode => {
@@ -1572,41 +1199,9 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                 return (
                     <SortableSectionCard
                         key={fixedCard.id}
-                        id={fixedCard.id}
                         title={fixedCard.title}
-                        isActiveDrag={activeDragSectionId === fixedCard.id}
-                        dragDimensions={dragPreviewDimensions}
                     >
                         {content}
-                    </SortableSectionCard>
-                );
-            }
-
-            const optimisticCard = optimisticMetafields.find(
-                (card) => card.tempAssignmentId === itemId,
-            );
-
-            if (optimisticCard) {
-                return (
-                    <SortableSectionCard
-                        key={optimisticCard.tempAssignmentId}
-                        id={optimisticCard.tempAssignmentId}
-                        title={optimisticCard.name}
-                        className={
-                            optimisticCard.kind === "field"
-                                ? "entity-section-card--half"
-                                : "entity-section-card--full"
-                        }
-                        disableDrag
-                        isActiveDrag={
-                            activeDragSectionId ===
-                            optimisticCard.tempAssignmentId
-                        }
-                        dragDimensions={dragPreviewDimensions}
-                    >
-                        <div className="entity-metafield-pending">
-                            Creating metafield...
-                        </div>
                     </SortableSectionCard>
                 );
             }
@@ -1634,7 +1229,6 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             return (
                 <div key={itemId} className={metafieldSectionClassName}>
                     <MetafieldsSection
-                        key={itemId}
                         projectId={projectId}
                         entityType={entityType}
                         entityId={entityId}
@@ -1661,6 +1255,9 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                                 projectId,
                             })
                         }
+                        onSaveDefinitionSelectOptions={
+                            onSaveMetafieldSelectOptions
+                        }
                         onAssignDefinition={onAssignMetafieldToEntity}
                         onSaveValue={onSaveMetafieldValue}
                         onUnassign={onRemoveMetafieldFromEntity}
@@ -1686,15 +1283,12 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             entityId,
             entityType,
             gallerySources,
-            dragPreviewDimensions,
             handleAssetAction,
             handleChange,
             imageOptions,
             internalCardById,
             metafieldAssignments,
             metafieldDefinitions,
-            optimisticMetafields,
-            activeDragSectionId,
             onAssignMetafieldToEntity,
             onCreateOrReuseMetafieldDefinition,
             onDeleteMetafieldDefinitionGlobal,
@@ -1719,164 +1313,44 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     return (
         <div className="entity-editor-panel">
             <form className="entity-editor" onSubmit={handleSubmit}>
-                <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragStart={handleSectionDragStart}
-                    onDragOver={handleSectionDragOver}
-                    onDragEnd={handleSectionDragEnd}
-                    onDragCancel={handleSectionDragCancel}
-                >
-                    <div className="entity-editor-grid entity-editor-grid--balanced">
-                        <div className="entity-header entity-header--lhs">
-                            <div className="entity-header-title">
-                                <p className="panel-label">{panelLabel}</p>
-                                <input
-                                    ref={titleInputRef}
-                                    type="text"
-                                    className="entity-name-input"
-                                    value={values.name}
-                                    onChange={(e) =>
-                                        handleChange(
-                                            "name",
-                                            e.target.value as TValues["name"],
-                                        )
-                                    }
-                                    placeholder={`Untitled ${panelLabel}`}
-                                />
-                            </div>
+                <div className="entity-editor-grid entity-editor-grid--balanced">
+                    <div className="entity-header entity-header--lhs">
+                        <div className="entity-header-title">
+                            <p className="panel-label">{panelLabel}</p>
+                            <input
+                                ref={titleInputRef}
+                                type="text"
+                                className="entity-name-input"
+                                value={values.name}
+                                onChange={(e) =>
+                                    handleChange(
+                                        "name",
+                                        e.target.value as TValues["name"],
+                                    )
+                                }
+                                placeholder={`Untitled ${panelLabel}`}
+                            />
                         </div>
-                        <div className="entity-column-shell entity-column-shell--lhs">
-                            <div
-                                ref={leftDroppable.setNodeRef}
-                                className="entity-column-dropzone"
-                            >
-                                <SortableContext
-                                    items={sectionPlacement.left}
-                                    strategy={rectSortingStrategy}
-                                >
-                                    <div className="entity-column entity-column--sortable">
-                                        {sectionPlacement.left.map(
-                                            renderSection,
-                                        )}
-                                    </div>
-                                </SortableContext>
-                            </div>
-                            <div className="entity-column-add">
-                                <ActionDropdown
-                                    options={buildAddSectionOptions("left")}
-                                    size={14}
-                                />
-                            </div>
-                        </div>
-                        <div className="entity-column-shell entity-column-shell--rhs">
-                            <div
-                                ref={rightDroppable.setNodeRef}
-                                className="entity-column-dropzone"
-                            >
-                                <SortableContext
-                                    items={sectionPlacement.right}
-                                    strategy={rectSortingStrategy}
-                                >
-                                    <div className="entity-column entity-column--sortable">
-                                        {sectionPlacement.right.map(
-                                            renderSection,
-                                        )}
-                                    </div>
-                                </SortableContext>
-                            </div>
-                            <div className="entity-column-add">
-                                <ActionDropdown
-                                    options={buildAddSectionOptions("right")}
-                                    size={14}
-                                />
+                    </div>
+                    <div className="entity-column-shell entity-column-shell--lhs">
+                        <div className="entity-column-dropzone">
+                            <div className="entity-column entity-column--sortable">
+                                {sectionPlacement.left.map(renderSection)}
                             </div>
                         </div>
                     </div>
-                </DndContext>
+                    <div className="entity-column-shell entity-column-shell--rhs">
+                        <div className="entity-column-dropzone">
+                            <div className="entity-column entity-column--sortable">
+                                {sectionPlacement.right.map(renderSection)}
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 {error ? (
                     <span className="card-hint is-error">{error}</span>
                 ) : null}
             </form>
-            <Dialog
-                open={Boolean(pendingMetafieldDraft)}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        closeMetafieldNameDialog();
-                    }
-                }}
-            >
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Create Metafield</DialogTitle>
-                        <DialogDescription>
-                            Choose a name for the new metafield.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <div className="dialog-form">
-                        <div className="dialog-field">
-                            <Label htmlFor="metafield-name">Name</Label>
-                            <Input
-                                id="metafield-name"
-                                autoFocus
-                                value={pendingMetafieldDraft?.name ?? ""}
-                                onChange={(event) => {
-                                    const nextName = event.target.value;
-                                    setPendingMetafieldDraft((current) =>
-                                        current
-                                            ? {
-                                                  ...current,
-                                                  name: nextName,
-                                              }
-                                            : current,
-                                    );
-                                    if (metafieldDraftError) {
-                                        setMetafieldDraftError(null);
-                                    }
-                                }}
-                                onKeyDown={(event) => {
-                                    if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        void confirmMetafieldCreation();
-                                    }
-                                }}
-                                placeholder="Metafield name"
-                                disabled={isCreatingMetafield}
-                            />
-                        </div>
-                        {metafieldDraftError ? (
-                            <span className="card-hint is-error">
-                                {metafieldDraftError}
-                            </span>
-                        ) : null}
-                        <div className="dialog-actions">
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                onClick={closeMetafieldNameDialog}
-                                disabled={isCreatingMetafield}
-                            >
-                                Cancel
-                            </Button>
-                            <Button
-                                type="button"
-                                variant="primary"
-                                onClick={() => {
-                                    void confirmMetafieldCreation();
-                                }}
-                                disabled={
-                                    isCreatingMetafield ||
-                                    !(pendingMetafieldDraft?.name ?? "").trim()
-                                }
-                            >
-                                {isCreatingMetafield
-                                    ? "Creating..."
-                                    : "Create Metafield"}
-                            </Button>
-                        </div>
-                    </div>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

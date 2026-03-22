@@ -35,6 +35,10 @@ export class SaveMetafieldValue {
         let changed = false;
 
         if (request.value !== undefined) {
+            if (definition.valueType === "string[]") {
+                this.assertValidSelectValue(request.value, definition.id, definition.selectOptions.map((option) => option.id));
+            }
+
             const currentSerialized = JSON.stringify(assignment.valueJson);
             const nextSerialized = JSON.stringify(request.value);
             if (currentSerialized !== nextSerialized) {
@@ -57,5 +61,48 @@ export class SaveMetafieldValue {
         assignment.updatedAt = new Date();
 
         await this.assignmentRepository.update(assignment);
+    }
+
+    private assertValidSelectValue(
+        value: unknown,
+        definitionId: string,
+        optionIds: string[],
+    ): void {
+        let rawIds: string[] = [];
+
+        if (
+            value &&
+            typeof value === "object" &&
+            "kind" in value &&
+            "value" in value
+        ) {
+            const kind = (value as { kind?: unknown }).kind;
+            const entries = (value as { value?: unknown }).value;
+            if (kind !== "select") {
+                throw new Error("Select metafields must be saved with kind 'select'.");
+            }
+
+            if (!Array.isArray(entries)) {
+                throw new Error("Select metafields must be saved with an array value.");
+            }
+
+            rawIds = entries.filter((entry): entry is string => typeof entry === "string");
+        } else if (Array.isArray(value)) {
+            rawIds = value.filter((entry): entry is string => typeof entry === "string");
+        } else {
+            throw new Error("Select metafields must be saved with select option IDs.");
+        }
+
+        if (rawIds.length === 0) {
+            return;
+        }
+
+        const allowed = new Set(optionIds);
+        const invalid = rawIds.filter((id) => !allowed.has(id));
+        if (invalid.length > 0) {
+            throw new Error(
+                `Select metafield ${definitionId} includes unknown option IDs.`,
+            );
+        }
     }
 }

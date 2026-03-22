@@ -24,6 +24,7 @@ export const ConnectedLocationEditor: React.FC<
         assets,
         metafieldDefinitions,
         metafieldAssignments,
+        editorTemplates,
         activeDocument,
         updateLocationLocally,
         addOrUpdateMetafieldDefinitionLocally,
@@ -33,6 +34,7 @@ export const ConnectedLocationEditor: React.FC<
         removeMetafieldDefinitionLocally,
         saveLocationInfo,
         createOrReuseMetafieldDefinition,
+        saveMetafieldSelectOptions,
         assignMetafieldToEntity,
         saveMetafieldValue,
         removeMetafieldFromEntity,
@@ -129,6 +131,13 @@ export const ConnectedLocationEditor: React.FC<
                     assignment.entityId === locationId,
             ),
         [metafieldAssignments, locationId],
+    );
+
+    const locationEditorTemplate = React.useMemo(
+        () =>
+            editorTemplates.find((template) => template.editorType === "location") ??
+            null,
+        [editorTemplates],
     );
 
     const handleSubmit = React.useCallback(
@@ -392,6 +401,38 @@ export const ConnectedLocationEditor: React.FC<
         [assignMetafieldToEntity, addOrUpdateMetafieldAssignmentLocally],
     );
 
+    const handleSaveMetafieldSelectOptions = React.useCallback(
+        async (request: Parameters<typeof saveMetafieldSelectOptions>[0]) => {
+            const response = await saveMetafieldSelectOptions(request);
+            const definition = metafieldDefinitions.find(
+                (item) => item.id === request.definitionId,
+            );
+
+            if (definition) {
+                addOrUpdateMetafieldDefinitionLocally({
+                    ...definition,
+                    selectOptions: response.options.map((option, index) => ({
+                        id: option.id,
+                        label: option.label,
+                        labelNormalized: option.label.trim().toLowerCase(),
+                        orderIndex: index,
+                        ...(option.icon ? { icon: option.icon } : {}),
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    })),
+                    updatedAt: new Date(),
+                });
+            }
+
+            return response;
+        },
+        [
+            addOrUpdateMetafieldDefinitionLocally,
+            metafieldDefinitions,
+            saveMetafieldSelectOptions,
+        ],
+    );
+
     const handleSaveMetafieldValue = React.useCallback(
         async (request: Parameters<typeof saveMetafieldValue>[0]) => {
             const original = locationMetafieldAssignments.find(
@@ -590,6 +631,7 @@ export const ConnectedLocationEditor: React.FC<
             onCreateOrReuseMetafieldDefinition={
                 handleCreateOrReuseMetafieldDefinition
             }
+            onSaveMetafieldSelectOptions={handleSaveMetafieldSelectOptions}
             onAssignMetafieldToEntity={handleAssignMetafieldToEntity}
             onSaveMetafieldValue={handleSaveMetafieldValue}
             onRemoveMetafieldFromEntity={handleRemoveMetafieldFromEntity}
@@ -597,6 +639,7 @@ export const ConnectedLocationEditor: React.FC<
                 handleDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={handleImportMetafieldImage}
+            editorTemplate={locationEditorTemplate}
             onDirtyStateChange={handleDirtyStateChange}
             onNavigateToDocument={handleNavigateToDocument}
             focusTitleOnMount={focusTitleOnMount}

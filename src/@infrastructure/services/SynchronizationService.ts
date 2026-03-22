@@ -21,6 +21,8 @@ import { SupabaseMetafieldDefinitionRepository } from "../db/SupabaseMetafieldDe
 import { FileSystemMetafieldDefinitionRepository } from "../db/filesystem/FileSystemMetafieldDefinitionRepository";
 import { SupabaseMetafieldAssignmentRepository } from "../db/SupabaseMetafieldAssignmentRepository";
 import { FileSystemMetafieldAssignmentRepository } from "../db/filesystem/FileSystemMetafieldAssignmentRepository";
+import { SupabaseEditorTemplateRepository } from "../db/SupabaseEditorTemplateRepository";
+import { FileSystemEditorTemplateRepository } from "../db/filesystem/FileSystemEditorTemplateRepository";
 import { SupabaseService } from "../db/SupabaseService";
 import { fileSystemService } from "../storage/FileSystemService";
 import * as path from "path";
@@ -111,6 +113,8 @@ export class SynchronizationService extends EventEmitter {
         private fsMetafieldDefinitionRepo: FileSystemMetafieldDefinitionRepository,
         private supabaseMetafieldAssignmentRepo: SupabaseMetafieldAssignmentRepository,
         private fsMetafieldAssignmentRepo: FileSystemMetafieldAssignmentRepository,
+        private supabaseEditorTemplateRepo: SupabaseEditorTemplateRepository,
+        private fsEditorTemplateRepo: FileSystemEditorTemplateRepository,
         private supabaseDeletionLogRepo: SupabaseDeletionLogRepository,
     ) {
         super();
@@ -313,6 +317,16 @@ export class SynchronizationService extends EventEmitter {
             )
             .on(
                 "postgres_changes",
+                {
+                    event: "*",
+                    schema: "public",
+                    table: "editor_templates",
+                },
+                (payload) =>
+                    this.handleRealtimeChange("editorTemplate", payload),
+            )
+            .on(
+                "postgres_changes",
                 { event: "*", schema: "public", table: "assets" },
                 (payload) => this.handleAssetRealtimeChange(payload),
             )
@@ -445,6 +459,8 @@ export class SynchronizationService extends EventEmitter {
                 return "organizations";
             case "scrapNote":
                 return "scrap_notes";
+            case "editorTemplate":
+                return "editor_templates";
             case "metafieldDefinition":
                 return "metafield_definitions";
             case "metafieldAssignment":
@@ -495,6 +511,12 @@ export class SynchronizationService extends EventEmitter {
     ): Promise<string | null> {
         try {
             switch (entityType) {
+                case "editorTemplate": {
+                    const template = await this.fsEditorTemplateRepo.findById(
+                        entityId,
+                    );
+                    return template?.projectId ?? null;
+                }
                 case "metafieldDefinition": {
                     const definition =
                         await this.fsMetafieldDefinitionRepo.findById(entityId);
@@ -1144,6 +1166,12 @@ export class SynchronizationService extends EventEmitter {
                     const scrapNote = await this.fsScrapNoteRepo.findById(id);
                     return scrapNote?.title ?? null;
                 }
+                case "editorTemplate": {
+                    const template = await this.fsEditorTemplateRepo.findById(
+                        id,
+                    );
+                    return template ? `${template.editorType} template` : id;
+                }
                 case "metafieldDefinition": {
                     const definition =
                         await this.fsMetafieldDefinitionRepo.findById(id);
@@ -1215,6 +1243,16 @@ export class SynchronizationService extends EventEmitter {
                 if (scrapNote) {
                     await this.fsScrapNoteRepo.update(scrapNote);
                     return scrapNote;
+                }
+                return null;
+            }
+            case "editorTemplate": {
+                const template = await this.supabaseEditorTemplateRepo.findById(
+                    id,
+                );
+                if (template) {
+                    await this.fsEditorTemplateRepo.update(template);
+                    return template;
                 }
                 return null;
             }
@@ -1306,6 +1344,13 @@ export class SynchronizationService extends EventEmitter {
             case "scrapNote": {
                 const scrapNote = await this.supabaseScrapNoteRepo.findById(id);
                 if (scrapNote) await this.fsScrapNoteRepo.update(scrapNote);
+                break;
+            }
+            case "editorTemplate": {
+                const template = await this.supabaseEditorTemplateRepo.findById(
+                    id,
+                );
+                if (template) await this.fsEditorTemplateRepo.update(template);
                 break;
             }
             case "metafieldDefinition": {
@@ -1475,6 +1520,18 @@ export class SynchronizationService extends EventEmitter {
                     }
                     await this.supabaseScrapNoteRepo.update(scrapNote);
                     return scrapNote;
+                }
+                return null;
+            }
+            case "editorTemplate": {
+                const template = await this.fsEditorTemplateRepo.findById(id);
+                if (template) {
+                    if (forceUpdateTimestamp) {
+                        template.updatedAt = new Date();
+                        await this.fsEditorTemplateRepo.update(template);
+                    }
+                    await this.supabaseEditorTemplateRepo.update(template);
+                    return template;
                 }
                 return null;
             }
@@ -1777,8 +1834,70 @@ export class SynchronizationService extends EventEmitter {
         await this.syncLocations(projectId, mode);
         await this.syncOrganizations(projectId, mode);
         await this.syncScrapNotes(projectId, mode);
+        await this.syncEditorTemplates(projectId, mode);
         await this.syncMetafields(projectId, mode);
         await this.syncAssets(projectId, mode);
+    }
+
+    private async syncEditorTemplates(
+        projectId: string,
+        mode: "normal" | "reconnect",
+    ) {
+        const shouldNotifyConflicts = this.shouldNotifyConflictsForMode(mode);
+        const remote = await this.supabaseEditorTemplateRepo.findByProjectId(
+            projectId,
+        );
+        const local = await this.fsEditorTemplateRepo.findByProjectId(projectId);
+        const localMap = new Map(local.map((item) => [item.id, item]));
+        const remoteMap = new Map(remote.map((item) => [item.id, item]));
+
+        for (const remoteItem of remote) {
+            if (
+                this.currentUserId &&
+                (await deletionLog.isDeleted(remoteItem.id, this.currentUserId))
+            ) {
+                continue;
+            }
+
+            const localItem = localMap.get(remoteItem.id);
+            if (localItem) {
+                if (
+                    remoteItem.updatedAt.getTime() >
+                    localItem.updatedAt.getTime()
+                ) {
+                    await this.fsEditorTemplateRepo.update(remoteItem);
+                } else if (
+                    localItem.updatedAt.getTime() >
+                    remoteItem.updatedAt.getTime()
+                ) {
+                    if (shouldNotifyConflicts) {
+                        this.syncStateGateway?.notifyConflict({
+                            entityType: "editorTemplate",
+                            entityId: remoteItem.id,
+                            projectId,
+                            entityName: `${remoteItem.editorType} template`,
+                            localUpdatedAt: localItem.updatedAt.toISOString(),
+                            remoteUpdatedAt: remoteItem.updatedAt.toISOString(),
+                        });
+                    }
+                }
+            } else {
+                await this.fsEditorTemplateRepo.create(remoteItem);
+            }
+        }
+
+        for (const localItem of local) {
+            if (!remoteMap.has(localItem.id)) {
+                try {
+                    await this.supabaseEditorTemplateRepo.create(localItem);
+                } catch (error) {
+                    logger.warn(
+                        `Skipped editor template sync for ${localItem.id}`,
+                        error,
+                    );
+                }
+            }
+        }
     }
 
     private async syncMetafields(
@@ -2514,6 +2633,9 @@ export class SynchronizationService extends EventEmitter {
                 case "scrapNote":
                     entity = await this.supabaseScrapNoteRepo.findById(id);
                     break;
+                case "editorTemplate":
+                    entity = await this.supabaseEditorTemplateRepo.findById(id);
+                    break;
                 case "metafieldDefinition":
                     entity =
                         await this.supabaseMetafieldDefinitionRepo.findById(id);
@@ -2562,6 +2684,9 @@ export class SynchronizationService extends EventEmitter {
                 case "scrapNote":
                     entity = await this.fsScrapNoteRepo.findById(id);
                     break;
+                case "editorTemplate":
+                    entity = await this.fsEditorTemplateRepo.findById(id);
+                    break;
                 case "metafieldDefinition":
                     entity = await this.fsMetafieldDefinitionRepo.findById(id);
                     break;
@@ -2605,6 +2730,9 @@ export class SynchronizationService extends EventEmitter {
             case "scrapNote":
                 await this.supabaseScrapNoteRepo.delete(id);
                 break;
+            case "editorTemplate":
+                await this.supabaseEditorTemplateRepo.delete(id);
+                break;
             case "metafieldDefinition":
                 await this.supabaseMetafieldDefinitionRepo.delete(id);
                 break;
@@ -2645,6 +2773,9 @@ export class SynchronizationService extends EventEmitter {
                 break;
             case "scrapNote":
                 await this.fsScrapNoteRepo.delete(id);
+                break;
+            case "editorTemplate":
+                await this.fsEditorTemplateRepo.delete(id);
                 break;
             case "metafieldDefinition":
                 await this.fsMetafieldDefinitionRepo.delete(id);
@@ -3066,12 +3197,52 @@ export class SynchronizationService extends EventEmitter {
         });
     }
 
+    private rehydratePendingPayload(payload: unknown): unknown {
+        return this.rehydrateDateFields(payload);
+    }
+
+    private rehydrateDateFields(value: unknown, key?: string): unknown {
+        if (Array.isArray(value)) {
+            return value.map((entry) => this.rehydrateDateFields(entry));
+        }
+
+        if (value && typeof value === "object") {
+            const obj = value as Record<string, unknown>;
+            const next: Record<string, unknown> = {};
+            for (const [entryKey, entryValue] of Object.entries(obj)) {
+                next[entryKey] = this.rehydrateDateFields(entryValue, entryKey);
+            }
+            return next;
+        }
+
+        if (
+            typeof value === "string" &&
+            this.shouldRehydrateAsDateField(key)
+        ) {
+            const parsed = new Date(value);
+            if (!Number.isNaN(parsed.getTime())) {
+                return parsed;
+            }
+        }
+
+        return value;
+    }
+
+    private shouldRehydrateAsDateField(key?: string): boolean {
+        if (!key) {
+            return false;
+        }
+
+        return key === "createdAt" || key === "updatedAt" || key === "deletedAt";
+    }
+
     private async replayPendingUpdate(entry: PendingUpdate): Promise<void> {
-        const payload = entry.payload as Record<string, unknown>;
+        const payload = this.rehydratePendingPayload(entry.payload);
+        const payloadRecord = payload as Record<string, unknown>;
 
         switch (entry.entityType) {
             case "project": {
-                const project = entry.payload as Parameters<
+                const project = payload as Parameters<
                     SupabaseProjectRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3085,7 +3256,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "chapter": {
-                const chapter = entry.payload as Parameters<
+                const chapter = payload as Parameters<
                     SupabaseChapterRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3098,16 +3269,18 @@ export class SynchronizationService extends EventEmitter {
                 } else if (entry.operation === "updateContent") {
                     await this.supabaseChapterRepo.updateContent(
                         entry.entityId,
-                        String(payload.content ?? ""),
-                        payload.updatedAt
-                            ? new Date(String(payload.updatedAt))
+                        String(payloadRecord.content ?? ""),
+                        payloadRecord.updatedAt instanceof Date
+                            ? payloadRecord.updatedAt
+                            : payloadRecord.updatedAt
+                              ? new Date(String(payloadRecord.updatedAt))
                             : undefined,
                     );
                 }
                 return;
             }
             case "character": {
-                const character = entry.payload as Parameters<
+                const character = payload as Parameters<
                     SupabaseCharacterRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3121,7 +3294,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "location": {
-                const location = entry.payload as Parameters<
+                const location = payload as Parameters<
                     SupabaseLocationRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3135,7 +3308,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "organization": {
-                const organization = entry.payload as Parameters<
+                const organization = payload as Parameters<
                     SupabaseOrganizationRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3149,7 +3322,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "scrapNote": {
-                const scrapNote = entry.payload as Parameters<
+                const scrapNote = payload as Parameters<
                     SupabaseScrapNoteRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3162,16 +3335,34 @@ export class SynchronizationService extends EventEmitter {
                 } else if (entry.operation === "updateContent") {
                     await this.supabaseScrapNoteRepo.updateContent(
                         entry.entityId,
-                        String(payload.content ?? ""),
-                        payload.updatedAt
-                            ? new Date(String(payload.updatedAt))
+                        String(payloadRecord.content ?? ""),
+                        payloadRecord.updatedAt instanceof Date
+                            ? payloadRecord.updatedAt
+                            : payloadRecord.updatedAt
+                              ? new Date(String(payloadRecord.updatedAt))
                             : undefined,
                     );
                 }
                 return;
             }
+            case "editorTemplate": {
+                const template = payload as Parameters<
+                    SupabaseEditorTemplateRepository["update"]
+                >[0];
+
+                if (entry.operation === "create") {
+                    await this.supabaseEditorTemplateRepo.create(template);
+                } else if (entry.operation === "update") {
+                    await this.supabaseEditorTemplateRepo.update(template);
+                } else if (entry.operation === "delete") {
+                    await this.supabaseEditorTemplateRepo.delete(
+                        String(payloadRecord.id ?? entry.entityId),
+                    );
+                }
+                return;
+            }
             case "metafieldDefinition": {
-                const definition = entry.payload as Parameters<
+                const definition = payload as Parameters<
                     SupabaseMetafieldDefinitionRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3186,7 +3377,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "metafieldAssignment": {
-                const assignment = entry.payload as Parameters<
+                const assignment = payload as Parameters<
                     SupabaseMetafieldAssignmentRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
@@ -3201,7 +3392,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "image": {
-                const image = entry.payload as Parameters<
+                const image = payload as Parameters<
                     SupabaseAssetRepository["saveImage"]
                 >[1];
                 if (entry.operation === "save") {
@@ -3213,7 +3404,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "bgm": {
-                const bgm = entry.payload as Parameters<
+                const bgm = payload as Parameters<
                     SupabaseAssetRepository["saveBGM"]
                 >[1];
                 if (entry.operation === "save") {
@@ -3222,7 +3413,7 @@ export class SynchronizationService extends EventEmitter {
                 return;
             }
             case "playlist": {
-                const playlist = entry.payload as Parameters<
+                const playlist = payload as Parameters<
                     SupabaseAssetRepository["savePlaylist"]
                 >[1];
                 if (entry.operation === "save") {

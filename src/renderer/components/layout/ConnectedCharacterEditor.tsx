@@ -30,6 +30,7 @@ export const ConnectedCharacterEditor: React.FC<
         assets,
         metafieldDefinitions,
         metafieldAssignments,
+        editorTemplates,
         activeDocument,
         updateCharacterLocally,
         addOrUpdateMetafieldDefinitionLocally,
@@ -39,6 +40,7 @@ export const ConnectedCharacterEditor: React.FC<
         removeMetafieldDefinitionLocally,
         saveCharacterInfo,
         createOrReuseMetafieldDefinition,
+        saveMetafieldSelectOptions,
         assignMetafieldToEntity,
         saveMetafieldValue,
         removeMetafieldFromEntity,
@@ -132,6 +134,14 @@ export const ConnectedCharacterEditor: React.FC<
                     assignment.entityId === characterId,
             ),
         [metafieldAssignments, characterId],
+    );
+
+    const characterEditorTemplate = React.useMemo(
+        () =>
+            editorTemplates.find(
+                (template) => template.editorType === "character",
+            ) ?? null,
+        [editorTemplates],
     );
 
     const definitionById = React.useMemo(
@@ -711,6 +721,38 @@ export const ConnectedCharacterEditor: React.FC<
         [assignMetafieldToEntity, addOrUpdateMetafieldAssignmentLocally],
     );
 
+    const handleSaveMetafieldSelectOptions = React.useCallback(
+        async (request: Parameters<typeof saveMetafieldSelectOptions>[0]) => {
+            const response = await saveMetafieldSelectOptions(request);
+            const definition = metafieldDefinitions.find(
+                (item) => item.id === request.definitionId,
+            );
+
+            if (definition) {
+                addOrUpdateMetafieldDefinitionLocally({
+                    ...definition,
+                    selectOptions: response.options.map((option, index) => ({
+                        id: option.id,
+                        label: option.label,
+                        labelNormalized: option.label.trim().toLowerCase(),
+                        orderIndex: index,
+                        ...(option.icon ? { icon: option.icon } : {}),
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    })),
+                    updatedAt: new Date(),
+                });
+            }
+
+            return response;
+        },
+        [
+            addOrUpdateMetafieldDefinitionLocally,
+            metafieldDefinitions,
+            saveMetafieldSelectOptions,
+        ],
+    );
+
     const handleSaveMetafieldValue = React.useCallback(
         async (request: Parameters<typeof saveMetafieldValue>[0]) => {
             const original = characterMetafieldAssignments.find(
@@ -837,6 +879,7 @@ export const ConnectedCharacterEditor: React.FC<
             onCreateOrReuseMetafieldDefinition={
                 handleCreateOrReuseMetafieldDefinition
             }
+            onSaveMetafieldSelectOptions={handleSaveMetafieldSelectOptions}
             onAssignMetafieldToEntity={handleAssignMetafieldToEntity}
             onSaveMetafieldValue={handleSaveMetafieldValue}
             onRemoveMetafieldFromEntity={handleRemoveMetafieldFromEntity}
@@ -844,6 +887,7 @@ export const ConnectedCharacterEditor: React.FC<
                 handleDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={handleImportMetafieldImage}
+            editorTemplate={characterEditorTemplate}
             onActionLog={handleActionLog}
             onSectionLayoutSync={handleSectionLayoutSync}
             initialSectionPlacement={initialSectionPlacement}

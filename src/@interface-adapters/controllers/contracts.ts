@@ -67,6 +67,8 @@ import type { ListProjectMetafieldsController } from "./metafield/ListProjectMet
 import type { CreateOrReuseMetafieldDefinitionController } from "./metafield/CreateOrReuseMetafieldDefinitionController";
 import type { AssignMetafieldToEntityController } from "./metafield/AssignMetafieldToEntityController";
 import type { SaveMetafieldValueController } from "./metafield/SaveMetafieldValueController";
+import type { SaveMetafieldSelectOptionsController } from "./metafield/SaveMetafieldSelectOptionsController";
+import type { SaveEditorTemplateController } from "./metafield/SaveEditorTemplateController";
 import type { RemoveMetafieldFromEntityController } from "./metafield/RemoveMetafieldFromEntityController";
 import type { DeleteMetafieldDefinitionGlobalController } from "./metafield/DeleteMetafieldDefinitionGlobalController";
 import type { SubmitBugReportController } from "./support/SubmitBugReportController";
@@ -149,6 +151,8 @@ export interface ControllerInstanceMap {
         createOrReuseMetafieldDefinition: CreateOrReuseMetafieldDefinitionController;
         assignMetafieldToEntity: AssignMetafieldToEntityController;
         saveMetafieldValue: SaveMetafieldValueController;
+        saveMetafieldSelectOptions: SaveMetafieldSelectOptionsController;
+        saveEditorTemplate: SaveEditorTemplateController;
         removeMetafieldFromEntity: RemoveMetafieldFromEntityController;
         deleteMetafieldDefinitionGlobal: DeleteMetafieldDefinitionGlobalController;
     };
@@ -265,6 +269,8 @@ export const controllerChannels: ControllerChannelMap = {
             "metafield:createOrReuseMetafieldDefinition",
         assignMetafieldToEntity: "metafield:assignMetafieldToEntity",
         saveMetafieldValue: "metafield:saveMetafieldValue",
+        saveMetafieldSelectOptions: "metafield:saveMetafieldSelectOptions",
+        saveEditorTemplate: "metafield:saveEditorTemplate",
         removeMetafieldFromEntity: "metafield:removeMetafieldFromEntity",
         deleteMetafieldDefinitionGlobal:
             "metafield:deleteMetafieldDefinitionGlobal",

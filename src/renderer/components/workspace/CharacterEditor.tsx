@@ -2,6 +2,7 @@ import React from "react";
 
 import type {
     WorkspaceCharacter,
+    WorkspaceEditorTemplate,
     WorkspaceLocation,
     WorkspaceMetafieldAssignment,
     WorkspaceMetafieldDefinition,
@@ -60,7 +61,21 @@ export type CharacterEditorProps = {
             | "image"
             | "image[]";
         targetEntityKind?: "character" | "location" | "organization";
+        selectOptions?: Array<
+            | string
+            | {
+                  label: string;
+                  icon?: string | null;
+              }
+        >;
     }) => Promise<{ definition: WorkspaceMetafieldDefinition }>;
+    onSaveMetafieldSelectOptions: (request: {
+        definitionId: string;
+        options: Array<{ id?: string; label: string; icon?: string | null }>;
+    }) => Promise<{
+        definitionId: string;
+        options: Array<{ id: string; label: string; icon?: string }>;
+    }>;
     onAssignMetafieldToEntity: (request: {
         definitionId: string;
         entityType: "character" | "location" | "organization";
@@ -80,6 +95,7 @@ export type CharacterEditorProps = {
         definitionId: string;
     }) => Promise<void>;
     onImportMetafieldImage: (file: File) => Promise<string>;
+    editorTemplate?: WorkspaceEditorTemplate | null;
     onActionLog?: (entry: CharacterEditorActionLog) => Promise<void>;
     onSectionLayoutSync?: (layout: CharacterSectionPlacement) => Promise<void>;
     initialSectionPlacement?: CharacterSectionPlacement;
@@ -89,9 +105,8 @@ export type CharacterEditorProps = {
 };
 
 const DEFAULT_CARDS: RichEditorCardConfig[] = [
-    { title: "Current Location", type: "currentLocation" },
-    { title: "Background Location", type: "backgroundLocation" },
-    { title: "Organization", type: "organization" },
+    { title: "Related Locations", type: "relatedLocations" },
+    { title: "Related Organizations", type: "relatedOrganizations" },
 ];
 
 const defaultValues = (
@@ -124,11 +139,13 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
     onGeneratePlaylist,
     onImportPlaylist,
     onCreateOrReuseMetafieldDefinition,
+    onSaveMetafieldSelectOptions,
     onAssignMetafieldToEntity,
     onSaveMetafieldValue,
     onRemoveMetafieldFromEntity,
     onDeleteMetafieldDefinitionGlobal,
     onImportMetafieldImage,
+    editorTemplate,
     onActionLog,
     onSectionLayoutSync,
     initialSectionPlacement,
@@ -170,39 +187,38 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
             card: RichEditorCardConfig,
             context: RichEditorRenderContext<CharacterEditorValues>,
         ) => {
-            if (card.type === "currentLocation") {
+            if (card.type === "relatedLocations") {
                 return (
                     <div className="entity-field">
-                        <SearchableSelect
-                            value={context.values.currentLocationId}
-                            options={locationOptions}
-                            onChange={(value) =>
-                                context.setField("currentLocationId", value)
-                            }
-                            placeholder="Select current location"
-                            allowClear
-                        />
+                        <div className="entity-row">
+                            <div className="entity-field">
+                                <SearchableSelect
+                                    value={context.values.currentLocationId}
+                                    options={locationOptions}
+                                    onChange={(value) =>
+                                        context.setField("currentLocationId", value)
+                                    }
+                                    placeholder="Select current location"
+                                    allowClear
+                                />
+                            </div>
+                            <div className="entity-field">
+                                <SearchableSelect
+                                    value={context.values.backgroundLocationId}
+                                    options={locationOptions}
+                                    onChange={(value) =>
+                                        context.setField("backgroundLocationId", value)
+                                    }
+                                    placeholder="Select background location"
+                                    allowClear
+                                />
+                            </div>
+                        </div>
                     </div>
                 );
             }
 
-            if (card.type === "backgroundLocation") {
-                return (
-                    <div className="entity-field">
-                        <SearchableSelect
-                            value={context.values.backgroundLocationId}
-                            options={locationOptions}
-                            onChange={(value) =>
-                                context.setField("backgroundLocationId", value)
-                            }
-                            placeholder="Select background location"
-                            allowClear
-                        />
-                    </div>
-                );
-            }
-
-            if (card.type === "organization") {
+            if (card.type === "relatedOrganizations") {
                 return (
                     <div className="entity-field">
                         <SearchableSelect
@@ -264,6 +280,7 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
             onCreateOrReuseMetafieldDefinition={
                 onCreateOrReuseMetafieldDefinition
             }
+            onSaveMetafieldSelectOptions={onSaveMetafieldSelectOptions}
             onAssignMetafieldToEntity={onAssignMetafieldToEntity}
             onSaveMetafieldValue={onSaveMetafieldValue}
             onRemoveMetafieldFromEntity={onRemoveMetafieldFromEntity}
@@ -271,6 +288,8 @@ export const CharacterEditor: React.FC<CharacterEditorProps> = ({
                 onDeleteMetafieldDefinitionGlobal
             }
             onImportMetafieldImage={onImportMetafieldImage}
+            editorTemplate={editorTemplate}
+            defaultRightCardTypes={["relatedLocations", "relatedOrganizations"]}
             onActionLog={onActionLog}
             onSectionLayoutSync={onSectionLayoutSync}
             initialSectionPlacement={initialSectionPlacement}

@@ -1,32 +1,11 @@
 import { Character } from "../../../domain/entities/story/world/Character";
-import {
-    MetafieldDefinition,
-    MetafieldValueType,
-} from "../../../domain/entities/story/world/MetafieldDefinition";
 import { MetafieldAssignment } from "../../../domain/entities/story/world/MetafieldAssignment";
 import { ICharacterRepository } from "../../../domain/repositories/ICharacterRepository";
+import { IEditorTemplateRepository } from "../../../domain/repositories/IEditorTemplateRepository";
 import { IMetafieldAssignmentRepository } from "../../../domain/repositories/IMetafieldAssignmentRepository";
 import { IMetafieldDefinitionRepository } from "../../../domain/repositories/IMetafieldDefinitionRepository";
 import { IProjectRepository } from "../../../domain/repositories/IProjectRepository";
 import { generateId } from "../../utils/id";
-import { normalizeMetafieldName } from "../../utils/normalizeMetafieldName";
-
-type CharacterMetafieldSeed = {
-    name: string;
-    valueType: MetafieldValueType;
-    initialValue: unknown;
-};
-
-const CHARACTER_DEFAULT_METAFIELDS: CharacterMetafieldSeed[] = [
-    { name: "Race", valueType: "string", initialValue: "" },
-    { name: "Age", valueType: "string", initialValue: "" },
-    { name: "Personality", valueType: "string[]", initialValue: [] },
-    {
-        name: "Powers & Abilities",
-        valueType: "string[]",
-        initialValue: [],
-    },
-];
 
 export interface CreateCharacterRequest {
     projectId: string;
@@ -42,6 +21,7 @@ export class CreateCharacter {
     constructor(
         private readonly characterRepository: ICharacterRepository,
         private readonly projectRepository: IProjectRepository,
+        private readonly editorTemplateRepository: IEditorTemplateRepository,
         private readonly metafieldDefinitionRepository: IMetafieldDefinitionRepository,
         private readonly metafieldAssignmentRepository: IMetafieldAssignmentRepository,
     ) {}
@@ -78,7 +58,22 @@ export class CreateCharacter {
 
         await this.characterRepository.create(projectId, character);
 
-        await this.seedCharacterMetafields(projectId, id, now);
+        const editorTemplate =
+            await this.editorTemplateRepository.findByProjectAndEditorType(
+                projectId,
+                "character",
+            );
+
+        if (!editorTemplate) {
+            throw new Error("Character template is missing for this project.");
+        }
+
+        await this.seedCharacterMetafieldsFromTemplate(
+            projectId,
+            id,
+            now,
+            editorTemplate.fields,
+        );
 
         if (!project.characterIds.includes(id)) {
             project.characterIds.push(id);
@@ -89,17 +84,30 @@ export class CreateCharacter {
         return { character };
     }
 
-    private async seedCharacterMetafields(
+    private async seedCharacterMetafieldsFromTemplate(
         projectId: string,
         characterId: string,
         now: Date,
+        fields: Array<{
+            definitionId: string;
+            kind: "field" | "paragraph" | "select";
+            orderIndex: number;
+        }>,
     ): Promise<void> {
-        for (const [index, seed] of CHARACTER_DEFAULT_METAFIELDS.entries()) {
-            const definition = await this.createDefinition(
-                projectId,
-                seed,
-                now,
-            );
+        const orderedFields = [...fields].sort(
+            (a, b) => a.orderIndex - b.orderIndex,
+        );
+
+        let orderIndex = 0;
+        for (const field of orderedFields) {
+            const definition =
+                await this.metafieldDefinitionRepository.findById(
+                    field.definitionId,
+                );
+
+            if (!definition || definition.projectId !== projectId) {
+                continue;
+            }
 
             const assignment = new MetafieldAssignment(
                 generateId(),
@@ -107,56 +115,17 @@ export class CreateCharacter {
                 definition.id,
                 "character",
                 characterId,
-                this.cloneInitialValue(seed.initialValue),
-                index,
+                field.kind === "select"
+                    ? { kind: field.kind, value: [] as string[] }
+                    : { kind: field.kind, value: "" },
+                orderIndex,
                 now,
                 now,
             );
 
             await this.metafieldAssignmentRepository.create(assignment);
+            orderIndex += 1;
         }
     }
 
-    private async createDefinition(
-        projectId: string,
-        seed: CharacterMetafieldSeed,
-        now: Date,
-    ): Promise<MetafieldDefinition> {
-        const normalized = normalizeMetafieldName(seed.name);
-        const existing =
-            await this.metafieldDefinitionRepository.findByProjectAndNameNormalized(
-                projectId,
-                normalized,
-            );
-        if (existing) {
-            return existing;
-        }
-
-        const definition = new MetafieldDefinition(
-            generateId(),
-            projectId,
-            seed.name,
-            normalized,
-            "character",
-            seed.valueType,
-            null,
-            now,
-            now,
-        );
-
-        await this.metafieldDefinitionRepository.create(definition);
-        return definition;
-    }
-
-    private cloneInitialValue(value: unknown): unknown {
-        if (Array.isArray(value)) {
-            return [...value];
-        }
-
-        if (value && typeof value === "object") {
-            return { ...(value as Record<string, unknown>) };
-        }
-
-        return value;
-    }
 }
