@@ -219,6 +219,12 @@ Process:
 3. Call 'search_youtube' with these queries.
 4. Review the results. Filter out reviews, reactions, or irrelevant videos. Select the best 10-15 tracks that create a cohesive listening experience.
 5. Call 'finalize_playlist' with the selected tracks.
+
+Safety requirements:
+- Keep all search queries and selected tracks SFW and appropriate for a broad audience.
+- Avoid sexual, explicit, erotic, pornographic, fetish, or suggestive themes.
+- Avoid hateful, extremist, or graphically violent content.
+- If the subject implies NSFW content, reinterpret it into neutral cinematic/instrumental ambience.
 `,
                         },
                     ],

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { createRoot } from "react-dom/client";
+import ReactMarkdown from "react-markdown";
 import strokeLargeLogo from "../../../../assets/stroke-large.png";
 import inkyLargeIcon from "../../../../assets/icons/inky-large.png";
 import genAiIcon from "../../../../assets/icons/gen-ai.png";
@@ -30,6 +31,18 @@ interface SetupConfig {
         imageGeneration: boolean;
         audioGeneration: boolean;
     };
+    theme: {
+        colorScheme: "dark" | "light";
+        accentColor: string;
+    };
+    legalAccepted: boolean;
+    legalAcceptedAt: string | null;
+    legalVersion: string;
+}
+
+interface LegalPoliciesResponse {
+    markdown: string;
+    legalVersion: string;
 }
 
 type SetupApi = {
@@ -45,6 +58,7 @@ type SetupApi = {
     cancelDownloads: (
         types: Array<"comfyui" | "image" | "audio">,
     ) => Promise<void>;
+    getLegalPolicies: () => Promise<LegalPoliciesResponse>;
     completeSetup: (config: SetupConfig) => Promise<void>;
     closeWindow: () => void;
 };
@@ -64,6 +78,7 @@ const setupEvents = (): SetupEvents =>
 type SetupStep =
     | "welcome"
     | "features"
+    | "legal"
     | "downloads"
     | "finalizing"
     | "complete";
@@ -99,7 +114,7 @@ const WelcomeStep: React.FC<{ onNext: () => void }> = ({ onNext }) => (
         </div>
         <h1 style={styles.title}>Welcome to Inkline</h1>
         <p style={styles.subtitle}>
-            Your AI-powered storytelling companion. <br></br>Let's set up your
+            Your modern storytelling companion. <br></br>Let's set up your
             experience.
         </p>
         <button style={styles.primaryButton} onClick={onNext}>
@@ -135,10 +150,10 @@ const FeaturesStep: React.FC<{
 
     return (
         <div style={styles.stepContainer}>
-            <h2 style={styles.stepTitle}>Enable Features</h2>
+            <h2 style={styles.stepTitle}>Opt-In AI Features</h2>
             <p style={styles.stepDescription}>
-                Choose which AI features you'd like to use. You can change these
-                later in Settings.
+                Choose which AI features you'd like to use, or skip altogether.
+                You can change these later in Settings.
             </p>
 
             {!isWindows && (
@@ -358,6 +373,149 @@ const FeaturesStep: React.FC<{
                     Back
                 </button>
                 <button style={styles.primaryButton} onClick={onNext}>
+                    Continue
+                </button>
+            </div>
+        </div>
+    );
+};
+
+const LegalStep: React.FC<{
+    policies: LegalPoliciesResponse | null;
+    isLoading: boolean;
+    error: string | null;
+    hasScrolledToEnd: boolean;
+    hasAccepted: boolean;
+    onScrolledToEnd: () => void;
+    onAcceptedChange: (accepted: boolean) => void;
+    onNext: () => void;
+    onBack: () => void;
+}> = ({
+    policies,
+    isLoading,
+    error,
+    hasScrolledToEnd,
+    hasAccepted,
+    onScrolledToEnd,
+    onAcceptedChange,
+    onNext,
+    onBack,
+}) => {
+    const canContinue =
+        !isLoading &&
+        !error &&
+        Boolean(policies) &&
+        hasScrolledToEnd &&
+        hasAccepted;
+
+    const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
+        if (hasScrolledToEnd) {
+            return;
+        }
+
+        const element = event.currentTarget;
+        const scrollOffset =
+            element.scrollHeight - element.scrollTop - element.clientHeight;
+        if (scrollOffset <= 8) {
+            onScrolledToEnd();
+        }
+    };
+
+    return (
+        <div style={styles.stepContainer}>
+            <h2 style={styles.stepTitle}>Terms and Privacy</h2>
+            <p style={styles.stepDescription}>
+                Review and accept the Terms of Service and Privacy Policy to
+                continue setup.
+            </p>
+
+            {isLoading && (
+                <p style={styles.downloadNote}>Loading legal policies...</p>
+            )}
+
+            {error && <div style={styles.errorNote}>{error}</div>}
+
+            {policies && !error && (
+                <>
+                    <div style={styles.summaryBox}>
+                        <div
+                            style={styles.legalScrollBox}
+                            onScroll={handleScroll}
+                        >
+                            <div style={styles.legalMarkdown}>
+                                <ReactMarkdown
+                                    components={{
+                                        h1: ({ children }) => (
+                                            <h3
+                                                style={
+                                                    styles.legalHeadingPrimary
+                                                }
+                                            >
+                                                {children}
+                                            </h3>
+                                        ),
+                                        h2: ({ children }) => (
+                                            <h4
+                                                style={
+                                                    styles.legalHeadingSecondary
+                                                }
+                                            >
+                                                {children}
+                                            </h4>
+                                        ),
+                                        p: ({ children }) => (
+                                            <p style={styles.legalParagraph}>
+                                                {children}
+                                            </p>
+                                        ),
+                                        li: ({ children }) => (
+                                            <li style={styles.legalListItem}>
+                                                {children}
+                                            </li>
+                                        ),
+                                        hr: () => (
+                                            <hr style={styles.legalDivider} />
+                                        ),
+                                    }}
+                                >
+                                    {policies.markdown}
+                                </ReactMarkdown>
+                            </div>
+                        </div>
+                    </div>
+                    {!hasScrolledToEnd && (
+                        <p style={styles.featureNote}>
+                            Scroll to the end of the legal text to enable
+                            acceptance.
+                        </p>
+                    )}
+                    <label style={styles.legalCheckboxRow}>
+                        <input
+                            type="checkbox"
+                            checked={hasAccepted}
+                            disabled={!hasScrolledToEnd}
+                            onChange={(event) =>
+                                onAcceptedChange(event.target.checked)
+                            }
+                            style={styles.legalCheckboxInput}
+                        />
+                        I agree to the Terms of Service and Privacy Policy.
+                    </label>
+                </>
+            )}
+
+            <div style={styles.buttonRow}>
+                <button style={styles.secondaryButton} onClick={onBack}>
+                    Back
+                </button>
+                <button
+                    style={{
+                        ...styles.primaryButton,
+                        ...(!canContinue ? styles.primaryButtonDisabled : {}),
+                    }}
+                    onClick={onNext}
+                    disabled={!canContinue}
+                >
                     Continue
                 </button>
             </div>
@@ -981,10 +1139,9 @@ const FinalizingStep: React.FC<{
 };
 
 const CompleteStep: React.FC<{
-    config: SetupConfig;
     onComplete: () => void;
     onBack: () => void;
-}> = ({ config, onComplete, onBack }) => (
+}> = ({ onComplete, onBack }) => (
     <div style={styles.stepContainer}>
         <div style={styles.successIcon}>
             <img
@@ -997,109 +1154,6 @@ const CompleteStep: React.FC<{
         <p style={styles.stepDescription}>
             Inkline is ready to help you tell your stories.
         </p>
-
-        <div style={styles.summaryBox}>
-            <h4 style={styles.summaryTitle}>Your Setup Summary</h4>
-            <ul style={styles.summaryList}>
-                <li>
-                    AI Chat & Editor:{" "}
-                    {config.features.aiChat ? (
-                        <>
-                            <CheckCircleIcon
-                                style={{
-                                    fontSize: 13,
-                                    verticalAlign: "middle",
-                                    marginRight: 4,
-                                    color: "#2ef6ad",
-                                }}
-                            />
-                            Enabled
-                        </>
-                    ) : (
-                        <>
-                            <CancelIcon
-                                style={{
-                                    fontSize: 13,
-                                    verticalAlign: "middle",
-                                    marginRight: 4,
-                                    color: "#e74c3c",
-                                }}
-                            />
-                            Disabled
-                        </>
-                    )}
-                </li>
-                <li>
-                    Image Generation:{" "}
-                    {config.features.imageGeneration ? (
-                        <>
-                            <CheckCircleIcon
-                                style={{
-                                    fontSize: 13,
-                                    verticalAlign: "middle",
-                                    marginRight: 4,
-                                    color: "#2ef6ad",
-                                }}
-                            />
-                            Enabled
-                        </>
-                    ) : (
-                        <>
-                            <CancelIcon
-                                style={{
-                                    fontSize: 13,
-                                    verticalAlign: "middle",
-                                    marginRight: 4,
-                                    color: "#e74c3c",
-                                }}
-                            />
-                            Disabled
-                        </>
-                    )}
-                </li>
-                <li>
-                    Audio Generation:{" "}
-                    {config.features.audioGeneration ? (
-                        <>
-                            <CheckCircleIcon
-                                style={{
-                                    fontSize: 13,
-                                    verticalAlign: "middle",
-                                    marginRight: 4,
-                                    color: "#2ef6ad",
-                                }}
-                            />
-                            Enabled
-                        </>
-                    ) : (
-                        <>
-                            <CancelIcon
-                                style={{
-                                    fontSize: 13,
-                                    verticalAlign: "middle",
-                                    marginRight: 4,
-                                    color: "#e74c3c",
-                                }}
-                            />
-                            Disabled
-                        </>
-                    )}
-                </li>
-            </ul>
-            {config.features.aiChat && (
-                <p style={styles.reminderNote}>
-                    <InfoIcon
-                        style={{
-                            fontSize: 14,
-                            verticalAlign: "middle",
-                            marginRight: 6,
-                        }}
-                    />
-                    Remember to add your Gemini API key in Settings after
-                    signing in!
-                </p>
-            )}
-        </div>
 
         <div style={styles.buttonRow}>
             <button style={styles.secondaryButton} onClick={onBack}>
@@ -1116,12 +1170,27 @@ const CompleteStep: React.FC<{
 const SetupWizard: React.FC = () => {
     const [currentStep, setCurrentStep] = useState<SetupStep>("welcome");
     const [isWindows, setIsWindows] = useState(true);
+    const [legalPolicies, setLegalPolicies] =
+        useState<LegalPoliciesResponse | null>(null);
+    const [legalPoliciesLoading, setLegalPoliciesLoading] = useState(true);
+    const [legalPoliciesError, setLegalPoliciesError] = useState<string | null>(
+        null,
+    );
+    const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
+    const [hasAcceptedLegal, setHasAcceptedLegal] = useState(false);
     const [config, setConfig] = useState<SetupConfig>({
         features: {
             aiChat: true,
             imageGeneration: false,
             audioGeneration: false,
         },
+        theme: {
+            colorScheme: "dark",
+            accentColor: "#4a90e2",
+        },
+        legalAccepted: false,
+        legalAcceptedAt: null,
+        legalVersion: "2026-03-22",
     });
 
     // Check platform and start LanguageTool download in background on mount
@@ -1168,6 +1237,42 @@ const SetupWizard: React.FC = () => {
         };
     }, []);
 
+    useEffect(() => {
+        let isSubscribed = true;
+
+        const loadPolicies = async () => {
+            setLegalPoliciesLoading(true);
+            setLegalPoliciesError(null);
+            try {
+                const policies = await setupApi().getLegalPolicies();
+                if (!isSubscribed) return;
+                setLegalPolicies(policies);
+                setConfig((prev) => ({
+                    ...prev,
+                    legalVersion: policies.legalVersion,
+                }));
+            } catch (error) {
+                if (!isSubscribed) return;
+                setLegalPoliciesError(
+                    getSetupFriendlyError(
+                        error,
+                        "Could not load legal policies. Please restart setup.",
+                    ),
+                );
+            } finally {
+                if (isSubscribed) {
+                    setLegalPoliciesLoading(false);
+                }
+            }
+        };
+
+        void loadPolicies();
+
+        return () => {
+            isSubscribed = false;
+        };
+    }, []);
+
     const updateConfig = useCallback((updates: Partial<SetupConfig>) => {
         setConfig((prev) => ({
             ...prev,
@@ -1175,6 +1280,10 @@ const SetupWizard: React.FC = () => {
             features: {
                 ...prev.features,
                 ...(updates.features || {}),
+            },
+            theme: {
+                ...prev.theme,
+                ...(updates.theme || {}),
             },
         }));
     }, []);
@@ -1187,9 +1296,21 @@ const SetupWizard: React.FC = () => {
         }
     };
 
+    const handleLegalAcceptanceChange = useCallback(
+        (accepted: boolean) => {
+            setHasAcceptedLegal(accepted);
+            updateConfig({
+                legalAccepted: accepted,
+                legalAcceptedAt: accepted ? new Date().toISOString() : null,
+            });
+        },
+        [updateConfig],
+    );
+
     const steps: SetupStep[] = [
         "welcome",
         "features",
+        "legal",
         "downloads",
         "finalizing",
         "complete",
@@ -1267,6 +1388,19 @@ const SetupWizard: React.FC = () => {
                         isWindows={isWindows}
                     />
                 )}
+                {currentStep === "legal" && (
+                    <LegalStep
+                        policies={legalPolicies}
+                        isLoading={legalPoliciesLoading}
+                        error={legalPoliciesError}
+                        hasScrolledToEnd={hasScrolledToEnd}
+                        hasAccepted={hasAcceptedLegal}
+                        onScrolledToEnd={() => setHasScrolledToEnd(true)}
+                        onAcceptedChange={handleLegalAcceptanceChange}
+                        onNext={goNext}
+                        onBack={goBack}
+                    />
+                )}
                 {currentStep === "downloads" && (
                     <DownloadsStep
                         config={config}
@@ -1278,11 +1412,7 @@ const SetupWizard: React.FC = () => {
                     <FinalizingStep onNext={goNext} />
                 )}
                 {currentStep === "complete" && (
-                    <CompleteStep
-                        config={config}
-                        onComplete={handleComplete}
-                        onBack={goBack}
-                    />
+                    <CompleteStep onComplete={handleComplete} onBack={goBack} />
                 )}
             </div>
         </div>
@@ -1397,6 +1527,12 @@ const styles: Record<string, React.CSSProperties> = {
         fontWeight: 500,
         cursor: "pointer",
         transition: "background-color 0.2s ease",
+    },
+    primaryButtonDisabled: {
+        backgroundColor: "#3a3b3e",
+        color: "#8a8b8e",
+        cursor: "not-allowed",
+        opacity: 1,
     },
     secondaryButton: {
         backgroundColor: "transparent",
@@ -1632,12 +1768,75 @@ const styles: Record<string, React.CSSProperties> = {
         marginTop: "8px",
         textAlign: "center",
     },
+    legalMeta: {
+        fontSize: "12px",
+        color: "#8a8b8e",
+        marginBottom: "8px",
+        textAlign: "left",
+    },
+    legalScrollBox: {
+        maxHeight: "300px",
+        overflowY: "auto",
+        border: "1px solid #3a3b3e",
+        borderRadius: "10px",
+        backgroundColor: "#1a1b1e",
+        padding: "16px",
+        textAlign: "left",
+    },
+    legalMarkdown: {
+        color: "#8a8b8e",
+        fontSize: "13px",
+        lineHeight: 1.5,
+        whiteSpace: "normal",
+    },
+    legalHeadingPrimary: {
+        fontSize: "16px",
+        fontWeight: 600,
+        color: "#f6f7fb",
+        margin: "0 0 8px 0",
+    },
+    legalHeadingSecondary: {
+        fontSize: "14px",
+        fontWeight: 600,
+        color: "#f6f7fb",
+        margin: "12px 0 6px 0",
+    },
+    legalParagraph: {
+        margin: "0 0 8px 0",
+        color: "#8a8b8e",
+        lineHeight: 1.5,
+    },
+    legalListItem: {
+        marginBottom: "6px",
+        color: "#8a8b8e",
+    },
+    legalDivider: {
+        border: "none",
+        borderTop: "1px solid #3a3b3e",
+        margin: "14px 0",
+    },
+    legalCheckboxRow: {
+        display: "flex",
+        alignItems: "center",
+        gap: "10px",
+        marginTop: "14px",
+        fontSize: "13px",
+        color: "#d8dae0",
+        textAlign: "left",
+    },
+    legalCheckboxInput: {
+        width: "16px",
+        height: "16px",
+        accentColor: "#2ef6ad",
+        cursor: "pointer",
+    },
 };
 
 // Exports for dev preview
 export {
     WelcomeStep,
     FeaturesStep,
+    LegalStep,
     DownloadsStep,
     FinalizingStep,
     CompleteStep,

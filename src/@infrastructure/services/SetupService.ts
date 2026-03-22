@@ -19,6 +19,9 @@ export interface SetupConfig {
         image: boolean;
         audio: boolean;
     };
+    legalAccepted: boolean;
+    legalAcceptedAt: string | null;
+    legalVersion: string;
 }
 
 const DEFAULT_SETUP_CONFIG: SetupConfig = {
@@ -38,6 +41,9 @@ const DEFAULT_SETUP_CONFIG: SetupConfig = {
         image: false,
         audio: false,
     },
+    legalAccepted: false,
+    legalAcceptedAt: null,
+    legalVersion: "2026-03-22",
 };
 
 export class SetupService {
@@ -47,7 +53,7 @@ export class SetupService {
     constructor() {
         this.configPath = path.join(
             app.getPath("userData"),
-            "inkline-setup.json"
+            "inkline-setup.json",
         );
     }
 
@@ -83,16 +89,12 @@ export class SetupService {
         await fs.writeFile(
             this.configPath,
             JSON.stringify(this.config, null, 2),
-            "utf-8"
+            "utf-8",
         );
     }
 
-    async markSetupComplete(): Promise<void> {
-        await this.saveConfig({ setupCompleted: true });
-    }
-
     async updateFeatures(
-        features: Partial<SetupConfig["features"]>
+        features: Partial<SetupConfig["features"]>,
     ): Promise<void> {
         const currentConfig = await this.getConfig();
         await this.saveConfig({
@@ -100,16 +102,9 @@ export class SetupService {
         });
     }
 
-    async updateTheme(theme: Partial<SetupConfig["theme"]>): Promise<void> {
-        const currentConfig = await this.getConfig();
-        await this.saveConfig({
-            theme: { ...currentConfig.theme, ...theme },
-        });
-    }
-
     async markModelDownloaded(
         modelType: "image" | "audio",
-        downloaded: boolean
+        downloaded: boolean,
     ): Promise<void> {
         const currentConfig = await this.getConfig();
         await this.saveConfig({
@@ -124,32 +119,8 @@ export class SetupService {
         await this.saveConfig({ comfyuiInstalled: installed });
     }
 
-    async isComfyUIInstalled(): Promise<boolean> {
-        const config = await this.getConfig();
-        return config.comfyuiInstalled;
-    }
-
     async markLanguageToolInstalled(installed: boolean): Promise<void> {
         await this.saveConfig({ languageToolInstalled: installed });
-    }
-
-    async isLanguageToolInstalled(): Promise<boolean> {
-        const config = await this.getConfig();
-        return config.languageToolInstalled;
-    }
-
-    getModelsPath(): string {
-        // In development, models are in server/ComfyUI/models
-        // In production, they're in resources/server/ComfyUI/models
-        if (app.isPackaged) {
-            return path.join(
-                process.resourcesPath,
-                "server",
-                "ComfyUI",
-                "models"
-            );
-        }
-        return path.join(app.getAppPath(), "server", "ComfyUI", "models");
     }
 }
 

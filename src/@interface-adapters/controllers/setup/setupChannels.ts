@@ -3,9 +3,9 @@
 
 export const SETUP_CHANNELS = {
     COMPLETE_SETUP: "setup:complete",
+    GET_LEGAL_POLICIES: "setup:getLegalPolicies",
     START_DOWNLOADS: "setup:startDownloads",
     CANCEL_DOWNLOADS: "setup:cancelDownloads",
-    CHECK_MODEL_STATUS: "setup:checkModelStatus",
     CHECK_COMFYUI_STATUS: "setup:checkComfyUIStatus",
     CHECK_LANGUAGETOOL_STATUS: "setup:checkLanguageToolStatus",
     CHECK_PLATFORM: "setup:checkPlatform",
@@ -57,6 +57,14 @@ export interface SetupConfig {
         colorScheme: "dark" | "light";
         accentColor: string;
     };
+    legalAccepted: boolean;
+    legalAcceptedAt: string | null;
+    legalVersion: string;
+}
+
+export interface LegalPoliciesResponse {
+    markdown: string;
+    legalVersion: string;
 }
 
 export interface DownloadProgress {
@@ -74,11 +82,6 @@ export interface DownloadRequest {
     image: boolean;
     audio: boolean;
     languagetool: boolean;
-}
-
-export interface ModelStatus {
-    image: boolean;
-    audio: boolean;
 }
 
 export interface ComfyUIStatus {
