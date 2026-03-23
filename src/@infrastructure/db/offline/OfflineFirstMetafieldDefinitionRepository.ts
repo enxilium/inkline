@@ -50,10 +50,6 @@ export class OfflineFirstMetafieldDefinitionRepository implements IMetafieldDefi
         const local = await this.fsRepo.findById(id);
         const result = this.pickMostRecent(local, remote);
 
-        if (result && (await this.isPendingDeletion(result.id))) {
-            return null;
-        }
-
         if (result && result === remote && !local) {
             await this.fsRepo.create(remote);
         }
@@ -71,9 +67,8 @@ export class OfflineFirstMetafieldDefinitionRepository implements IMetafieldDefi
 
         const local = await this.fsRepo.findByProjectId(projectId);
         const merged = this.mergeByMostRecent(local, remote);
-        const filtered = await this.filterPendingDeletions(merged);
 
-        for (const definition of filtered) {
+        for (const definition of merged) {
             const isRemoteOnly =
                 remote.some((item) => item.id === definition.id) &&
                 !local.some((item) => item.id === definition.id);
@@ -82,7 +77,7 @@ export class OfflineFirstMetafieldDefinitionRepository implements IMetafieldDefi
             }
         }
 
-        return filtered.sort((a, b) => a.name.localeCompare(b.name));
+        return merged.sort((a, b) => a.name.localeCompare(b.name));
     }
 
     async findByProjectAndNameNormalized(
@@ -183,33 +178,5 @@ export class OfflineFirstMetafieldDefinitionRepository implements IMetafieldDefi
         }
 
         return Array.from(map.values());
-    }
-
-    private async filterPendingDeletions(
-        definitions: MetafieldDefinition[],
-    ): Promise<MetafieldDefinition[]> {
-        try {
-            const deletions = await deletionLog.getAll();
-            const deletedDefinitionIds = new Set(
-                deletions
-                    .filter((entry) => entry.entityType === "metafieldDefinition")
-                    .map((entry) => entry.entityId),
-            );
-
-            return definitions.filter(
-                (definition) => !deletedDefinitionIds.has(definition.id),
-            );
-        } catch {
-            // If deletion log is unavailable, avoid hiding definitions unexpectedly.
-            return definitions;
-        }
-    }
-
-    private async isPendingDeletion(definitionId: string): Promise<boolean> {
-        try {
-            return await deletionLog.isDeleted(definitionId);
-        } catch {
-            return false;
-        }
     }
 }
