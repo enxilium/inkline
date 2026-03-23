@@ -967,11 +967,6 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             return;
         }
 
-        const initialSelectOptions =
-            templateNewFieldKind === "select"
-                ? normalizeTemplateSelectOptions(templateNewFieldOptionsDraft)
-                : [];
-
         setTemplateDraftError(null);
 
         try {
@@ -980,7 +975,6 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                 name,
                 scope: editorType,
                 valueType: templateNewFieldKind === "select" ? "string[]" : "string",
-                selectOptions: initialSelectOptions,
             });
 
             setCreatedDefinitionsById((current) => {
@@ -2070,42 +2064,6 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                 Create & Add
                             </Button>
                         </div>
-                        {templateNewFieldKind === "select" ? (
-                            <TemplateSelectOptionsEditor
-                                options={templateNewFieldOptionsDraft}
-                                disabled={isSavingTemplate}
-                                addPlaceholder="Add option for this metafield"
-                                onAddOption={addNewFieldOption}
-                                onOptionLabelChange={(option, label) => {
-                                    const optionIndex =
-                                        templateNewFieldOptionsDraft.indexOf(
-                                            option,
-                                        );
-                                    if (optionIndex >= 0) {
-                                        updateNewFieldOptionLabel(
-                                            optionIndex,
-                                            label,
-                                        );
-                                    }
-                                }}
-                                onOptionLabelBlur={blurNewFieldOptionLabel}
-                                onOptionDelete={(option) => {
-                                    const optionIndex =
-                                        templateNewFieldOptionsDraft.indexOf(
-                                            option,
-                                        );
-                                    if (optionIndex >= 0) {
-                                        deleteNewFieldOption(optionIndex);
-                                    }
-                                }}
-                                onOptionIconEdit={(_, optionIndex) =>
-                                    setIconPickerTarget({
-                                        kind: "new",
-                                        optionIndex,
-                                    })
-                                }
-                            />
-                        ) : null}
                     </div>
                     {templateDraftError ? (
                         <span className="card-hint is-error">
@@ -2139,6 +2097,10 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                                     ) {
                                                         const staticCard =
                                                             staticCardById.get(itemId);
+                                                        const staticPlaceholder =
+                                                            renderStaticTemplateCardPlaceholder(
+                                                                itemId,
+                                                            );
                                                         return (
                                                             <SortableSectionCard
                                                                 key={itemId}
@@ -2147,13 +2109,15 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                                                     staticCard?.title ??
                                                                     "Core Card"
                                                                 }
-                                                                className="is-static"
+                                                                className={`is-static${
+                                                                    staticPlaceholder
+                                                                        ? ""
+                                                                        : " is-static-empty"
+                                                                }`}
                                                                 disableDrag={isSavingTemplate}
                                                                 showDragHandle={!isSavingTemplate}
                                                             >
-                                                                {renderStaticTemplateCardPlaceholder(
-                                                                    itemId,
-                                                                )}
+                                                                {staticPlaceholder}
                                                             </SortableSectionCard>
                                                         );
                                                     }
@@ -2319,6 +2283,10 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                                     ) {
                                                         const staticCard =
                                                             staticCardById.get(itemId);
+                                                        const staticPlaceholder =
+                                                            renderStaticTemplateCardPlaceholder(
+                                                                itemId,
+                                                            );
                                                         return (
                                                             <SortableSectionCard
                                                                 key={itemId}
@@ -2327,13 +2295,15 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                                                     staticCard?.title ??
                                                                     "Core Card"
                                                                 }
-                                                                className="is-static"
+                                                                className={`is-static${
+                                                                    staticPlaceholder
+                                                                        ? ""
+                                                                        : " is-static-empty"
+                                                                }`}
                                                                 disableDrag={isSavingTemplate}
                                                                 showDragHandle={!isSavingTemplate}
                                                             >
-                                                                {renderStaticTemplateCardPlaceholder(
-                                                                    itemId,
-                                                                )}
+                                                                {staticPlaceholder}
                                                             </SortableSectionCard>
                                                         );
                                                     }

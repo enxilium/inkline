@@ -48,6 +48,7 @@ export const ConnectedCharacterEditor: React.FC<
         generateCharacterImage,
         generateCharacterSong,
         generateCharacterPlaylist,
+        deleteAsset,
         importAsset,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
@@ -95,20 +96,36 @@ export const ConnectedCharacterEditor: React.FC<
         [characters, characterId],
     );
 
-    const resolveStoredImageUrls = React.useCallback(
-        (galleryIds: string[]): string[] =>
+    const resolveStoredImages = React.useCallback(
+        (galleryIds: string[]): Array<{ id: string; url: string }> =>
             galleryIds
-                .map((id) => assets.images[id]?.url)
-                .filter((url): url is string => Boolean(url)),
+                .map((id) => {
+                    const image = assets.images[id];
+                    return image ? { id: image.id, url: image.url } : null;
+                })
+                .filter(
+                    (image): image is { id: string; url: string } =>
+                        Boolean(image),
+                ),
         [assets.images],
     );
 
-    const gallerySources = React.useMemo(
+    const galleryImages = React.useMemo(
         () =>
             character
-                ? resolveStoredImageUrls(character.galleryImageIds ?? [])
+                ? resolveStoredImages(character.galleryImageIds ?? [])
                 : [],
-        [character, resolveStoredImageUrls],
+        [character, resolveStoredImages],
+    );
+
+    const galleryImageIds = React.useMemo(
+        () => galleryImages.map((image) => image.id),
+        [galleryImages],
+    );
+
+    const gallerySources = React.useMemo(
+        () => galleryImages.map((image) => image.url),
+        [galleryImages],
     );
 
     const songUrl = React.useMemo(
@@ -630,6 +647,41 @@ export const ConnectedCharacterEditor: React.FC<
         }
     };
 
+    const handleDeletePortrait = React.useCallback(
+        async (imageId: string) => {
+            if (!projectId || !character) {
+                return;
+            }
+
+            await deleteAsset({
+                projectId,
+                assetId: imageId,
+                kind: "image",
+            });
+
+            useAppStore.setState((state) => {
+                const nextImages = { ...state.assets.images };
+                delete nextImages[imageId];
+                return {
+                    assets: {
+                        ...state.assets,
+                        images: nextImages,
+                    },
+                };
+            });
+
+            if (character.galleryImageIds.includes(imageId)) {
+                updateCharacterLocally(character.id, {
+                    galleryImageIds: character.galleryImageIds.filter(
+                        (existingId) => existingId !== imageId,
+                    ),
+                    updatedAt: new Date(),
+                });
+            }
+        },
+        [character, deleteAsset, projectId, updateCharacterLocally],
+    );
+
     const handleGenerateSong = async () => {
         if (!projectId || !character) return;
         const response = await generateCharacterSong({
@@ -866,12 +918,14 @@ export const ConnectedCharacterEditor: React.FC<
             metafieldDefinitions={visibleMetafieldDefinitions}
             metafieldAssignments={visibleCharacterMetafieldAssignments}
             imageOptions={imageOptions}
+            galleryImageIds={galleryImageIds}
             gallerySources={gallerySources}
             songUrl={songUrl}
             availableDocuments={availableDocuments}
             onSubmit={handleSubmit}
             onGeneratePortrait={handleGeneratePortrait}
             onImportPortrait={handleImportPortrait}
+            onDeletePortrait={handleDeletePortrait}
             onGenerateSong={handleGenerateSong}
             onImportSong={handleImportSong}
             onGeneratePlaylist={handleGeneratePlaylist}

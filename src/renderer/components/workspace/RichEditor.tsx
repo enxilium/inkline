@@ -9,9 +9,18 @@ import type {
     WorkspaceOrganization,
 } from "../../types";
 import { ActionDropdown } from "../ui/ActionDropdown";
+import { Button } from "../ui/Button";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "../ui/Dialog";
 import {
     ChevronLeftIcon,
     ChevronRightIcon,
+    MoreVerticalIcon,
 } from "../ui/Icons";
 import type { DocumentRef } from "../ui/ListInput";
 import { showToast } from "../ui/GenerationProgressToast";
@@ -209,12 +218,14 @@ export type RichEditorProps<TValues extends RichEditorBaseValues> = {
     metafieldDefinitions: WorkspaceMetafieldDefinition[];
     metafieldAssignments: WorkspaceMetafieldAssignment[];
     imageOptions: { id: string; label: string }[];
+    galleryImageIds: string[];
     gallerySources: string[];
     songUrl?: string;
     availableDocuments?: DocumentRef[];
     onNavigateToDocument?: (ref: DocumentRef) => void;
     onGeneratePortrait: () => Promise<void>;
     onImportPortrait: (file: File) => Promise<void>;
+    onDeletePortrait: (imageId: string) => Promise<void>;
     onGenerateSong: () => Promise<void>;
     onImportSong: (file: File) => Promise<void>;
     onGeneratePlaylist: () => Promise<void>;
@@ -332,12 +343,14 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     metafieldDefinitions,
     metafieldAssignments,
     imageOptions,
+    galleryImageIds,
     gallerySources,
     songUrl,
     availableDocuments = [],
     onNavigateToDocument,
     onGeneratePortrait,
     onImportPortrait,
+    onDeletePortrait,
     onGenerateSong,
     onImportSong,
     onGeneratePlaylist,
@@ -376,6 +389,8 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     const [error, setError] = React.useState<string | null>(null);
     const [assetBusy, setAssetBusy] = React.useState(false);
     const [currentImageIndex, setCurrentImageIndex] = React.useState(0);
+    const [pendingDeletePortraitId, setPendingDeletePortraitId] =
+        React.useState<string | null>(null);
     const [sectionPlacement, setSectionPlacement] =
         React.useState<RichEditorSectionPlacement>(() => {
             const defs = CORE_CARD_CONFIG;
@@ -572,6 +587,7 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
         if (!gallerySources.length) {
             firstImageRef.current = undefined;
             setCurrentImageIndex(0);
+            setPendingDeletePortraitId(null);
             return;
         }
 
@@ -972,7 +988,39 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     };
 
     const canCycleGallery = gallerySources.length > 1;
+    const currentPortraitImageId = galleryImageIds[currentImageIndex];
     const portraitUrl = gallerySources[currentImageIndex];
+
+    const handleRequestDeletePortraitAction = React.useCallback(() => {
+        if (!currentPortraitImageId || assetBusy) {
+            return;
+        }
+
+        setPendingDeletePortraitId(currentPortraitImageId);
+    }, [assetBusy, currentPortraitImageId]);
+
+    const handleConfirmDeletePortrait = React.useCallback(async () => {
+        if (!pendingDeletePortraitId || assetBusy) {
+            return;
+        }
+
+        setAssetBusy(true);
+        setError(null);
+        try {
+            await onDeletePortrait(pendingDeletePortraitId);
+            setPendingDeletePortraitId(null);
+        } catch (deleteError) {
+            setError(
+                toFriendlyError(
+                    deleteError,
+                    "Failed to delete portrait.",
+                    "generation-image",
+                ),
+            );
+        } finally {
+            setAssetBusy(false);
+        }
+    }, [assetBusy, onDeletePortrait, pendingDeletePortraitId, toFriendlyError]);
 
     const showNextImage = () => {
         if (!canCycleGallery) {
@@ -1044,45 +1092,66 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
                                 ) : null}
                             </div>
                             <div className="portrait-toolbar">
-                                <div className="portrait-gallery-nav">
-                                    <button
-                                        type="button"
-                                        className="gallery-nav-btn"
-                                        onClick={showPreviousImage}
-                                        disabled={!canCycleGallery}
-                                    >
-                                        <ChevronLeftIcon size={14} />
-                                    </button>
-                                    <span className="gallery-nav-label">
-                                        {gallerySources.length > 0
-                                            ? `${currentImageIndex + 1} of ${gallerySources.length}`
-                                            : "0 of 0"}
-                                    </span>
-                                    <button
-                                        type="button"
-                                        className="gallery-nav-btn"
-                                        onClick={showNextImage}
-                                        disabled={!canCycleGallery}
-                                    >
-                                        <ChevronRightIcon size={14} />
-                                    </button>
+                                <div className="portrait-toolbar-left">
+                                    <ActionDropdown
+                                        disabled={assetBusy}
+                                        TriggerIcon={MoreVerticalIcon}
+                                        menuAlign="left"
+                                        options={[
+                                            {
+                                                label: "Delete image",
+                                                onClick:
+                                                    handleRequestDeletePortraitAction,
+                                                disabled:
+                                                    assetBusy ||
+                                                    !currentPortraitImageId,
+                                            },
+                                        ]}
+                                    />
                                 </div>
-                                <ActionDropdown
-                                    disabled={assetBusy}
-                                    options={[
-                                        {
-                                            label: assetCopy.generateImageLabel,
-                                            onClick:
-                                                handleGeneratePortraitAction,
-                                            disabled: assetBusy,
-                                        },
-                                        {
-                                            label: assetCopy.imageImportLabel,
-                                            onClick: triggerFilePick,
-                                            disabled: assetBusy,
-                                        },
-                                    ]}
-                                />
+                                <div className="portrait-toolbar-center">
+                                    <div className="portrait-gallery-nav">
+                                        <button
+                                            type="button"
+                                            className="gallery-nav-btn"
+                                            onClick={showPreviousImage}
+                                            disabled={!canCycleGallery}
+                                        >
+                                            <ChevronLeftIcon size={14} />
+                                        </button>
+                                        <span className="gallery-nav-label">
+                                            {gallerySources.length > 0
+                                                ? `${currentImageIndex + 1} of ${gallerySources.length}`
+                                                : "0 of 0"}
+                                        </span>
+                                        <button
+                                            type="button"
+                                            className="gallery-nav-btn"
+                                            onClick={showNextImage}
+                                            disabled={!canCycleGallery}
+                                        >
+                                            <ChevronRightIcon size={14} />
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="portrait-toolbar-right">
+                                    <ActionDropdown
+                                        disabled={assetBusy}
+                                        options={[
+                                            {
+                                                label: assetCopy.generateImageLabel,
+                                                onClick:
+                                                    handleGeneratePortraitAction,
+                                                disabled: assetBusy,
+                                            },
+                                            {
+                                                label: assetCopy.imageImportLabel,
+                                                onClick: triggerFilePick,
+                                                disabled: assetBusy,
+                                            },
+                                        ]}
+                                    />
+                                </div>
                                 <input
                                     ref={fileInputRef}
                                     type="file"
@@ -1282,9 +1351,11 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
             currentImageIndex,
             entityId,
             entityType,
+            currentPortraitImageId,
             gallerySources,
             handleAssetAction,
             handleChange,
+            handleRequestDeletePortraitAction,
             imageOptions,
             internalCardById,
             metafieldAssignments,
@@ -1311,46 +1382,86 @@ export function RichEditor<TValues extends RichEditorBaseValues>({
     );
 
     return (
-        <div className="entity-editor-panel">
-            <form className="entity-editor" onSubmit={handleSubmit}>
-                <div className="entity-editor-grid entity-editor-grid--balanced">
-                    <div className="entity-header entity-header--lhs">
-                        <div className="entity-header-title">
-                            <p className="panel-label">{panelLabel}</p>
-                            <input
-                                ref={titleInputRef}
-                                type="text"
-                                className="entity-name-input"
-                                value={values.name}
-                                onChange={(e) =>
-                                    handleChange(
-                                        "name",
-                                        e.target.value as TValues["name"],
-                                    )
-                                }
-                                placeholder={`Untitled ${panelLabel}`}
-                            />
+        <>
+            <div className="entity-editor-panel">
+                <form className="entity-editor" onSubmit={handleSubmit}>
+                    <div className="entity-editor-grid entity-editor-grid--balanced">
+                        <div className="entity-header entity-header--lhs">
+                            <div className="entity-header-title">
+                                <p className="panel-label">{panelLabel}</p>
+                                <input
+                                    ref={titleInputRef}
+                                    type="text"
+                                    className="entity-name-input"
+                                    value={values.name}
+                                    onChange={(e) =>
+                                        handleChange(
+                                            "name",
+                                            e.target.value as TValues["name"],
+                                        )
+                                    }
+                                    placeholder={`Untitled ${panelLabel}`}
+                                />
+                            </div>
                         </div>
-                    </div>
-                    <div className="entity-column-shell entity-column-shell--lhs">
-                        <div className="entity-column-dropzone">
-                            <div className="entity-column entity-column--sortable">
-                                {sectionPlacement.left.map(renderSection)}
+                        <div className="entity-column-shell entity-column-shell--lhs">
+                            <div className="entity-column-dropzone">
+                                <div className="entity-column entity-column--sortable">
+                                    {sectionPlacement.left.map(renderSection)}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="entity-column-shell entity-column-shell--rhs">
+                            <div className="entity-column-dropzone">
+                                <div className="entity-column entity-column--sortable">
+                                    {sectionPlacement.right.map(renderSection)}
+                                </div>
                             </div>
                         </div>
                     </div>
-                    <div className="entity-column-shell entity-column-shell--rhs">
-                        <div className="entity-column-dropzone">
-                            <div className="entity-column entity-column--sortable">
-                                {sectionPlacement.right.map(renderSection)}
-                            </div>
-                        </div>
+                    {error ? (
+                        <span className="card-hint is-error">{error}</span>
+                    ) : null}
+                </form>
+            </div>
+            <Dialog
+                open={Boolean(pendingDeletePortraitId)}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen && !assetBusy) {
+                        setPendingDeletePortraitId(null);
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Current Image?</DialogTitle>
+                        <DialogDescription>
+                            This will permanently delete the current portrait image
+                            from this entity.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="dialog-actions">
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            onClick={() => setPendingDeletePortraitId(null)}
+                            disabled={assetBusy}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="primary"
+                            onClick={() => {
+                                void handleConfirmDeletePortrait();
+                            }}
+                            disabled={assetBusy}
+                        >
+                            Delete image
+                        </Button>
                     </div>
-                </div>
-                {error ? (
-                    <span className="card-hint is-error">{error}</span>
-                ) : null}
-            </form>
-        </div>
+                </DialogContent>
+            </Dialog>
+        </>
     );
 }

@@ -3231,6 +3231,10 @@ input.toolbar-color:focus {
     flex-wrap: wrap;
 }
 
+.dialog-modal-editor .entity-section-card.is-static.is-static-empty .entity-section-card-header {
+    margin-bottom: 0;
+}
+
 .entity-section-card-actions,
 .metafield-card-actions {
     display: inline-flex;
@@ -3474,11 +3478,23 @@ input.toolbar-color:focus {
 /* ── Portrait Toolbar (gallery nav + add dropdown) ── */
 
 .portrait-toolbar {
-    display: flex;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
-    justify-content: space-between;
     gap: 0.5rem;
     padding: 0.35rem 0;
+}
+
+.portrait-toolbar-left {
+    justify-self: start;
+}
+
+.portrait-toolbar-center {
+    justify-self: center;
+}
+
+.portrait-toolbar-right {
+    justify-self: end;
 }
 
 .portrait-gallery-nav {
@@ -3530,20 +3546,22 @@ input.toolbar-color:focus {
     display: flex;
     align-items: center;
     justify-content: center;
-    background: color-mix(in srgb, var(--accent) 10%, transparent);
-    border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
+    background: var(--overlay-6);
+    border: 1px solid var(--overlay-14);
     border-radius: var(--radius-md);
-    color: var(--accent);
-    padding: 0.5rem;
+    color: var(--text-subtle);
+    padding: 0.38rem;
     cursor: pointer;
     transition:
         background var(--duration-fast) var(--ease-default),
-        border-color var(--duration-fast) var(--ease-default);
+        border-color var(--duration-fast) var(--ease-default),
+        color var(--duration-fast) var(--ease-default);
 }
 
 .action-dropdown-trigger:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--accent) 20%, transparent);
-    border-color: color-mix(in srgb, var(--accent) 40%, transparent);
+    background: var(--overlay-10);
+    border-color: var(--overlay-20);
+    color: var(--text);
 }
 
 .action-dropdown-trigger:disabled {
@@ -3563,6 +3581,11 @@ input.toolbar-color:focus {
     box-shadow: var(--shadow);
     z-index: var(--z-dropdown);
     overflow: hidden;
+}
+
+.action-dropdown-menu.is-align-left {
+    left: 0;
+    right: auto;
 }
 
 .action-dropdown-item {

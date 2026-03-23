@@ -42,6 +42,7 @@ export const ConnectedOrganizationEditor: React.FC<
         generateOrganizationImage,
         generateOrganizationSong,
         generateOrganizationPlaylist,
+        deleteAsset,
         importAsset,
         setActiveDocument,
         setAutosaveStatus: setGlobalAutosaveStatus,
@@ -90,20 +91,36 @@ export const ConnectedOrganizationEditor: React.FC<
         [organizations, organizationId],
     );
 
-    const resolveStoredImageUrls = React.useCallback(
-        (galleryIds: string[]): string[] =>
+    const resolveStoredImages = React.useCallback(
+        (galleryIds: string[]): Array<{ id: string; url: string }> =>
             galleryIds
-                .map((id) => assets.images[id]?.url)
-                .filter((url): url is string => Boolean(url)),
+                .map((id) => {
+                    const image = assets.images[id];
+                    return image ? { id: image.id, url: image.url } : null;
+                })
+                .filter(
+                    (image): image is { id: string; url: string } =>
+                        Boolean(image),
+                ),
         [assets.images],
     );
 
-    const gallerySources = React.useMemo(
+    const galleryImages = React.useMemo(
         () =>
             organization
-                ? resolveStoredImageUrls(organization.galleryImageIds ?? [])
+                ? resolveStoredImages(organization.galleryImageIds ?? [])
                 : [],
-        [organization, resolveStoredImageUrls],
+        [organization, resolveStoredImages],
+    );
+
+    const galleryImageIds = React.useMemo(
+        () => galleryImages.map((image) => image.id),
+        [galleryImages],
+    );
+
+    const gallerySources = React.useMemo(
+        () => galleryImages.map((image) => image.url),
+        [galleryImages],
     );
 
     const songUrl = React.useMemo(
@@ -313,6 +330,41 @@ export const ConnectedOrganizationEditor: React.FC<
             addImageLocally(response.image);
         }
     };
+
+    const handleDeletePortrait = React.useCallback(
+        async (imageId: string) => {
+            if (!projectId || !organization) {
+                return;
+            }
+
+            await deleteAsset({
+                projectId,
+                assetId: imageId,
+                kind: "image",
+            });
+
+            useAppStore.setState((state) => {
+                const nextImages = { ...state.assets.images };
+                delete nextImages[imageId];
+                return {
+                    assets: {
+                        ...state.assets,
+                        images: nextImages,
+                    },
+                };
+            });
+
+            if (organization.galleryImageIds.includes(imageId)) {
+                updateOrganizationLocally(organization.id, {
+                    galleryImageIds: organization.galleryImageIds.filter(
+                        (existingId) => existingId !== imageId,
+                    ),
+                    updatedAt: new Date(),
+                });
+            }
+        },
+        [deleteAsset, organization, projectId, updateOrganizationLocally],
+    );
 
     const handleGenerateSong = async () => {
         if (!projectId || !organization) return;
@@ -615,6 +667,7 @@ export const ConnectedOrganizationEditor: React.FC<
             metafieldDefinitions={metafieldDefinitions}
             metafieldAssignments={organizationMetafieldAssignments}
             imageOptions={imageOptions}
+            galleryImageIds={galleryImageIds}
             gallerySources={gallerySources}
             songUrl={songUrl}
             availableDocuments={availableDocuments}
@@ -622,6 +675,7 @@ export const ConnectedOrganizationEditor: React.FC<
             onNavigateToDocument={handleNavigateToDocument}
             onGeneratePortrait={handleGeneratePortrait}
             onImportPortrait={handleImportPortrait}
+            onDeletePortrait={handleDeletePortrait}
             onGenerateSong={handleGenerateSong}
             onImportSong={handleImportSong}
             onGeneratePlaylist={handleGeneratePlaylist}

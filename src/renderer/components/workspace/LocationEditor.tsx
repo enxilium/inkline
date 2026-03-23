@@ -26,6 +26,7 @@ export type LocationEditorProps = {
     metafieldDefinitions: WorkspaceMetafieldDefinition[];
     metafieldAssignments: WorkspaceMetafieldAssignment[];
     imageOptions: { id: string; label: string }[];
+    galleryImageIds: string[];
     currentParentLocationId: string | null;
     gallerySources: string[];
     songUrl?: string;
@@ -33,6 +34,7 @@ export type LocationEditorProps = {
     onSubmit: (values: LocationEditorValues) => Promise<void>;
     onGeneratePortrait: () => Promise<void>;
     onImportPortrait: (file: File) => Promise<void>;
+    onDeletePortrait: (imageId: string) => Promise<void>;
     onGenerateSong: () => Promise<void>;
     onImportSong: (file: File) => Promise<void>;
     onGeneratePlaylist: () => Promise<void>;
@@ -107,6 +109,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     metafieldDefinitions,
     metafieldAssignments,
     imageOptions,
+    galleryImageIds,
     currentParentLocationId,
     gallerySources,
     songUrl,
@@ -114,6 +117,7 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
     onSubmit,
     onGeneratePortrait,
     onImportPortrait,
+    onDeletePortrait,
     onGenerateSong,
     onImportSong,
     onGeneratePlaylist,
@@ -208,12 +212,14 @@ export const LocationEditor: React.FC<LocationEditorProps> = ({
             metafieldDefinitions={metafieldDefinitions}
             metafieldAssignments={metafieldAssignments}
             imageOptions={imageOptions}
+            galleryImageIds={galleryImageIds}
             gallerySources={gallerySources}
             songUrl={songUrl}
             availableDocuments={availableDocuments}
             onNavigateToDocument={onNavigateToDocument}
             onGeneratePortrait={onGeneratePortrait}
             onImportPortrait={onImportPortrait}
+            onDeletePortrait={onDeletePortrait}
             onGenerateSong={onGenerateSong}
             onImportSong={onImportSong}
             onGeneratePlaylist={onGeneratePlaylist}
