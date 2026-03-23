@@ -176,6 +176,7 @@ import type { IStorageService } from "../@core/domain/services/IStorageService";
 import type { IUserSessionStore } from "../@core/domain/services/IUserSessionStore";
 import { ElectronAuthStateGateway } from "./auth/ElectronAuthStateGateway";
 import { ElectronSyncStateGateway } from "../@interface-adapters/controllers/sync/SyncStateGateway";
+import { setupService } from "../@infrastructure/services/SetupService";
 import type { EntityType as SyncEntityType } from "../@interface-adapters/controllers/sync/SyncStateGateway";
 
 export type RepositoryDependencies = {
@@ -1027,6 +1028,19 @@ export class AppBuilder {
             for (const action of actions) {
                 const channel = controllerChannels[category][action];
                 const controller = this.controllers[category][action];
+
+                if (channel === controllerChannels.project.createProject) {
+                    ipcMain.handle(channel, async (event, ...args) => {
+                        const result = await invokeController(
+                            controller,
+                            event,
+                            args,
+                        );
+                        await setupService.markFirstProjectCreated();
+                        return result;
+                    });
+                    continue;
+                }
 
                 ipcMain.handle(channel, (event, ...args) =>
                     invokeController(controller, event, args),

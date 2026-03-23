@@ -40,6 +40,8 @@ type EditorTemplateDialogProps = {
     open: boolean;
     editorType: WorkspaceEditorTemplateType | null;
     onOpenChange: (open: boolean) => void;
+    onTemplateSaved?: () => void;
+    lockOutsideClose?: boolean;
 };
 
 type TemplateDraftField = {
@@ -367,7 +369,10 @@ const renderStaticTemplateCardPlaceholder = (
 
     if (staticCardId === "template-core:portrait") {
         return (
-            <div className="template-static-portrait-placeholder" aria-hidden="true">
+            <div
+                className="template-static-portrait-placeholder"
+                aria-hidden="true"
+            >
                 <div className="template-static-portrait-placeholder__square" />
             </div>
         );
@@ -416,13 +421,11 @@ const sortTemplateSelectOptions = (
         }
     >,
 ): TemplateSelectOptionDraft[] =>
-    options
-        .slice()
-        .sort((left, right) => {
-            const leftOrder = (left as { orderIndex?: number }).orderIndex ?? 0;
-            const rightOrder = (right as { orderIndex?: number }).orderIndex ?? 0;
-            return leftOrder - rightOrder;
-        });
+    options.slice().sort((left, right) => {
+        const leftOrder = (left as { orderIndex?: number }).orderIndex ?? 0;
+        const rightOrder = (right as { orderIndex?: number }).orderIndex ?? 0;
+        return leftOrder - rightOrder;
+    });
 
 type SortableSectionCardProps = {
     id: string;
@@ -493,13 +496,21 @@ type TemplateSelectOptionsEditorProps = {
     disabled: boolean;
     addPlaceholder?: string;
     onAddOption: (label: string) => void;
-    onOptionLabelChange: (option: TemplateSelectOptionDraft, label: string) => void;
+    onOptionLabelChange: (
+        option: TemplateSelectOptionDraft,
+        label: string,
+    ) => void;
     onOptionLabelBlur?: (option: TemplateSelectOptionDraft) => void;
     onOptionDelete: (option: TemplateSelectOptionDraft) => void;
-    onOptionIconEdit: (option: TemplateSelectOptionDraft, optionIndex: number) => void;
+    onOptionIconEdit: (
+        option: TemplateSelectOptionDraft,
+        optionIndex: number,
+    ) => void;
 };
 
-const TemplateSelectOptionsEditor: React.FC<TemplateSelectOptionsEditorProps> = ({
+const TemplateSelectOptionsEditor: React.FC<
+    TemplateSelectOptionsEditorProps
+> = ({
     options,
     disabled,
     addPlaceholder = "Add option and press Enter",
@@ -591,10 +602,14 @@ const TemplateSelectOptionsEditor: React.FC<TemplateSelectOptionsEditorProps> = 
     );
 };
 
-export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> = ({
+export const ConnectedEditorTemplateDialog: React.FC<
+    EditorTemplateDialogProps
+> = ({
     open,
     editorType,
     onOpenChange,
+    onTemplateSaved,
+    lockOutsideClose = false,
 }) => {
     const {
         projectId,
@@ -640,8 +655,10 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             }
         >
     >(new Map());
-    const [templateSelectOptionsByDefinitionId, setTemplateSelectOptionsByDefinitionId] =
-        React.useState<Record<string, TemplateSelectOptionDraft[]>>({});
+    const [
+        templateSelectOptionsByDefinitionId,
+        setTemplateSelectOptionsByDefinitionId,
+    ] = React.useState<Record<string, TemplateSelectOptionDraft[]>>({});
     const [pendingSelectOptionDelete, setPendingSelectOptionDelete] =
         React.useState<{
             definitionId: string;
@@ -670,17 +687,19 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             right: [],
         });
     const dialogModalEditorRef = React.useRef<HTMLDivElement | null>(null);
-    const templateDragScrollBoundsRef = React.useRef<
-        { min: number; max: number } | null
-    >(null);
+    const templateDragScrollBoundsRef = React.useRef<{
+        min: number;
+        max: number;
+    } | null>(null);
     const [templateDragPlacementSnapshot, setTemplateDragPlacementSnapshot] =
         React.useState<SectionPlacement | null>(null);
     const lastProcessedDragOverKeyRef = React.useRef<string | null>(null);
     const templateInitSignatureRef = React.useRef<string | null>(null);
     const dragOverRafRef = React.useRef<number | null>(null);
-    const pendingDragOverRef = React.useRef<
-        { activeId: string; overId: string } | null
-    >(null);
+    const pendingDragOverRef = React.useRef<{
+        activeId: string;
+        overId: string;
+    } | null>(null);
     const staticCards = React.useMemo<TemplateStaticCard[]>(() => {
         if (!editorType) {
             return [];
@@ -695,12 +714,18 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
     );
 
     const staticLeftItems = React.useMemo(
-        () => staticCards.filter((card) => card.column === "left").map((card) => card.id),
+        () =>
+            staticCards
+                .filter((card) => card.column === "left")
+                .map((card) => card.id),
         [staticCards],
     );
 
     const staticRightItems = React.useMemo(
-        () => staticCards.filter((card) => card.column === "right").map((card) => card.id),
+        () =>
+            staticCards
+                .filter((card) => card.column === "right")
+                .map((card) => card.id),
         [staticCards],
     );
 
@@ -709,11 +734,15 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         [staticCards],
     );
 
-    const [pendingTemplateDeleteDefinitionId, setPendingTemplateDeleteDefinitionId] =
-        React.useState<string | null>(null);
+    const [
+        pendingTemplateDeleteDefinitionId,
+        setPendingTemplateDeleteDefinitionId,
+    ] = React.useState<string | null>(null);
     const [pendingUnsavedCloseConfirm, setPendingUnsavedCloseConfirm] =
         React.useState(false);
     const initialTemplateDraftSignatureRef = React.useRef<string | null>(null);
+    const [templateDraftTouched, setTemplateDraftTouched] =
+        React.useState(false);
 
     const sensors = useSensors(
         useSensor(PointerSensor, {
@@ -727,9 +756,8 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         }
 
         return (
-            editorTemplates.find(
-                (entry) => entry.editorType === editorType,
-            ) ?? null
+            editorTemplates.find((entry) => entry.editorType === editorType) ??
+            null
         );
     }, [editorTemplates, editorType]);
 
@@ -738,32 +766,8 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             return [];
         }
 
-        const eligibleStoreDefinitions = metafieldDefinitions.filter((definition) => {
-            if (definition.name.startsWith("_sys:")) {
-                return false;
-            }
-
-            if (
-                definition.valueType !== "string" &&
-                definition.valueType !== "string[]"
-            ) {
-                return false;
-            }
-
-            return (
-                definition.scope === "project" || definition.scope === editorType
-            );
-        });
-
-        const existingIds = new Set(
-            eligibleStoreDefinitions.map((definition) => definition.id),
-        );
-        const optimisticDefinitions = [...createdDefinitionsById.values()].filter(
+        const eligibleStoreDefinitions = metafieldDefinitions.filter(
             (definition) => {
-                if (existingIds.has(definition.id)) {
-                    return false;
-                }
-
                 if (definition.name.startsWith("_sys:")) {
                     return false;
                 }
@@ -776,10 +780,38 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                 }
 
                 return (
-                    definition.scope === "project" || definition.scope === editorType
+                    definition.scope === "project" ||
+                    definition.scope === editorType
                 );
             },
         );
+
+        const existingIds = new Set(
+            eligibleStoreDefinitions.map((definition) => definition.id),
+        );
+        const optimisticDefinitions = [
+            ...createdDefinitionsById.values(),
+        ].filter((definition) => {
+            if (existingIds.has(definition.id)) {
+                return false;
+            }
+
+            if (definition.name.startsWith("_sys:")) {
+                return false;
+            }
+
+            if (
+                definition.valueType !== "string" &&
+                definition.valueType !== "string[]"
+            ) {
+                return false;
+            }
+
+            return (
+                definition.scope === "project" ||
+                definition.scope === editorType
+            );
+        });
 
         return [...eligibleStoreDefinitions, ...optimisticDefinitions];
     }, [createdDefinitionsById, editorType, metafieldDefinitions]);
@@ -849,7 +881,9 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                   .map((field) => ({
                       definitionId: field.definitionId,
                       kind: field.kind,
-                      column: template.placement.right.includes(field.definitionId)
+                      column: template.placement.right.includes(
+                          field.definitionId,
+                      )
                           ? "right"
                           : "left",
                   }))
@@ -886,6 +920,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         setPendingTemplateDeleteDefinitionId(null);
         setPendingSelectOptionDelete(null);
         setPendingUnsavedCloseConfirm(false);
+        setTemplateDraftTouched(false);
         setIconPickerTarget(null);
         setTemplateDragPlacementSnapshot(null);
         lastProcessedDragOverKeyRef.current = null;
@@ -901,12 +936,14 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             const definition = templateDefinitionById.get(field.definitionId);
             nextSelectOptionsByDefinitionId[field.definitionId] =
                 sortTemplateSelectOptions(
-                    (definition?.selectOptions as Array<{
-                        id: string;
-                        label: string;
-                        icon?: string;
-                        orderIndex?: number;
-                    }> | undefined) ?? [],
+                    (definition?.selectOptions as
+                        | Array<{
+                              id: string;
+                              label: string;
+                              icon?: string;
+                              orderIndex?: number;
+                          }>
+                        | undefined) ?? [],
                 ).map((option) => ({
                     id: option.id,
                     label: option.label,
@@ -974,7 +1011,8 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                 projectId,
                 name,
                 scope: editorType,
-                valueType: templateNewFieldKind === "select" ? "string[]" : "string",
+                valueType:
+                    templateNewFieldKind === "select" ? "string[]" : "string",
             });
 
             setCreatedDefinitionsById((current) => {
@@ -1016,6 +1054,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             setTemplateNewFieldName("");
             setTemplateNewFieldKind("field");
             setTemplateNewFieldOptionsDraft([]);
+            setTemplateDraftTouched(true);
             setTemplateSelectOptionsByDefinitionId((current) => ({
                 ...current,
                 [definitionId]: sortTemplateSelectOptions(
@@ -1046,22 +1085,26 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         templateNewFieldOptionsDraft,
     ]);
 
-    const removeTemplateDraftField = React.useCallback((definitionId: string) => {
-        const itemId = toTemplateCardItemId(definitionId);
-        setTemplateDraftFields((current) =>
-            current.filter((field) => field.definitionId !== definitionId),
-        );
-        setTemplateSectionPlacement((placement) => ({
-            left: placement.left.filter((id) => id !== itemId),
-            right: placement.right.filter((id) => id !== itemId),
-        }));
-        setTemplateSelectOptionsByDefinitionId((current) => {
-            const next = { ...current };
-            delete next[definitionId];
-            return next;
-        });
-        setTemplateDraftError(null);
-    }, []);
+    const removeTemplateDraftField = React.useCallback(
+        (definitionId: string) => {
+            const itemId = toTemplateCardItemId(definitionId);
+            setTemplateDraftTouched(true);
+            setTemplateDraftFields((current) =>
+                current.filter((field) => field.definitionId !== definitionId),
+            );
+            setTemplateSectionPlacement((placement) => ({
+                left: placement.left.filter((id) => id !== itemId),
+                right: placement.right.filter((id) => id !== itemId),
+            }));
+            setTemplateSelectOptionsByDefinitionId((current) => {
+                const next = { ...current };
+                delete next[definitionId];
+                return next;
+            });
+            setTemplateDraftError(null);
+        },
+        [],
+    );
 
     const persistTemplateSelectOptions = React.useCallback(
         async (
@@ -1080,12 +1123,14 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             }
 
             const existingOptions =
-                (definition.selectOptions as Array<{
-                    id: string;
-                    label: string;
-                    icon?: string;
-                    orderIndex?: number;
-                }> | undefined) ?? [];
+                (definition.selectOptions as
+                    | Array<{
+                          id: string;
+                          label: string;
+                          icon?: string;
+                          orderIndex?: number;
+                      }>
+                    | undefined) ?? [];
 
             const existingByNormalized = new Map(
                 existingOptions.map((option) => [
@@ -1099,7 +1144,8 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                 options: options.map((option) => ({
                     id:
                         option.id ??
-                        existingByNormalized.get(option.label.toLowerCase())?.id,
+                        existingByNormalized.get(option.label.toLowerCase())
+                            ?.id,
                     label: option.label,
                     ...(option.icon ? { icon: option.icon } : {}),
                 })),
@@ -1142,16 +1188,21 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         ],
     );
 
-    const addNewFieldOption = React.useCallback((label: string) => {
-        const normalized = normalizeTemplateSelectOptions([
-            ...templateNewFieldOptionsDraft,
-            { label },
-        ]);
-        setTemplateNewFieldOptionsDraft(normalized);
-    }, [templateNewFieldOptionsDraft]);
+    const addNewFieldOption = React.useCallback(
+        (label: string) => {
+            setTemplateDraftTouched(true);
+            const normalized = normalizeTemplateSelectOptions([
+                ...templateNewFieldOptionsDraft,
+                { label },
+            ]);
+            setTemplateNewFieldOptionsDraft(normalized);
+        },
+        [templateNewFieldOptionsDraft],
+    );
 
     const updateNewFieldOptionLabel = React.useCallback(
         (optionIndex: number, label: string) => {
+            setTemplateDraftTouched(true);
             const next = templateNewFieldOptionsDraft.map((option, index) =>
                 index === optionIndex
                     ? {
@@ -1172,6 +1223,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
     }, []);
 
     const deleteNewFieldOption = React.useCallback((optionIndex: number) => {
+        setTemplateDraftTouched(true);
         setTemplateNewFieldOptionsDraft((current) =>
             current.filter((_, index) => index !== optionIndex),
         );
@@ -1179,6 +1231,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
 
     const updateNewFieldOptionIcon = React.useCallback(
         (optionIndex: number, iconKey: string) => {
+            setTemplateDraftTouched(true);
             const next = templateNewFieldOptionsDraft.map((option, index) =>
                 index === optionIndex
                     ? {
@@ -1194,8 +1247,13 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
 
     const addExistingDefinitionOption = React.useCallback(
         async (definitionId: string, label: string) => {
-            const current = templateSelectOptionsByDefinitionId[definitionId] ?? [];
-            const next = normalizeTemplateSelectOptions([...current, { label }]);
+            setTemplateDraftTouched(true);
+            const current =
+                templateSelectOptionsByDefinitionId[definitionId] ?? [];
+            const next = normalizeTemplateSelectOptions([
+                ...current,
+                { label },
+            ]);
             setTemplateSelectOptionsByDefinitionId((prev) => ({
                 ...prev,
                 [definitionId]: next,
@@ -1207,6 +1265,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
 
     const updateExistingDefinitionOptionLabel = React.useCallback(
         (definitionId: string, optionId: string, label: string) => {
+            setTemplateDraftTouched(true);
             setTemplateSelectOptionsByDefinitionId((prev) => {
                 const current = prev[definitionId] ?? [];
                 const next = current.map((option) =>
@@ -1228,7 +1287,8 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
 
     const blurExistingDefinitionOptionLabel = React.useCallback(
         async (definitionId: string) => {
-            const current = templateSelectOptionsByDefinitionId[definitionId] ?? [];
+            const current =
+                templateSelectOptionsByDefinitionId[definitionId] ?? [];
             await persistTemplateSelectOptions(definitionId, current);
         },
         [persistTemplateSelectOptions, templateSelectOptionsByDefinitionId],
@@ -1269,9 +1329,12 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
 
             if (usageCount === 0) {
                 void (async () => {
+                    setTemplateDraftTouched(true);
                     const current =
                         templateSelectOptionsByDefinitionId[definitionId] ?? [];
-                    const next = current.filter((option) => option.id !== optionId);
+                    const next = current.filter(
+                        (option) => option.id !== optionId,
+                    );
                     setTemplateSelectOptionsByDefinitionId((prev) => ({
                         ...prev,
                         [definitionId]: next,
@@ -1305,27 +1368,31 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         ],
     );
 
-    const confirmExistingDefinitionOptionDelete = React.useCallback(async () => {
-        if (!pendingSelectOptionDelete) {
-            return;
-        }
+    const confirmExistingDefinitionOptionDelete =
+        React.useCallback(async () => {
+            if (!pendingSelectOptionDelete) {
+                return;
+            }
 
-        const { definitionId, optionId } = pendingSelectOptionDelete;
-        const current = templateSelectOptionsByDefinitionId[definitionId] ?? [];
-        const next = current.filter((option) => option.id !== optionId);
+            setTemplateDraftTouched(true);
 
-        setTemplateSelectOptionsByDefinitionId((prev) => ({
-            ...prev,
-            [definitionId]: next,
-        }));
+            const { definitionId, optionId } = pendingSelectOptionDelete;
+            const current =
+                templateSelectOptionsByDefinitionId[definitionId] ?? [];
+            const next = current.filter((option) => option.id !== optionId);
 
-        setPendingSelectOptionDelete(null);
-        await persistTemplateSelectOptions(definitionId, next);
-    }, [
-        pendingSelectOptionDelete,
-        persistTemplateSelectOptions,
-        templateSelectOptionsByDefinitionId,
-    ]);
+            setTemplateSelectOptionsByDefinitionId((prev) => ({
+                ...prev,
+                [definitionId]: next,
+            }));
+
+            setPendingSelectOptionDelete(null);
+            await persistTemplateSelectOptions(definitionId, next);
+        }, [
+            pendingSelectOptionDelete,
+            persistTemplateSelectOptions,
+            templateSelectOptionsByDefinitionId,
+        ]);
 
     const cancelExistingDefinitionOptionDelete = React.useCallback(() => {
         if (isSavingTemplate) {
@@ -1340,13 +1407,16 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                 return;
             }
 
+            setTemplateDraftTouched(true);
+
             if (iconPickerTarget.kind === "new") {
                 updateNewFieldOptionIcon(iconPickerTarget.optionIndex, iconKey);
                 return;
             }
 
             const { definitionId, optionId } = iconPickerTarget;
-            const current = templateSelectOptionsByDefinitionId[definitionId] ?? [];
+            const current =
+                templateSelectOptionsByDefinitionId[definitionId] ?? [];
             const next = current.map((option) =>
                 option.id === optionId
                     ? {
@@ -1511,7 +1581,10 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     }
 
                     const dragOverTransitionKey = `${pending.activeId}->${pending.overId}:${sourceColumn}->${targetColumn}:idx:${targetIndex}`;
-                    if (lastProcessedDragOverKeyRef.current === dragOverTransitionKey) {
+                    if (
+                        lastProcessedDragOverKeyRef.current ===
+                        dragOverTransitionKey
+                    ) {
                         return current;
                     }
 
@@ -1611,7 +1684,10 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             let nextPlacement: SectionPlacement | null = null;
 
             setTemplateSectionPlacement((current) => {
-                const sourceColumn = findTemplateColumnForItem(current, activeId);
+                const sourceColumn = findTemplateColumnForItem(
+                    current,
+                    activeId,
+                );
                 const targetColumn = findTemplateColumnForItem(current, overId);
                 if (!sourceColumn || !targetColumn) {
                     return current;
@@ -1632,10 +1708,18 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                         return current;
                     }
 
-                    const reordered = arrayMove(sourceItems, oldIndex, newIndex);
+                    const reordered = arrayMove(
+                        sourceItems,
+                        oldIndex,
+                        newIndex,
+                    );
                     const normalized = normalizeTemplatePlacement({
-                        left: sourceColumn === "left" ? reordered : current.left,
-                        right: sourceColumn === "right" ? reordered : current.right,
+                        left:
+                            sourceColumn === "left" ? reordered : current.left,
+                        right:
+                            sourceColumn === "right"
+                                ? reordered
+                                : current.right,
                         staticLeftItems,
                         staticRightItems,
                         validFieldItemIds: templateDraftFields.map((field) =>
@@ -1652,7 +1736,9 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     return current;
                 }
 
-                const sourceItems = current[sourceColumn].filter((id) => id !== activeId);
+                const sourceItems = current[sourceColumn].filter(
+                    (id) => id !== activeId,
+                );
                 const targetItems = [...current[targetColumn]];
                 const targetIndex = targetItems.includes(overId)
                     ? targetItems.indexOf(overId)
@@ -1684,7 +1770,9 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     ),
                 });
                 nextPlacement = normalized;
-                return areSamePlacement(normalized, current) ? current : normalized;
+                return areSamePlacement(normalized, current)
+                    ? current
+                    : normalized;
             });
 
             setTemplateDragPlacementSnapshot(null);
@@ -1699,6 +1787,8 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             if (!nextPlacement) {
                 return;
             }
+
+            setTemplateDraftTouched(true);
 
             if (!isTemplateCardItemId(activeId)) {
                 return;
@@ -1731,7 +1821,9 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                             column: leftSet.has(itemId) ? "left" : "right",
                         };
                     })
-                    .filter((field): field is TemplateDraftField => Boolean(field));
+                    .filter((field): field is TemplateDraftField =>
+                        Boolean(field),
+                    );
             });
         },
         [
@@ -1777,7 +1869,8 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                 orderIndex?: number;
             }>,
         ): TemplateSelectOptionDraft[] => {
-            const localDraft = templateSelectOptionsByDefinitionId[definitionId];
+            const localDraft =
+                templateSelectOptionsByDefinitionId[definitionId];
             if (localDraft) {
                 return localDraft;
             }
@@ -1841,7 +1934,9 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             .map((placementId) =>
                 staticCardIds.has(placementId) ? null : placementId,
             )
-            .filter((definitionId): definitionId is string => Boolean(definitionId));
+            .filter((definitionId): definitionId is string =>
+                Boolean(definitionId),
+            );
 
         const dedupedFields: TemplateDraftField[] = [];
         const seenDefinitions = new Set<string>();
@@ -1887,11 +1982,16 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             });
 
             await reloadProjectTemplateData(projectId);
+            onTemplateSaved?.();
+            setTemplateDraftTouched(false);
             setPendingTemplateDeleteDefinitionId(null);
             onOpenChange(false);
         } catch (error) {
             setTemplateDraftError(
-                normalizeUserFacingError(error, "Failed to save editor template."),
+                normalizeUserFacingError(
+                    error,
+                    "Failed to save editor template.",
+                ),
             );
         } finally {
             setIsSavingTemplate(false);
@@ -1899,6 +1999,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
     }, [
         editorType,
         onOpenChange,
+        onTemplateSaved,
         projectId,
         reloadProjectTemplateData,
         saveEditorTemplate,
@@ -1918,11 +2019,14 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
         }
 
         if (iconPickerTarget.kind === "new") {
-            return templateNewFieldOptionsDraft[iconPickerTarget.optionIndex]?.icon;
+            return templateNewFieldOptionsDraft[iconPickerTarget.optionIndex]
+                ?.icon;
         }
 
         const options =
-            templateSelectOptionsByDefinitionId[iconPickerTarget.definitionId] ?? [];
+            templateSelectOptionsByDefinitionId[
+                iconPickerTarget.definitionId
+            ] ?? [];
         return options.find((option) => option.id === iconPickerTarget.optionId)
             ?.icon;
     }, [
@@ -1936,7 +2040,8 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
             buildTemplateDraftSignature({
                 fields: templateDraftFields,
                 placement: templateSectionPlacement,
-                selectOptionsByDefinitionId: templateSelectOptionsByDefinitionId,
+                selectOptionsByDefinitionId:
+                    templateSelectOptionsByDefinitionId,
                 templateNewFieldName,
                 templateNewFieldKind,
                 templateNewFieldOptionsDraft,
@@ -1953,16 +2058,17 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
 
     const hasUnsavedTemplateChanges = React.useMemo(() => {
         const initialSignature = initialTemplateDraftSignatureRef.current;
-        if (!open || !initialSignature) {
+        if (!open || !initialSignature || !templateDraftTouched) {
             return false;
         }
 
         return initialSignature !== currentTemplateDraftSignature;
-    }, [currentTemplateDraftSignature, open]);
+    }, [currentTemplateDraftSignature, open, templateDraftTouched]);
 
     React.useEffect(() => {
         if (!open) {
             setPendingUnsavedCloseConfirm(false);
+            setTemplateDraftTouched(false);
             initialTemplateDraftSignatureRef.current = null;
         }
     }, [open]);
@@ -2014,468 +2120,540 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     requestTemplateDialogClose();
                 }}
             >
-            <DialogModalEditorContent ref={dialogModalEditorRef}>
-                <DialogHeader>
-                    <DialogTitle>
-                        Edit {editorTypeLabel(editorType)} Template
-                    </DialogTitle>
-                    <DialogDescription>
-                        Arrange core cards and metafields to define the default
-                        editor layout.
-                    </DialogDescription>
-                </DialogHeader>
-                <div className="dialog-form">
-                    <div className="dialog-field">
-                        <Label>Create New Metafield</Label>
-                        <div className="flex-row">
-                            <Input
-                                value={templateNewFieldName}
-                                onChange={(event) =>
-                                    setTemplateNewFieldName(event.target.value)
-                                }
-                                placeholder="Metafield name"
-                                disabled={isSavingTemplate}
-                            />
-                            <select
-                                className="input template-new-field-kind-select"
-                                value={templateNewFieldKind}
-                                onChange={(event) =>
-                                    setTemplateNewFieldKind(
-                                        event.target.value as
-                                            | "field"
-                                            | "paragraph"
-                                            | "select",
-                                    )
-                                }
-                                disabled={isSavingTemplate}
+                <DialogModalEditorContent
+                    ref={dialogModalEditorRef}
+                    data-tutorial-id="template-editor-dialog"
+                    onInteractOutside={(event) => {
+                        if (lockOutsideClose) {
+                            event.preventDefault();
+                        }
+                    }}
+                    onPointerDownOutside={(event) => {
+                        if (lockOutsideClose) {
+                            event.preventDefault();
+                        }
+                    }}
+                >
+                    <DialogHeader>
+                        <DialogTitle>
+                            Edit {editorTypeLabel(editorType)} Template
+                        </DialogTitle>
+                        <DialogDescription>
+                            Arrange core cards and metafields to define the
+                            default editor layout.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="dialog-form">
+                        <div className="dialog-field">
+                            <Label>Create New Metafield</Label>
+                            <div className="flex-row">
+                                <Input
+                                    value={templateNewFieldName}
+                                    onChange={(event) => {
+                                        setTemplateDraftTouched(true);
+                                        setTemplateNewFieldName(
+                                            event.target.value,
+                                        );
+                                    }}
+                                    placeholder="Metafield name"
+                                    disabled={isSavingTemplate}
+                                />
+                                <select
+                                    className="input template-new-field-kind-select"
+                                    value={templateNewFieldKind}
+                                    onChange={(event) => {
+                                        setTemplateDraftTouched(true);
+                                        setTemplateNewFieldKind(
+                                            event.target.value as
+                                                | "field"
+                                                | "paragraph"
+                                                | "select",
+                                        );
+                                    }}
+                                    disabled={isSavingTemplate}
+                                >
+                                    <option value="field">Field</option>
+                                    <option value="paragraph">Paragraph</option>
+                                    <option value="select">Select</option>
+                                </select>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => {
+                                        void createAndAddTemplateField();
+                                    }}
+                                    disabled={
+                                        isSavingTemplate ||
+                                        !templateNewFieldName.trim()
+                                    }
+                                >
+                                    Create
+                                </Button>
+                            </div>
+                        </div>
+                        {templateDraftError ? (
+                            <span className="card-hint is-error">
+                                {templateDraftError}
+                            </span>
+                        ) : null}
+                        <DndContext
+                            sensors={sensors}
+                            collisionDetection={closestCenter}
+                            autoScroll={!isSavingTemplate}
+                            onDragStart={handleTemplateSectionDragStart}
+                            onDragMove={handleTemplateSectionDragMove}
+                            onDragOver={handleTemplateSectionDragOver}
+                            onDragEnd={handleTemplateSectionDragEnd}
+                            onDragCancel={handleTemplateSectionDragCancel}
+                        >
+                            <div
+                                className="entity-editor-grid entity-editor-grid--balanced"
+                                data-tutorial-id="template-editor-cards"
                             >
-                                <option value="field">Field</option>
-                                <option value="paragraph">Paragraph</option>
-                                <option value="select">Select</option>
-                            </select>
+                                <div className="entity-column-shell entity-column-shell--lhs">
+                                    <div className="entity-column-dropzone">
+                                        <SortableContext
+                                            items={
+                                                templateSectionPlacement.left
+                                            }
+                                            strategy={
+                                                verticalListSortingStrategy
+                                            }
+                                        >
+                                            <div className="entity-column entity-column--sortable">
+                                                {templateSectionPlacement.left.map(
+                                                    (itemId) => {
+                                                        if (
+                                                            staticCardById.has(
+                                                                itemId,
+                                                            )
+                                                        ) {
+                                                            const staticCard =
+                                                                staticCardById.get(
+                                                                    itemId,
+                                                                );
+                                                            const staticPlaceholder =
+                                                                renderStaticTemplateCardPlaceholder(
+                                                                    itemId,
+                                                                );
+                                                            return (
+                                                                <SortableSectionCard
+                                                                    key={itemId}
+                                                                    id={itemId}
+                                                                    title={
+                                                                        staticCard?.title ??
+                                                                        "Core Card"
+                                                                    }
+                                                                    className={`is-static${
+                                                                        staticPlaceholder
+                                                                            ? ""
+                                                                            : " is-static-empty"
+                                                                    }`}
+                                                                    disableDrag={
+                                                                        isSavingTemplate
+                                                                    }
+                                                                    showDragHandle={
+                                                                        !isSavingTemplate
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        staticPlaceholder
+                                                                    }
+                                                                </SortableSectionCard>
+                                                            );
+                                                        }
+
+                                                        const definitionId =
+                                                            toTemplateDefinitionId(
+                                                                itemId,
+                                                            );
+                                                        if (!definitionId) {
+                                                            return null;
+                                                        }
+                                                        const field =
+                                                            templateDraftByDefinitionId.get(
+                                                                definitionId,
+                                                            );
+                                                        const definition =
+                                                            templateDefinitionById.get(
+                                                                definitionId,
+                                                            );
+                                                        if (
+                                                            !field ||
+                                                            !definition
+                                                        ) {
+                                                            return null;
+                                                        }
+
+                                                        return (
+                                                            <SortableSectionCard
+                                                                key={itemId}
+                                                                id={itemId}
+                                                                title={
+                                                                    definition.name
+                                                                }
+                                                                className={
+                                                                    field.kind ===
+                                                                    "field"
+                                                                        ? "entity-section-card--half"
+                                                                        : "entity-section-card--full"
+                                                                }
+                                                                headerActions={
+                                                                    <button
+                                                                        type="button"
+                                                                        className="entity-section-card-icon-btn entity-section-card-icon-btn--danger"
+                                                                        aria-label={`Delete ${definition.name} from template`}
+                                                                        onClick={(
+                                                                            event,
+                                                                        ) => {
+                                                                            event.preventDefault();
+                                                                            event.stopPropagation();
+                                                                            requestTemplateDraftFieldDelete(
+                                                                                definitionId,
+                                                                            );
+                                                                        }}
+                                                                        disabled={
+                                                                            isSavingTemplate
+                                                                        }
+                                                                    >
+                                                                        <TrashIcon
+                                                                            size={
+                                                                                14
+                                                                            }
+                                                                        />
+                                                                    </button>
+                                                                }
+                                                                disableDrag={
+                                                                    isSavingTemplate
+                                                                }
+                                                                showDragHandle={
+                                                                    !isSavingTemplate
+                                                                }
+                                                            >
+                                                                {renderTemplateKindPlaceholder(
+                                                                    field.kind,
+                                                                )}
+                                                                {field.kind ===
+                                                                "select" ? (
+                                                                    <TemplateSelectOptionsEditor
+                                                                        options={getDefinitionSelectOptionsDraft(
+                                                                            definitionId,
+                                                                            definition.selectOptions as Array<{
+                                                                                id: string;
+                                                                                label: string;
+                                                                                icon?: string;
+                                                                                orderIndex?: number;
+                                                                            }>,
+                                                                        )}
+                                                                        disabled={
+                                                                            isSavingTemplate
+                                                                        }
+                                                                        onAddOption={(
+                                                                            label,
+                                                                        ) => {
+                                                                            void addExistingDefinitionOption(
+                                                                                definitionId,
+                                                                                label,
+                                                                            );
+                                                                        }}
+                                                                        onOptionLabelChange={(
+                                                                            option,
+                                                                            label,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+                                                                            updateExistingDefinitionOptionLabel(
+                                                                                definitionId,
+                                                                                option.id,
+                                                                                label,
+                                                                            );
+                                                                        }}
+                                                                        onOptionLabelBlur={() => {
+                                                                            void blurExistingDefinitionOptionLabel(
+                                                                                definitionId,
+                                                                            );
+                                                                        }}
+                                                                        onOptionDelete={(
+                                                                            option,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+
+                                                                            requestExistingDefinitionOptionDelete(
+                                                                                definitionId,
+                                                                                option.id,
+                                                                                option.label,
+                                                                            );
+                                                                        }}
+                                                                        onOptionIconEdit={(
+                                                                            option,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+
+                                                                            setIconPickerTarget(
+                                                                                {
+                                                                                    kind: "existing",
+                                                                                    definitionId,
+                                                                                    optionId:
+                                                                                        option.id,
+                                                                                },
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                ) : null}
+                                                            </SortableSectionCard>
+                                                        );
+                                                    },
+                                                )}
+                                            </div>
+                                        </SortableContext>
+                                    </div>
+                                </div>
+                                <div className="entity-column-shell entity-column-shell--rhs">
+                                    <div className="entity-column-dropzone">
+                                        <SortableContext
+                                            items={
+                                                templateSectionPlacement.right
+                                            }
+                                            strategy={
+                                                verticalListSortingStrategy
+                                            }
+                                        >
+                                            <div className="entity-column entity-column--sortable">
+                                                {templateSectionPlacement.right.map(
+                                                    (itemId) => {
+                                                        if (
+                                                            staticCardById.has(
+                                                                itemId,
+                                                            )
+                                                        ) {
+                                                            const staticCard =
+                                                                staticCardById.get(
+                                                                    itemId,
+                                                                );
+                                                            const staticPlaceholder =
+                                                                renderStaticTemplateCardPlaceholder(
+                                                                    itemId,
+                                                                );
+                                                            return (
+                                                                <SortableSectionCard
+                                                                    key={itemId}
+                                                                    id={itemId}
+                                                                    title={
+                                                                        staticCard?.title ??
+                                                                        "Core Card"
+                                                                    }
+                                                                    className={`is-static${
+                                                                        staticPlaceholder
+                                                                            ? ""
+                                                                            : " is-static-empty"
+                                                                    }`}
+                                                                    disableDrag={
+                                                                        isSavingTemplate
+                                                                    }
+                                                                    showDragHandle={
+                                                                        !isSavingTemplate
+                                                                    }
+                                                                >
+                                                                    {
+                                                                        staticPlaceholder
+                                                                    }
+                                                                </SortableSectionCard>
+                                                            );
+                                                        }
+
+                                                        const definitionId =
+                                                            toTemplateDefinitionId(
+                                                                itemId,
+                                                            );
+                                                        if (!definitionId) {
+                                                            return null;
+                                                        }
+                                                        const field =
+                                                            templateDraftByDefinitionId.get(
+                                                                definitionId,
+                                                            );
+                                                        const definition =
+                                                            templateDefinitionById.get(
+                                                                definitionId,
+                                                            );
+                                                        if (
+                                                            !field ||
+                                                            !definition
+                                                        ) {
+                                                            return null;
+                                                        }
+
+                                                        return (
+                                                            <SortableSectionCard
+                                                                key={itemId}
+                                                                id={itemId}
+                                                                title={
+                                                                    definition.name
+                                                                }
+                                                                className={
+                                                                    field.kind ===
+                                                                    "field"
+                                                                        ? "entity-section-card--half"
+                                                                        : "entity-section-card--full"
+                                                                }
+                                                                headerActions={
+                                                                    <button
+                                                                        type="button"
+                                                                        className="entity-section-card-icon-btn entity-section-card-icon-btn--danger"
+                                                                        aria-label={`Delete ${definition.name} from template`}
+                                                                        onClick={(
+                                                                            event,
+                                                                        ) => {
+                                                                            event.preventDefault();
+                                                                            event.stopPropagation();
+                                                                            requestTemplateDraftFieldDelete(
+                                                                                definitionId,
+                                                                            );
+                                                                        }}
+                                                                        disabled={
+                                                                            isSavingTemplate
+                                                                        }
+                                                                    >
+                                                                        <TrashIcon
+                                                                            size={
+                                                                                14
+                                                                            }
+                                                                        />
+                                                                    </button>
+                                                                }
+                                                                disableDrag={
+                                                                    isSavingTemplate
+                                                                }
+                                                                showDragHandle={
+                                                                    !isSavingTemplate
+                                                                }
+                                                            >
+                                                                {renderTemplateKindPlaceholder(
+                                                                    field.kind,
+                                                                )}
+                                                                {field.kind ===
+                                                                "select" ? (
+                                                                    <TemplateSelectOptionsEditor
+                                                                        options={getDefinitionSelectOptionsDraft(
+                                                                            definitionId,
+                                                                            definition.selectOptions as Array<{
+                                                                                id: string;
+                                                                                label: string;
+                                                                                icon?: string;
+                                                                                orderIndex?: number;
+                                                                            }>,
+                                                                        )}
+                                                                        disabled={
+                                                                            isSavingTemplate
+                                                                        }
+                                                                        onAddOption={(
+                                                                            label,
+                                                                        ) => {
+                                                                            void addExistingDefinitionOption(
+                                                                                definitionId,
+                                                                                label,
+                                                                            );
+                                                                        }}
+                                                                        onOptionLabelChange={(
+                                                                            option,
+                                                                            label,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+                                                                            updateExistingDefinitionOptionLabel(
+                                                                                definitionId,
+                                                                                option.id,
+                                                                                label,
+                                                                            );
+                                                                        }}
+                                                                        onOptionLabelBlur={() => {
+                                                                            void blurExistingDefinitionOptionLabel(
+                                                                                definitionId,
+                                                                            );
+                                                                        }}
+                                                                        onOptionDelete={(
+                                                                            option,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+
+                                                                            requestExistingDefinitionOptionDelete(
+                                                                                definitionId,
+                                                                                option.id,
+                                                                                option.label,
+                                                                            );
+                                                                        }}
+                                                                        onOptionIconEdit={(
+                                                                            option,
+                                                                        ) => {
+                                                                            if (
+                                                                                !option.id
+                                                                            ) {
+                                                                                return;
+                                                                            }
+
+                                                                            setIconPickerTarget(
+                                                                                {
+                                                                                    kind: "existing",
+                                                                                    definitionId,
+                                                                                    optionId:
+                                                                                        option.id,
+                                                                                },
+                                                                            );
+                                                                        }}
+                                                                    />
+                                                                ) : null}
+                                                            </SortableSectionCard>
+                                                        );
+                                                    },
+                                                )}
+                                            </div>
+                                        </SortableContext>
+                                    </div>
+                                </div>
+                            </div>
+                        </DndContext>
+                        <div className="dialog-actions">
                             <Button
                                 type="button"
-                                variant="ghost"
-                                onClick={() => {
-                                    void createAndAddTemplateField();
-                                }}
-                                disabled={isSavingTemplate || !templateNewFieldName.trim()}
+                                variant="secondary"
+                                onClick={requestTemplateDialogClose}
+                                disabled={isSavingTemplate}
                             >
-                                Create
+                                Cancel
+                            </Button>
+                            <Button
+                                type="button"
+                                onClick={() => {
+                                    void saveTemplateDraft();
+                                }}
+                                data-tutorial-id="template-save-button"
+                                disabled={isSavingTemplate}
+                            >
+                                {isSavingTemplate
+                                    ? "Saving..."
+                                    : "Save template"}
                             </Button>
                         </div>
                     </div>
-                    {templateDraftError ? (
-                        <span className="card-hint is-error">
-                            {templateDraftError}
-                        </span>
-                    ) : null}
-                    <DndContext
-                        sensors={sensors}
-                        collisionDetection={closestCenter}
-                        autoScroll={!isSavingTemplate}
-                        onDragStart={handleTemplateSectionDragStart}
-                        onDragMove={handleTemplateSectionDragMove}
-                        onDragOver={handleTemplateSectionDragOver}
-                        onDragEnd={handleTemplateSectionDragEnd}
-                        onDragCancel={handleTemplateSectionDragCancel}
-                    >
-                        <div className="entity-editor-grid entity-editor-grid--balanced">
-                            <div className="entity-column-shell entity-column-shell--lhs">
-                                <div
-                                    className="entity-column-dropzone"
-                                >
-                                    <SortableContext
-                                        items={templateSectionPlacement.left}
-                                        strategy={verticalListSortingStrategy}
-                                    >
-                                        <div className="entity-column entity-column--sortable">
-                                            {templateSectionPlacement.left.map(
-                                                (itemId) => {
-                                                    if (
-                                                        staticCardById.has(itemId)
-                                                    ) {
-                                                        const staticCard =
-                                                            staticCardById.get(itemId);
-                                                        const staticPlaceholder =
-                                                            renderStaticTemplateCardPlaceholder(
-                                                                itemId,
-                                                            );
-                                                        return (
-                                                            <SortableSectionCard
-                                                                key={itemId}
-                                                                id={itemId}
-                                                                title={
-                                                                    staticCard?.title ??
-                                                                    "Core Card"
-                                                                }
-                                                                className={`is-static${
-                                                                    staticPlaceholder
-                                                                        ? ""
-                                                                        : " is-static-empty"
-                                                                }`}
-                                                                disableDrag={isSavingTemplate}
-                                                                showDragHandle={!isSavingTemplate}
-                                                            >
-                                                                {staticPlaceholder}
-                                                            </SortableSectionCard>
-                                                        );
-                                                    }
-
-                                                    const definitionId =
-                                                        toTemplateDefinitionId(
-                                                            itemId,
-                                                        );
-                                                    if (!definitionId) {
-                                                        return null;
-                                                    }
-                                                    const field =
-                                                        templateDraftByDefinitionId.get(
-                                                            definitionId,
-                                                        );
-                                                    const definition =
-                                                        templateDefinitionById.get(
-                                                            definitionId,
-                                                        );
-                                                    if (!field || !definition) {
-                                                        return null;
-                                                    }
-
-                                                    return (
-                                                        <SortableSectionCard
-                                                            key={itemId}
-                                                            id={itemId}
-                                                            title={definition.name}
-                                                            className={
-                                                                field.kind === "field"
-                                                                    ? "entity-section-card--half"
-                                                                    : "entity-section-card--full"
-                                                            }
-                                                            headerActions={
-                                                                <button
-                                                                    type="button"
-                                                                    className="entity-section-card-icon-btn entity-section-card-icon-btn--danger"
-                                                                    aria-label={`Delete ${definition.name} from template`}
-                                                                    onClick={(event) => {
-                                                                        event.preventDefault();
-                                                                        event.stopPropagation();
-                                                                        requestTemplateDraftFieldDelete(
-                                                                            definitionId,
-                                                                        );
-                                                                    }}
-                                                                    disabled={isSavingTemplate}
-                                                                >
-                                                                    <TrashIcon size={14} />
-                                                                </button>
-                                                            }
-                                                            disableDrag={isSavingTemplate}
-                                                            showDragHandle={!isSavingTemplate}
-                                                        >
-                                                            {renderTemplateKindPlaceholder(
-                                                                field.kind,
-                                                            )}
-                                                            {field.kind ===
-                                                            "select" ? (
-                                                                <TemplateSelectOptionsEditor
-                                                                    options={getDefinitionSelectOptionsDraft(
-                                                                        definitionId,
-                                                                        definition.selectOptions as Array<{
-                                                                            id: string;
-                                                                            label: string;
-                                                                            icon?: string;
-                                                                            orderIndex?: number;
-                                                                        }>,
-                                                                    )}
-                                                                    disabled={
-                                                                        isSavingTemplate
-                                                                    }
-                                                                    onAddOption={
-                                                                        (label) => {
-                                                                            void addExistingDefinitionOption(
-                                                                                definitionId,
-                                                                                label,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                    onOptionLabelChange={
-                                                                        (
-                                                                            option,
-                                                                            label,
-                                                                        ) => {
-                                                                            if (
-                                                                                !option.id
-                                                                            ) {
-                                                                                return;
-                                                                            }
-                                                                            updateExistingDefinitionOptionLabel(
-                                                                                definitionId,
-                                                                                option.id,
-                                                                                label,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                    onOptionLabelBlur={
-                                                                        () => {
-                                                                            void blurExistingDefinitionOptionLabel(
-                                                                                definitionId,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                    onOptionDelete={
-                                                                        (
-                                                                            option,
-                                                                        ) => {
-                                                                            if (
-                                                                                !option.id
-                                                                            ) {
-                                                                                return;
-                                                                            }
-
-                                                                            requestExistingDefinitionOptionDelete(
-                                                                                definitionId,
-                                                                                option.id,
-                                                                                option.label,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                    onOptionIconEdit={
-                                                                        (
-                                                                            option,
-                                                                        ) => {
-                                                                            if (
-                                                                                !option.id
-                                                                            ) {
-                                                                                return;
-                                                                            }
-
-                                                                            setIconPickerTarget(
-                                                                                {
-                                                                                    kind: "existing",
-                                                                                    definitionId,
-                                                                                    optionId: option.id,
-                                                                                },
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                />
-                                                            ) : null}
-                                                        </SortableSectionCard>
-                                                    );
-                                                },
-                                            )}
-                                        </div>
-                                    </SortableContext>
-                                </div>
-                            </div>
-                            <div className="entity-column-shell entity-column-shell--rhs">
-                                <div
-                                    className="entity-column-dropzone"
-                                >
-                                    <SortableContext
-                                        items={templateSectionPlacement.right}
-                                        strategy={verticalListSortingStrategy}
-                                    >
-                                        <div className="entity-column entity-column--sortable">
-                                            {templateSectionPlacement.right.map(
-                                                (itemId) => {
-                                                    if (
-                                                        staticCardById.has(itemId)
-                                                    ) {
-                                                        const staticCard =
-                                                            staticCardById.get(itemId);
-                                                        const staticPlaceholder =
-                                                            renderStaticTemplateCardPlaceholder(
-                                                                itemId,
-                                                            );
-                                                        return (
-                                                            <SortableSectionCard
-                                                                key={itemId}
-                                                                id={itemId}
-                                                                title={
-                                                                    staticCard?.title ??
-                                                                    "Core Card"
-                                                                }
-                                                                className={`is-static${
-                                                                    staticPlaceholder
-                                                                        ? ""
-                                                                        : " is-static-empty"
-                                                                }`}
-                                                                disableDrag={isSavingTemplate}
-                                                                showDragHandle={!isSavingTemplate}
-                                                            >
-                                                                {staticPlaceholder}
-                                                            </SortableSectionCard>
-                                                        );
-                                                    }
-
-                                                    const definitionId =
-                                                        toTemplateDefinitionId(
-                                                            itemId,
-                                                        );
-                                                    if (!definitionId) {
-                                                        return null;
-                                                    }
-                                                    const field =
-                                                        templateDraftByDefinitionId.get(
-                                                            definitionId,
-                                                        );
-                                                    const definition =
-                                                        templateDefinitionById.get(
-                                                            definitionId,
-                                                        );
-                                                    if (!field || !definition) {
-                                                        return null;
-                                                    }
-
-                                                    return (
-                                                        <SortableSectionCard
-                                                            key={itemId}
-                                                            id={itemId}
-                                                            title={definition.name}
-                                                            className={
-                                                                field.kind === "field"
-                                                                    ? "entity-section-card--half"
-                                                                    : "entity-section-card--full"
-                                                            }
-                                                            headerActions={
-                                                                <button
-                                                                    type="button"
-                                                                    className="entity-section-card-icon-btn entity-section-card-icon-btn--danger"
-                                                                    aria-label={`Delete ${definition.name} from template`}
-                                                                    onClick={(event) => {
-                                                                        event.preventDefault();
-                                                                        event.stopPropagation();
-                                                                        requestTemplateDraftFieldDelete(
-                                                                            definitionId,
-                                                                        );
-                                                                    }}
-                                                                    disabled={isSavingTemplate}
-                                                                >
-                                                                    <TrashIcon size={14} />
-                                                                </button>
-                                                            }
-                                                            disableDrag={isSavingTemplate}
-                                                            showDragHandle={!isSavingTemplate}
-                                                        >
-                                                            {renderTemplateKindPlaceholder(
-                                                                field.kind,
-                                                            )}
-                                                            {field.kind ===
-                                                            "select" ? (
-                                                                <TemplateSelectOptionsEditor
-                                                                    options={getDefinitionSelectOptionsDraft(
-                                                                        definitionId,
-                                                                        definition.selectOptions as Array<{
-                                                                            id: string;
-                                                                            label: string;
-                                                                            icon?: string;
-                                                                            orderIndex?: number;
-                                                                        }>,
-                                                                    )}
-                                                                    disabled={
-                                                                        isSavingTemplate
-                                                                    }
-                                                                    onAddOption={
-                                                                        (label) => {
-                                                                            void addExistingDefinitionOption(
-                                                                                definitionId,
-                                                                                label,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                    onOptionLabelChange={
-                                                                        (
-                                                                            option,
-                                                                            label,
-                                                                        ) => {
-                                                                            if (
-                                                                                !option.id
-                                                                            ) {
-                                                                                return;
-                                                                            }
-                                                                            updateExistingDefinitionOptionLabel(
-                                                                                definitionId,
-                                                                                option.id,
-                                                                                label,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                    onOptionLabelBlur={
-                                                                        () => {
-                                                                            void blurExistingDefinitionOptionLabel(
-                                                                                definitionId,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                    onOptionDelete={
-                                                                        (
-                                                                            option,
-                                                                        ) => {
-                                                                            if (
-                                                                                !option.id
-                                                                            ) {
-                                                                                return;
-                                                                            }
-
-                                                                            requestExistingDefinitionOptionDelete(
-                                                                                definitionId,
-                                                                                option.id,
-                                                                                option.label,
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                    onOptionIconEdit={
-                                                                        (
-                                                                            option,
-                                                                        ) => {
-                                                                            if (
-                                                                                !option.id
-                                                                            ) {
-                                                                                return;
-                                                                            }
-
-                                                                            setIconPickerTarget(
-                                                                                {
-                                                                                    kind: "existing",
-                                                                                    definitionId,
-                                                                                    optionId: option.id,
-                                                                                },
-                                                                            );
-                                                                        }
-                                                                    }
-                                                                />
-                                                            ) : null}
-                                                        </SortableSectionCard>
-                                                    );
-                                                },
-                                            )}
-                                        </div>
-                                    </SortableContext>
-                                </div>
-                            </div>
-                        </div>
-                    </DndContext>
-                    <div className="dialog-actions">
-                        <Button
-                            type="button"
-                            variant="secondary"
-                            onClick={requestTemplateDialogClose}
-                            disabled={isSavingTemplate}
-                        >
-                            Cancel
-                        </Button>
-                        <Button
-                            type="button"
-                            onClick={() => {
-                                void saveTemplateDraft();
-                            }}
-                            disabled={isSavingTemplate}
-                        >
-                            {isSavingTemplate ? "Saving..." : "Save template"}
-                        </Button>
-                    </div>
-                </div>
-            </DialogModalEditorContent>
+                </DialogModalEditorContent>
             </Dialog>
             <Dialog
                 open={pendingUnsavedCloseConfirm}
@@ -2525,7 +2703,9 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     <DialogHeader>
                         <DialogTitle>Heads up!</DialogTitle>
                         <DialogDescription>
-                            Heads up! Deleting this metafield will affect ALL existing items using this template. Any existing information will be discarded.
+                            Heads up! Deleting this metafield will affect ALL
+                            existing items using this template. Any existing
+                            information will be discarded.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="dialog-actions">
@@ -2560,9 +2740,13 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                     <DialogHeader>
                         <DialogTitle>Delete Option?</DialogTitle>
                         <DialogDescription>
-                            This option is used in {pendingSelectOptionDelete?.usageCount ?? 0}{" "}
-                            saved value{(pendingSelectOptionDelete?.usageCount ?? 0) === 1 ? "" : "s"}.
-                            Deleting it will remove it from those assignments.
+                            This option is used in{" "}
+                            {pendingSelectOptionDelete?.usageCount ?? 0} saved
+                            value
+                            {(pendingSelectOptionDelete?.usageCount ?? 0) === 1
+                                ? ""
+                                : "s"}
+                            . Deleting it will remove it from those assignments.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="dialog-actions">

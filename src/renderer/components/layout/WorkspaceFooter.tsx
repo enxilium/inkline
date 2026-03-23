@@ -126,7 +126,7 @@ export const WorkspaceFooter: React.FC<{
             { kind: "location", title: "Locations" },
             { kind: "organization", title: "Organizations" },
         ],
-        []
+        [],
     );
 
     const renderBinderIcon = (kind: WorkspaceDocumentKind) => {
@@ -156,11 +156,19 @@ export const WorkspaceFooter: React.FC<{
             {workspaceViewMode === "manuscript" && (
                 <div className="workspace-footer-binder">
                     {isBinderOpen ? (
-                        <div className="binder-tabbar workspace-footer-binder-tabbar">
+                        <div
+                            className="binder-tabbar workspace-footer-binder-tabbar"
+                            data-tutorial-id="binder-switcher"
+                        >
                             {binderSections.map((section) => (
                                 <Button
                                     key={section.kind}
                                     variant="icon"
+                                    data-tutorial-id={
+                                        section.kind === "character"
+                                            ? "binder-switcher-character-tab"
+                                            : undefined
+                                    }
                                     className={
                                         "binder-tab" +
                                         (section.kind === binderActiveKind
@@ -259,7 +267,7 @@ export const WorkspaceFooter: React.FC<{
 };
 
 const getSyncStatusLabel = (
-    status: "online" | "offline" | "syncing"
+    status: "online" | "offline" | "syncing",
 ): string => {
     switch (status) {
         case "online":
@@ -273,7 +281,7 @@ const getSyncStatusLabel = (
 
 const getSyncStatusTitle = (
     status: "online" | "offline" | "syncing",
-    lastSyncedAt: string | null
+    lastSyncedAt: string | null,
 ): string => {
     const lastSyncStr = lastSyncedAt
         ? `Last synced: ${new Date(lastSyncedAt).toLocaleTimeString()}`

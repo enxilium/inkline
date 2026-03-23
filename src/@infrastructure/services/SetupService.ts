@@ -22,6 +22,11 @@ export interface SetupConfig {
     legalAccepted: boolean;
     legalAcceptedAt: string | null;
     legalVersion: string;
+    firstProjectCreated: boolean;
+    firstProjectCreatedAt: string | null;
+    tutorialCompletedAt: string | null;
+    tutorialSkippedAt: string | null;
+    tutorialVersion: string;
 }
 
 const DEFAULT_SETUP_CONFIG: SetupConfig = {
@@ -44,6 +49,11 @@ const DEFAULT_SETUP_CONFIG: SetupConfig = {
     legalAccepted: false,
     legalAcceptedAt: null,
     legalVersion: "2026-03-22",
+    firstProjectCreated: false,
+    firstProjectCreatedAt: null,
+    tutorialCompletedAt: null,
+    tutorialSkippedAt: null,
+    tutorialVersion: "v1",
 };
 
 export class SetupService {
@@ -121,6 +131,38 @@ export class SetupService {
 
     async markLanguageToolInstalled(installed: boolean): Promise<void> {
         await this.saveConfig({ languageToolInstalled: installed });
+    }
+
+    async markFirstProjectCreated(): Promise<void> {
+        const currentConfig = await this.getConfig();
+        if (currentConfig.firstProjectCreated) {
+            return;
+        }
+
+        await this.saveConfig({
+            firstProjectCreated: true,
+            firstProjectCreatedAt: new Date().toISOString(),
+        });
+    }
+
+    async markTutorialCompleted(): Promise<void> {
+        await this.saveConfig({
+            tutorialCompletedAt: new Date().toISOString(),
+            tutorialSkippedAt: null,
+        });
+    }
+
+    async markTutorialSkipped(): Promise<void> {
+        await this.saveConfig({
+            tutorialSkippedAt: new Date().toISOString(),
+        });
+    }
+
+    async resetTutorialProgress(): Promise<void> {
+        await this.saveConfig({
+            tutorialCompletedAt: null,
+            tutorialSkippedAt: null,
+        });
     }
 }
 

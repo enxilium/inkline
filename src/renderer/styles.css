@@ -3239,7 +3239,9 @@ input.toolbar-color:focus {
     flex-wrap: wrap;
 }
 
-.dialog-modal-editor .entity-section-card.is-static.is-static-empty .entity-section-card-header {
+.dialog-modal-editor
+    .entity-section-card.is-static.is-static-empty
+    .entity-section-card-header {
     margin-bottom: 0;
 }
 
@@ -5907,4 +5909,125 @@ input.toolbar-color:focus {
     color: var(--color-danger-light);
     font-size: var(--text-sm2);
     padding: 0.25rem 0;
+}
+
+.tutorial-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 21000;
+    pointer-events: none;
+}
+
+.tutorial-overlay-backdrop {
+    position: absolute;
+    inset: 0;
+    background: var(--backdrop-50);
+}
+
+.tutorial-overlay-highlight {
+    position: fixed;
+    border-radius: 10px;
+    border: 2px solid var(--accent);
+    box-shadow:
+        0 0 0 2px var(--accent-transparent2),
+        0 0 0 200vmax rgba(0, 0, 0, 0.45);
+    transition:
+        top 160ms var(--ease-out),
+        left 160ms var(--ease-out),
+        width 160ms var(--ease-out),
+        height 160ms var(--ease-out);
+}
+
+.tutorial-card {
+    position: fixed;
+    pointer-events: auto;
+    background: var(--surface-strong);
+    border: 1px solid var(--accent-transparent2);
+    border-radius: 14px;
+    box-shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+    padding: 0.85rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.tutorial-card-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem;
+}
+
+.tutorial-card-speaker {
+    display: flex;
+    align-items: center;
+    gap: 0.65rem;
+    min-width: 0;
+}
+
+.tutorial-card-avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid var(--accent-transparent2);
+    background: var(--overlay-6);
+}
+
+.tutorial-card-name {
+    margin: 0;
+    font-size: var(--text-sm2);
+    font-weight: 700;
+    color: var(--text);
+}
+
+.tutorial-card-progress {
+    margin: 0;
+    font-size: var(--text-xs);
+    color: var(--text-subtle);
+}
+
+.tutorial-skip-button {
+    border: none;
+    background: transparent;
+    color: var(--text-subtle);
+    font-size: var(--text-xs);
+    cursor: pointer;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+
+.tutorial-skip-button:hover {
+    color: var(--text);
+}
+
+.tutorial-card-message {
+    margin: 0;
+    color: var(--text);
+    line-height: 1.5;
+    font-size: var(--text-sm3);
+}
+
+.tutorial-card-action-hint {
+    margin: 0;
+    color: var(--accent-light);
+    font-size: var(--text-sm);
+}
+
+.tutorial-card-actions {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    min-height: 2.1rem;
+}
+
+.tutorial-card-waiting {
+    font-size: var(--text-xs2);
+    color: var(--text-subtle);
+}
+
+@media (max-width: 700px) {
+    .tutorial-card {
+        max-width: calc(100vw - 1rem);
+        padding: 0.75rem;
+    }
 }

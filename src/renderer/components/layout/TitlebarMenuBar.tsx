@@ -32,6 +32,7 @@ export const TitlebarMenuBar: React.FC = () => {
         setActiveDocument,
         workspaceViewMode,
         setWorkspaceViewMode,
+        requestTutorialReplay,
     } = useAppStore();
     const [openMenu, setOpenMenu] = React.useState<MenuKey>(null);
     const [isRangeDialogOpen, setIsRangeDialogOpen] = React.useState(false);
@@ -93,6 +94,7 @@ export const TitlebarMenuBar: React.FC = () => {
                             "titlebar-menubar-button titlebar-no-drag",
                             openMenu === "file" && "is-open",
                         )}
+                        data-tutorial-id="titlebar-file-menu-button"
                         onClick={() => toggleMenu("file")}
                         onMouseEnter={() => openOnHoverIfAnyOpen("file")}
                     >
@@ -125,6 +127,7 @@ export const TitlebarMenuBar: React.FC = () => {
                                 type="button"
                                 className="project-card-menu-item titlebar-menu-item-with-icon"
                                 role="menuitem"
+                                data-tutorial-id="titlebar-export-manuscript-item"
                                 onClick={() => {
                                     setOpenMenu(null);
                                     setIsExportDialogOpen(true);
@@ -227,6 +230,18 @@ export const TitlebarMenuBar: React.FC = () => {
                                 {workspaceViewMode === "manuscript"
                                     ? "Switch to Timeline"
                                     : "Switch to Manuscript"}
+                            </button>
+                            <button
+                                type="button"
+                                className="project-card-menu-item"
+                                role="menuitem"
+                                onClick={() => {
+                                    setOpenMenu(null);
+                                    setWorkspaceViewMode("manuscript");
+                                    requestTutorialReplay();
+                                }}
+                            >
+                                Replay Tutorial
                             </button>
                         </div>
                     ) : null}

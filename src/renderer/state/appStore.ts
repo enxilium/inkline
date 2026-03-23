@@ -655,6 +655,7 @@ type AppStore = {
     draggedDocument: { id: string; kind: string; title: string } | null;
     isBinderOpen: boolean;
     isChatOpen: boolean;
+    tutorialReplayNonce: number;
 
     // Pending chapter edits (in-memory only)
     pendingEditsByChapterId: Record<
@@ -807,6 +808,7 @@ type AppStore = {
     closeProject: () => void;
     toggleBinder: () => void;
     toggleChat: () => void;
+    requestTutorialReplay: () => void;
     flushActiveDocumentContent: () => Promise<void>;
 
     // IPC wrappers: keep renderer calls centralized here.
@@ -1131,7 +1133,9 @@ export const useAppStore = create<AppStore>((set, get) => {
         }
 
         const reloadPromise = (async () => {
-            const payload = await rendererApi.project.openProject({ projectId });
+            const payload = await rendererApi.project.openProject({
+                projectId,
+            });
             const current = get();
 
             if (
@@ -2770,7 +2774,10 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             runInBackground(
                 (async () => {
-                    await rendererApi.world.createOrganization({ projectId, id });
+                    await rendererApi.world.createOrganization({
+                        projectId,
+                        id,
+                    });
                     await reconcileEntityMetafieldsFromRepository(
                         projectId,
                         "organization",
@@ -3747,6 +3754,12 @@ export const useAppStore = create<AppStore>((set, get) => {
         isChatOpen: false,
         toggleChat: () => {
             set((state) => ({ isChatOpen: !state.isChatOpen }));
+        },
+        tutorialReplayNonce: 0,
+        requestTutorialReplay: () => {
+            set((state) => ({
+                tutorialReplayNonce: state.tutorialReplayNonce + 1,
+            }));
         },
 
         pendingEditsByChapterId: {},

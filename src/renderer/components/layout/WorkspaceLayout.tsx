@@ -35,7 +35,44 @@ const defaultLayout: IJsonModel = {
     },
 };
 
-export const WorkspaceLayout: React.FC = () => {
+export type LayoutSummary = {
+    signature: string;
+    tabsetCount: number;
+};
+
+const summarizeLayout = (model: Model): LayoutSummary => {
+    const json = model.toJson();
+
+    const countTabsets = (node: unknown): number => {
+        if (!node || typeof node !== "object") {
+            return 0;
+        }
+
+        const typed = node as {
+            type?: string;
+            children?: unknown[];
+        };
+        const own: number = typed.type === "tabset" ? 1 : 0;
+        const children = Array.isArray(typed.children) ? typed.children : [];
+        return (
+            own +
+            children.reduce<number>((sum, child) => {
+                return sum + countTabsets(child);
+            }, 0)
+        );
+    };
+
+    const layout = (json as { layout?: unknown }).layout ?? {};
+
+    return {
+        signature: JSON.stringify(layout),
+        tabsetCount: countTabsets(layout),
+    };
+};
+
+export const WorkspaceLayout: React.FC<{
+    onLayoutSummaryChange?: (summary: LayoutSummary) => void;
+}> = ({ onLayoutSummaryChange }) => {
     const {
         activeDocument,
         setActiveDocument,
@@ -48,6 +85,14 @@ export const WorkspaceLayout: React.FC = () => {
 
     // Initialize model once
     const [model] = React.useState(() => Model.fromJson(defaultLayout));
+
+    React.useEffect(() => {
+        if (!onLayoutSummaryChange) {
+            return;
+        }
+
+        onLayoutSummaryChange(summarizeLayout(model));
+    }, [model, onLayoutSummaryChange]);
 
     // Factory to render components
     const factory = (node: TabNode) => {
@@ -245,6 +290,7 @@ export const WorkspaceLayout: React.FC = () => {
 
     // Sync: Layout -> Store
     const onModelChange = (model: Model) => {
+        onLayoutSummaryChange?.(summarizeLayout(model));
         const activeTab = model.getActiveTabset()?.getSelectedNode() as TabNode;
         if (activeTab) {
             const config = activeTab.getConfig();
@@ -287,7 +333,10 @@ export const WorkspaceLayout: React.FC = () => {
     };
 
     return (
-        <div className="workspace-shell">
+        <div
+            className="workspace-shell"
+            data-tutorial-id="workspace-layout-root"
+        >
             <Layout
                 model={model}
                 factory={factory}

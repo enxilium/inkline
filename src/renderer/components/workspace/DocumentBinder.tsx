@@ -865,6 +865,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
     return (
         <aside
             className="binder-panel"
+            data-tutorial-id="binder-panel"
             onContextMenu={(e) => {
                 e.preventDefault();
                 window.ui.showContextMenu("binder_project");
@@ -894,6 +895,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                         <Button
                             variant="icon"
                             className="binder-create"
+                            data-tutorial-id="binder-template-button"
                             onClick={() => onEditTemplate(activeTemplateKind)}
                             title={`Edit ${activeSection.title} Template`}
                         >
@@ -903,6 +905,13 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                     <Button
                         variant="icon"
                         className="binder-create"
+                        data-tutorial-id={
+                            activeSection.kind === "chapter"
+                                ? "binder-create-chapter-button"
+                                : activeSection.kind === "character"
+                                  ? "binder-create-character-button"
+                                  : "binder-create-button"
+                        }
                         onClick={activeSection.onCreate}
                         title={`New ${activeSection.title}`}
                     >

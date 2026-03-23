@@ -11,6 +11,10 @@ export const SETUP_CHANNELS = {
     CHECK_PLATFORM: "setup:checkPlatform",
     DOWNLOAD_PROGRESS: "setup:downloadProgress",
     CLOSE_WINDOW: "setup:closeWindow",
+    GET_TUTORIAL_STATE: "setup:getTutorialState",
+    MARK_TUTORIAL_COMPLETED: "setup:markTutorialCompleted",
+    MARK_TUTORIAL_SKIPPED: "setup:markTutorialSkipped",
+    RESET_TUTORIAL_PROGRESS: "setup:resetTutorialProgress",
 } as const;
 
 /** Channels for managing features from the main renderer (settings screen). */
@@ -60,6 +64,19 @@ export interface SetupConfig {
     legalAccepted: boolean;
     legalAcceptedAt: string | null;
     legalVersion: string;
+    firstProjectCreated?: boolean;
+    firstProjectCreatedAt?: string | null;
+    tutorialCompletedAt?: string | null;
+    tutorialSkippedAt?: string | null;
+    tutorialVersion?: string;
+}
+
+export interface TutorialState {
+    firstProjectCreated: boolean;
+    firstProjectCreatedAt: string | null;
+    tutorialCompletedAt: string | null;
+    tutorialSkippedAt: string | null;
+    tutorialVersion: string;
 }
 
 export interface LegalPoliciesResponse {

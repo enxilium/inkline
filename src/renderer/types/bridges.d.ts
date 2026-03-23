@@ -1,6 +1,7 @@
 import type { IpcRenderer } from "electron";
 import type { RendererApi } from "../../@interface-adapters/controllers/contracts";
 import type { AuthStatePayload } from "../../@interface-adapters/controllers/auth/AuthStateGateway";
+import type { TutorialState } from "../../@interface-adapters/controllers/setup/setupChannels";
 import type {
     SyncStatePayload,
     RemoteChangePayload,
@@ -52,6 +53,12 @@ declare global {
                     progress: number;
                 }) => void,
             ): () => IpcRenderer;
+        };
+        tutorialApi: {
+            getState: () => Promise<TutorialState>;
+            markCompleted: () => Promise<void>;
+            markSkipped: () => Promise<void>;
+            resetProgress: () => Promise<void>;
         };
         importEvents: {
             onProgress(

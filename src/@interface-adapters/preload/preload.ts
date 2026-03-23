@@ -6,9 +6,11 @@ import {
 } from "../controllers/auth/AuthStateGateway";
 import {
     FEATURE_CHANNELS,
+    SETUP_CHANNELS,
     type FeatureConfig,
     type FeatureKind,
     type DownloadProgress,
+    type TutorialState,
 } from "../controllers/setup/setupChannels";
 import {
     SYNC_STATE_CHANGED_CHANNEL,
@@ -247,6 +249,19 @@ const createGenerationEvents = () => {
 
 const generationEvents = createGenerationEvents();
 contextBridge.exposeInMainWorld("generationEvents", generationEvents);
+
+const tutorialApi = {
+    getState: (): Promise<TutorialState> =>
+        ipcRenderer.invoke(SETUP_CHANNELS.GET_TUTORIAL_STATE),
+    markCompleted: (): Promise<void> =>
+        ipcRenderer.invoke(SETUP_CHANNELS.MARK_TUTORIAL_COMPLETED),
+    markSkipped: (): Promise<void> =>
+        ipcRenderer.invoke(SETUP_CHANNELS.MARK_TUTORIAL_SKIPPED),
+    resetProgress: (): Promise<void> =>
+        ipcRenderer.invoke(SETUP_CHANNELS.RESET_TUTORIAL_PROGRESS),
+};
+
+contextBridge.exposeInMainWorld("tutorialApi", tutorialApi);
 
 type TitleBarOverlayOptions = {
     color: string;

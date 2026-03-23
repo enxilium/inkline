@@ -654,6 +654,31 @@ const setupSetupIpcHandlers = (onComplete: () => void): void => {
     );
 };
 
+const setupTutorialIpcHandlers = (): void => {
+    ipcMain.handle(SETUP_CHANNELS.GET_TUTORIAL_STATE, async () => {
+        const config = await setupService.getConfig();
+        return {
+            firstProjectCreated: config.firstProjectCreated,
+            firstProjectCreatedAt: config.firstProjectCreatedAt,
+            tutorialCompletedAt: config.tutorialCompletedAt,
+            tutorialSkippedAt: config.tutorialSkippedAt,
+            tutorialVersion: config.tutorialVersion,
+        };
+    });
+
+    ipcMain.handle(SETUP_CHANNELS.MARK_TUTORIAL_COMPLETED, async () => {
+        await setupService.markTutorialCompleted();
+    });
+
+    ipcMain.handle(SETUP_CHANNELS.MARK_TUTORIAL_SKIPPED, async () => {
+        await setupService.markTutorialSkipped();
+    });
+
+    ipcMain.handle(SETUP_CHANNELS.RESET_TUTORIAL_PROGRESS, async () => {
+        await setupService.resetTutorialProgress();
+    });
+};
+
 // ──────────────────────────────────────────────────────────────
 // Feature management from the main renderer (Settings screen)
 // ──────────────────────────────────────────────────────────────
@@ -975,6 +1000,7 @@ const bootstrap = async (): Promise<void> => {
     createLoadingWindow();
 
     setupContextMenu();
+    setupTutorialIpcHandlers();
     setupFeatureIpcHandlers();
 
     await appBuilder.build();

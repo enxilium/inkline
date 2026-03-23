@@ -2,13 +2,19 @@ import React from "react";
 
 import { useAppStore } from "../state/appStore";
 import { WorkspaceLayout } from "../components/layout/WorkspaceLayout";
+import type { LayoutSummary } from "../components/layout/WorkspaceLayout";
 import { ConnectedDocumentBinder } from "../components/layout/ConnectedDocumentBinder";
 import { ConnectedEditorTemplateDialog } from "../components/layout/ConnectedEditorTemplateDialog";
 import { ChatPanel } from "../components/workspace/ChatPanel";
 import { WorkspaceFooter } from "../components/layout/WorkspaceFooter";
 import { ConflictResolutionDialog } from "../components/dialogs/ConflictResolutionDialog";
+import { TutorialOverlay } from "../components/tutorial/TutorialOverlay";
+import { TUTORIAL_STEPS } from "../components/tutorial/tutorialSteps";
 import TimelineView from "./TimelineView";
-import type { WorkspaceDocumentKind, WorkspaceEditorTemplateType } from "../types";
+import type {
+    WorkspaceDocumentKind,
+    WorkspaceEditorTemplateType,
+} from "../types";
 
 type ContextMenuEntityKind =
     | "chapter"
@@ -47,6 +53,16 @@ const isContextMenuEntityData = (
 
 export const WorkspaceView: React.FC = () => {
     const { isBinderOpen, isChatOpen, workspaceViewMode } = useAppStore();
+    const projectId = useAppStore((state) => state.projectId);
+    const chaptersCount = useAppStore((state) => state.chapters.length);
+    const charactersCount = useAppStore((state) => state.characters.length);
+    const toggleBinder = useAppStore((state) => state.toggleBinder);
+    const setWorkspaceViewMode = useAppStore(
+        (state) => state.setWorkspaceViewMode,
+    );
+    const tutorialReplayNonce = useAppStore(
+        (state) => state.tutorialReplayNonce,
+    );
     const activeDocument = useAppStore((state) => state.activeDocument);
     const closeProject = useAppStore((state) => state.closeProject);
     const deleteChapter = useAppStore((state) => state.deleteChapter);
@@ -112,6 +128,32 @@ export const WorkspaceView: React.FC = () => {
         );
     const [templateDialogEditorType, setTemplateDialogEditorType] =
         React.useState<WorkspaceEditorTemplateType | null>(null);
+
+    const [isTutorialActive, setIsTutorialActive] = React.useState(false);
+    const [tutorialStepIndex, setTutorialStepIndex] = React.useState(0);
+    const [actionFallbackReady, setActionFallbackReady] = React.useState(false);
+    const [templateSaveCount, setTemplateSaveCount] = React.useState(0);
+    const [layoutSummary, setLayoutSummary] = React.useState<LayoutSummary>({
+        signature: "",
+        tabsetCount: 1,
+    });
+    const saveStepScrollRef = React.useRef(false);
+    const actionBaselineRef = React.useRef<{
+        chapters: number;
+        characters: number;
+        templateSaves: number;
+        splitSignature: string;
+    }>({
+        chapters: chaptersCount,
+        characters: charactersCount,
+        templateSaves: templateSaveCount,
+        splitSignature: layoutSummary.signature,
+    });
+    const autoStartProjectRef = React.useRef<string | null>(null);
+
+    const tutorialStep = isTutorialActive
+        ? (TUTORIAL_STEPS[tutorialStepIndex] ?? null)
+        : null;
 
     const [isPeeking, setIsPeeking] = React.useState(false);
     const peekTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
@@ -231,6 +273,197 @@ export const WorkspaceView: React.FC = () => {
         [],
     );
 
+    const startTutorial = React.useCallback(() => {
+        if (!projectId) {
+            return;
+        }
+
+        setWorkspaceViewMode("manuscript");
+        if (!isBinderOpen) {
+            toggleBinder();
+        }
+
+        setBinderActiveKind("chapter");
+        setTemplateDialogEditorType(null);
+        setActionFallbackReady(false);
+        setTutorialStepIndex(0);
+        setIsTutorialActive(true);
+    }, [isBinderOpen, projectId, setWorkspaceViewMode, toggleBinder]);
+
+    const completeTutorial = React.useCallback(() => {
+        setIsTutorialActive(false);
+        setTutorialStepIndex(0);
+        setActionFallbackReady(false);
+        window.tutorialApi.markCompleted().catch(() => {
+            /* noop */
+        });
+    }, []);
+
+    const skipTutorial = React.useCallback(() => {
+        setIsTutorialActive(false);
+        setTutorialStepIndex(0);
+        setActionFallbackReady(false);
+        window.tutorialApi.markSkipped().catch(() => {
+            /* noop */
+        });
+    }, []);
+
+    const goNextTutorialStep = React.useCallback(() => {
+        setTutorialStepIndex((current) => {
+            const next = current + 1;
+            if (next >= TUTORIAL_STEPS.length) {
+                return current;
+            }
+            return next;
+        });
+    }, []);
+
+    React.useEffect(() => {
+        if (!isTutorialActive || !tutorialStep) {
+            return;
+        }
+
+        setActionFallbackReady(false);
+        actionBaselineRef.current = {
+            chapters: chaptersCount,
+            characters: charactersCount,
+            templateSaves: templateSaveCount,
+            splitSignature: layoutSummary.signature,
+        };
+
+        if (!tutorialStep.action || !tutorialStep.fallbackAfterMs) {
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            setActionFallbackReady(true);
+        }, tutorialStep.fallbackAfterMs);
+
+        return () => {
+            window.clearTimeout(timeoutId);
+        };
+    }, [isTutorialActive, tutorialStepIndex, tutorialStep]);
+
+    React.useEffect(() => {
+        if (!isTutorialActive || !tutorialStep?.action) {
+            return;
+        }
+
+        const baseline = actionBaselineRef.current;
+        let completed = false;
+
+        if (tutorialStep.action === "create-chapter") {
+            completed = chaptersCount > baseline.chapters;
+        } else if (tutorialStep.action === "switch-character-tab") {
+            completed = binderActiveKind === "character";
+        } else if (tutorialStep.action === "create-character") {
+            completed = charactersCount > baseline.characters;
+        } else if (tutorialStep.action === "open-template-editor") {
+            completed = templateDialogEditorType === "character";
+        } else if (tutorialStep.action === "save-template") {
+            completed = templateSaveCount > baseline.templateSaves;
+        } else if (tutorialStep.action === "split-pane") {
+            completed =
+                layoutSummary.tabsetCount > 1 &&
+                layoutSummary.signature !== baseline.splitSignature;
+        }
+
+        if (!completed) {
+            return;
+        }
+
+        if (tutorialStepIndex >= TUTORIAL_STEPS.length - 1) {
+            completeTutorial();
+            return;
+        }
+
+        goNextTutorialStep();
+    }, [
+        binderActiveKind,
+        chaptersCount,
+        charactersCount,
+        completeTutorial,
+        goNextTutorialStep,
+        isTutorialActive,
+        layoutSummary.signature,
+        layoutSummary.tabsetCount,
+        templateDialogEditorType,
+        templateSaveCount,
+        tutorialStep,
+        tutorialStepIndex,
+    ]);
+
+    React.useEffect(() => {
+        if (!projectId || autoStartProjectRef.current === projectId) {
+            return;
+        }
+
+        autoStartProjectRef.current = projectId;
+        window.tutorialApi
+            .getState()
+            .then((state) => {
+                const shouldAutoStart =
+                    state.firstProjectCreated &&
+                    !state.tutorialCompletedAt &&
+                    !state.tutorialSkippedAt;
+
+                if (shouldAutoStart) {
+                    startTutorial();
+                }
+            })
+            .catch(() => {
+                /* noop */
+            });
+    }, [projectId, startTutorial]);
+
+    React.useEffect(() => {
+        if (tutorialReplayNonce < 1) {
+            return;
+        }
+
+        startTutorial();
+    }, [startTutorial, tutorialReplayNonce]);
+
+    React.useEffect(() => {
+        if (!tutorialStep || tutorialStep.id !== "template-save") {
+            saveStepScrollRef.current = false;
+            return;
+        }
+
+        if (saveStepScrollRef.current) {
+            return;
+        }
+
+        saveStepScrollRef.current = true;
+        const timerId = window.setTimeout(() => {
+            const button = document.querySelector(
+                '[data-tutorial-id="template-save-button"]',
+            ) as HTMLElement | null;
+            button?.scrollIntoView({ behavior: "smooth", block: "center" });
+        }, 180);
+
+        return () => {
+            window.clearTimeout(timerId);
+        };
+    }, [tutorialStep]);
+
+    const handleTutorialNext = React.useCallback(() => {
+        if (!tutorialStep) {
+            return;
+        }
+
+        if (tutorialStepIndex >= TUTORIAL_STEPS.length - 1) {
+            completeTutorial();
+            return;
+        }
+
+        goNextTutorialStep();
+    }, [completeTutorial, goNextTutorialStep, tutorialStep, tutorialStepIndex]);
+
+    const showTutorialNext = Boolean(
+        tutorialStep && (!tutorialStep.action || actionFallbackReady),
+    );
+
     return (
         <div
             className="workspace-view"
@@ -294,7 +527,9 @@ export const WorkspaceView: React.FC = () => {
                 )}
                 <div className="workspace-main-content">
                     {workspaceViewMode === "manuscript" ? (
-                        <WorkspaceLayout />
+                        <WorkspaceLayout
+                            onLayoutSummaryChange={setLayoutSummary}
+                        />
                     ) : (
                         <TimelineView />
                     )}
@@ -332,12 +567,26 @@ export const WorkspaceView: React.FC = () => {
             <ConnectedEditorTemplateDialog
                 open={templateDialogEditorType !== null}
                 editorType={templateDialogEditorType}
+                lockOutsideClose={isTutorialActive}
+                onTemplateSaved={() => {
+                    setTemplateSaveCount((current) => current + 1);
+                }}
                 onOpenChange={(nextOpen) => {
                     if (!nextOpen) {
                         setTemplateDialogEditorType(null);
                     }
                 }}
             />
+            {tutorialStep ? (
+                <TutorialOverlay
+                    step={tutorialStep}
+                    stepIndex={tutorialStepIndex}
+                    totalSteps={TUTORIAL_STEPS.length}
+                    showNext={showTutorialNext}
+                    onNext={handleTutorialNext}
+                    onSkip={skipTutorial}
+                />
+            ) : null}
         </div>
     );
 };
