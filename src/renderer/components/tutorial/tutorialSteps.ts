@@ -85,7 +85,7 @@ export const TUTORIAL_STEPS: TutorialStep[] = [
         id: "template-drag",
         message:
             "You can also drag cards around to position them exactly the way you want it in this section!",
-        targetId: "template-editor-cards",
+        targetId: "template-first-card-drag-handle",
     },
     {
         id: "template-save",

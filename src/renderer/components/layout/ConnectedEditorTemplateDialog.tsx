@@ -435,6 +435,7 @@ type SortableSectionCardProps = {
     disableDrag?: boolean;
     showDragHandle?: boolean;
     headerActions?: React.ReactNode;
+    dragHandleTutorialId?: string;
 };
 
 const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
@@ -445,6 +446,7 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
     disableDrag = false,
     showDragHandle = true,
     headerActions,
+    dragHandleTutorialId,
 }) => {
     const {
         attributes,
@@ -478,6 +480,7 @@ const SortableSectionCard: React.FC<SortableSectionCardProps> = ({
                             type="button"
                             className="entity-section-card-handle"
                             aria-label={`Reorder ${title} section`}
+                            data-tutorial-id={dragHandleTutorialId}
                             {...attributes}
                             {...listeners}
                         >
@@ -2222,7 +2225,7 @@ export const ConnectedEditorTemplateDialog: React.FC<
                                         >
                                             <div className="entity-column entity-column--sortable">
                                                 {templateSectionPlacement.left.map(
-                                                    (itemId) => {
+                                                    (itemId, index) => {
                                                         if (
                                                             staticCardById.has(
                                                                 itemId,
@@ -2240,6 +2243,11 @@ export const ConnectedEditorTemplateDialog: React.FC<
                                                                 <SortableSectionCard
                                                                     key={itemId}
                                                                     id={itemId}
+                                                                    dragHandleTutorialId={
+                                                                        index === 0
+                                                                            ? "template-first-card-drag-handle"
+                                                                            : undefined
+                                                                    }
                                                                     title={
                                                                         staticCard?.title ??
                                                                         "Core Card"
@@ -2289,6 +2297,11 @@ export const ConnectedEditorTemplateDialog: React.FC<
                                                             <SortableSectionCard
                                                                 key={itemId}
                                                                 id={itemId}
+                                                                dragHandleTutorialId={
+                                                                    index === 0
+                                                                        ? "template-first-card-drag-handle"
+                                                                        : undefined
+                                                                }
                                                                 title={
                                                                     definition.name
                                                                 }
