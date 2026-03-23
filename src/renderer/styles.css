@@ -4910,11 +4910,13 @@ input.toolbar-color:focus {
     transition: opacity var(--duration-fast) var(--ease-default);
 }
 
-.template-select-option-chip-icon-btn:hover .template-select-option-chip-icon-default {
+.template-select-option-chip-icon-btn:hover
+    .template-select-option-chip-icon-default {
     opacity: 0;
 }
 
-.template-select-option-chip-icon-btn:hover .template-select-option-chip-icon-hover {
+.template-select-option-chip-icon-btn:hover
+    .template-select-option-chip-icon-hover {
     opacity: 1;
 }
 
@@ -5291,6 +5293,14 @@ input.toolbar-color:focus {
 
 .tiptap-document-reference:hover {
     text-decoration: none;
+}
+
+/* LT issues take priority over reference interactions and styling. */
+.lt .tiptap-document-reference,
+.lt .tiptap-document-reference:hover {
+    background: transparent !important;
+    box-shadow: none !important;
+    cursor: text;
 }
 
 /* Color variants by document kind (class for live editor + data-kind for serialized HTML) */

@@ -49,6 +49,28 @@ function guessMimeType(filename: string): string {
     return map[ext] ?? "application/octet-stream";
 }
 
+/**
+ * Normalize HTML text nodes so XHTML formatting whitespace does not turn into
+ * visible editor content. Keeps semantic spacing between inline words.
+ */
+function normalizeHtmlTextNode(rawText: string): string | null {
+    if (!rawText) return null;
+
+    // Preserve meaningful text while collapsing HTML-collapsible whitespace.
+    if (/[^\t\n\r\f ]/.test(rawText)) {
+        const normalized = rawText.replace(/[\t\n\r\f ]+/g, " ");
+        return normalized.length > 0 ? normalized : null;
+    }
+
+    // Ignore indentation/newline-only formatting nodes from pretty-printed XHTML.
+    if (/[\t\n\r\f]/.test(rawText)) {
+        return null;
+    }
+
+    // Preserve pure-space separators between adjacent inline nodes.
+    return " ";
+}
+
 // ─── HTML → Tiptap JSON converter ───────────────────────────────────────────
 
 type CheerioElement = DomElement;
@@ -70,8 +92,9 @@ function convertChildren(
 
     parent.contents().each((_i, el) => {
         if (el.type === "text") {
-            const text = (el as DomText).data;
-            if (text && text.length > 0) {
+            const rawText = (el as DomText).data;
+            const text = normalizeHtmlTextNode(rawText);
+            if (text) {
                 nodes.push({ type: "text", text });
             }
             return;

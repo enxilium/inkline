@@ -12,6 +12,7 @@ import {
     createDocumentReferenceSuggestion,
 } from "../../tiptap/documentReference";
 import { LanguageTool } from "../../tiptap/languageTool";
+import { NightModeDisplayColorShift } from "../../tiptap/nightModeDisplayColorShift";
 import { LanguageToolPopup } from "../workspace/LanguageToolPopup";
 import type { DocumentRef } from "./ListInput";
 import classNames from "clsx";
@@ -86,6 +87,7 @@ export const RichTextAreaInput = forwardRef<
 
         const editor = useEditor({
             extensions: [
+                NightModeDisplayColorShift,
                 StarterKit,
                 DocumentReference.configure({
                     suggestion: createDocumentReferenceSuggestion({

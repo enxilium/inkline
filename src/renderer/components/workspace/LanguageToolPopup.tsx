@@ -9,6 +9,7 @@ interface LanguageToolPopupProps {
 export const LanguageToolPopup: React.FC<LanguageToolPopupProps> = ({
     editor,
 }) => {
+    const HOVER_UPDATE_EVENT = "inkline:languagetool-hover-update";
     const [match, setMatch] = React.useState<Match | null>(null);
     const [matchRange, setMatchRange] = React.useState<{
         from: number;
@@ -48,7 +49,7 @@ export const LanguageToolPopup: React.FC<LanguageToolPopupProps> = ({
         };
     }, [match, position]);
 
-    // Poll storage regularly to detect changes (more reliable than transaction-based)
+    // Sync popup state from extension storage on editor updates.
     React.useEffect(() => {
         if (!editor) return;
 
@@ -172,15 +173,22 @@ export const LanguageToolPopup: React.FC<LanguageToolPopupProps> = ({
         // Check immediately
         checkStorage();
 
-        // Poll every 100ms for changes (handles edge cases where transactions don't fire)
-        const interval = setInterval(checkStorage, 100);
+        const handleHoverUpdate = () => {
+            checkStorage();
+        };
 
-        // Also check on transactions for faster response
+        // Keep in sync with editor updates.
         editor.on("transaction", checkStorage);
+        editor.on("selectionUpdate", checkStorage);
+        editor.view.dom.addEventListener(HOVER_UPDATE_EVENT, handleHoverUpdate);
 
         return () => {
-            clearInterval(interval);
             editor.off("transaction", checkStorage);
+            editor.off("selectionUpdate", checkStorage);
+            editor.view.dom.removeEventListener(
+                HOVER_UPDATE_EVENT,
+                handleHoverUpdate,
+            );
         };
     }, [editor]);
 
@@ -290,7 +298,7 @@ export const LanguageToolPopup: React.FC<LanguageToolPopupProps> = ({
                         .slice(0, 5)
                         .map((replacement, index) => (
                             <button
-                                key={index}
+                                key={`${replacement.value}-${index}`}
                                 className="lt-popup-suggestion"
                                 onClick={() => handleReplace(replacement.value)}
                                 type="button"

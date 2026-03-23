@@ -13,6 +13,7 @@ import { SearchAndReplace } from "../../tiptap/searchAndReplace";
 import { LanguageTool } from "../../tiptap/languageTool";
 import { InlineComment } from "../../tiptap/inlineComment";
 import CommentExtension from "../../tiptap/commentExtension";
+import { NightModeDisplayColorShift } from "../../tiptap/nightModeDisplayColorShift";
 import {
     DocumentReference,
     createDocumentReferenceSuggestion,
@@ -347,6 +348,7 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             });
         },
         extensions: [
+            NightModeDisplayColorShift,
             Color.configure({ types: ["textStyle"] }),
             TextStyle,
             FontFamily.configure({ types: ["textStyle"] }),

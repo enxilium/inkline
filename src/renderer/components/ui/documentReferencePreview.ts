@@ -1,5 +1,9 @@
 import tippy, { type Instance as TippyInstance } from "tippy.js";
 import type { DocumentRef, DocumentRefKind } from "./ListInput";
+import {
+    shouldShiftDisplayColorsForCurrentTheme,
+    transformHtmlForNightDisplay,
+} from "../../utils/displayColorShift";
 
 const isWordContinuation = (value: string): boolean =>
     /^[\p{L}\p{N}_'’-]/u.test(value);
@@ -7,64 +11,7 @@ const isWordContinuation = (value: string): boolean =>
 export const isElementPartOfLanguageToolProblem = (
     anchor: HTMLElement,
 ): boolean => {
-    if (anchor.closest(".lt")) {
-        return true;
-    }
-
-    const editorRoot =
-        anchor.closest(".editor-body") ||
-        anchor.closest(".rich-textarea-input") ||
-        anchor.parentElement;
-
-    if (!editorRoot) {
-        return false;
-    }
-
-    const nextSibling = anchor.nextSibling;
-    if (nextSibling instanceof Text) {
-        const value = nextSibling.textContent || "";
-        if (value.length > 0 && isWordContinuation(value)) {
-            const nextElement = nextSibling.nextSibling;
-            if (
-                nextElement instanceof HTMLElement &&
-                nextElement.classList.contains("lt")
-            ) {
-                return true;
-            }
-        }
-    }
-
-    if (
-        nextSibling instanceof HTMLElement &&
-        nextSibling.classList.contains("lt") &&
-        isWordContinuation(nextSibling.textContent || "")
-    ) {
-        return true;
-    }
-
-    const previousSibling = anchor.previousSibling;
-    if (
-        previousSibling instanceof HTMLElement &&
-        previousSibling.classList.contains("lt") &&
-        isWordContinuation(anchor.textContent || "")
-    ) {
-        return true;
-    }
-
-    if (
-        previousSibling instanceof Text &&
-        isWordContinuation(anchor.textContent || "")
-    ) {
-        const prevElement = previousSibling.previousSibling;
-        if (
-            prevElement instanceof HTMLElement &&
-            prevElement.classList.contains("lt")
-        ) {
-            return true;
-        }
-    }
-
-    return false;
+    return Boolean(anchor.closest(".lt"));
 };
 
 type PreviewContent = {
@@ -360,17 +307,28 @@ const toBodyHtml = (ref: DocumentRef): string => {
         return "";
     }
 
+    const shouldShiftDisplayColors = shouldShiftDisplayColorsForCurrentTheme();
+
     if (ref.previewContentType === "tiptap-json") {
         const html = renderTiptapJsonToHtml(raw);
-        return sanitizePreviewHtml(html);
+        return transformHtmlForNightDisplay(
+            sanitizePreviewHtml(html),
+            shouldShiftDisplayColors,
+        );
     }
 
     if (ref.previewContentType === "html") {
         const sanitized = sanitizePreviewHtml(raw);
-        return sanitized;
+        return transformHtmlForNightDisplay(
+            sanitized,
+            shouldShiftDisplayColors,
+        );
     }
 
-    return toPlainHtml(raw);
+    return transformHtmlForNightDisplay(
+        toPlainHtml(raw),
+        shouldShiftDisplayColors,
+    );
 };
 
 export const buildReferencePreviewContent = (

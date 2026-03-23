@@ -427,14 +427,16 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         };
     }, [clearAutoExpandTimer, clearRevealTimer, clearCollapseTimers]);
 
+    const locationsById = React.useMemo(
+        () => new Map(locations.map((location) => [location.id, location])),
+        [locations],
+    );
+
     const getRevealedLocationIds = React.useCallback(
         (
             parentId: string,
             collapsedMap: Record<string, boolean>,
         ): Record<string, boolean> => {
-            const locationsById = new Map(
-                locations.map((location) => [location.id, location]),
-            );
             const revealed: Record<string, boolean> = {};
             const visit = (locationId: string) => {
                 const location = locationsById.get(locationId);
@@ -457,7 +459,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
             visit(parentId);
             return revealed;
         },
-        [locations],
+        [locationsById],
     );
 
     const handleSelectKind = (kind: WorkspaceDocumentKind) => {
@@ -483,43 +485,56 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         }
     };
 
-    const chapterItems: BinderItem[] = chapters
-        .slice()
-        .sort((a, b) => a.order - b.order)
-        .map((chapter) => ({
-            id: chapter.id,
-            label: normalizeLabel(chapter.title, "Untitled Chapter"),
-            prefix: String(chapter.order + 1),
-            kind: "chapter",
-            hasPendingEdits:
-                (pendingEditsByChapterId[chapter.id]?.comments?.length ?? 0) >
-                    0 ||
-                (pendingEditsByChapterId[chapter.id]?.replacements?.length ??
-                    0) > 0,
-        }));
+    const chapterItems: BinderItem[] = React.useMemo(
+        () =>
+            chapters
+                .slice()
+                .sort((a, b) => a.order - b.order)
+                .map((chapter) => ({
+                    id: chapter.id,
+                    label: normalizeLabel(chapter.title, "Untitled Chapter"),
+                    prefix: String(chapter.order + 1),
+                    kind: "chapter" as const,
+                    hasPendingEdits:
+                        (pendingEditsByChapterId[chapter.id]?.comments
+                            ?.length ?? 0) > 0 ||
+                        (pendingEditsByChapterId[chapter.id]?.replacements
+                            ?.length ?? 0) > 0,
+                })),
+        [chapters, pendingEditsByChapterId],
+    );
 
-    const scrapNoteItems: BinderItem[] = scrapNotes.map((note) => ({
-        id: note.id,
-        label: normalizeLabel(note.title, "Untitled Note"),
-        kind: "scrapNote",
-    }));
+    const scrapNoteItems: BinderItem[] = React.useMemo(
+        () =>
+            scrapNotes.map((note) => ({
+                id: note.id,
+                label: normalizeLabel(note.title, "Untitled Note"),
+                kind: "scrapNote" as const,
+            })),
+        [scrapNotes],
+    );
 
-    const characterItems: BinderItem[] = characters.map((character) => ({
-        id: character.id,
-        label: normalizeLabel(character.name, "Untitled Character"),
-        kind: "character",
-    }));
+    const characterItems: BinderItem[] = React.useMemo(
+        () =>
+            characters.map((character) => ({
+                id: character.id,
+                label: normalizeLabel(character.name, "Untitled Character"),
+                kind: "character" as const,
+            })),
+        [characters],
+    );
 
-    const locationItems: BinderItem[] = locations.map((location) => ({
-        id: location.id,
-        label: normalizeLabel(location.name, "Untitled Location"),
-        kind: "location",
-    }));
+    const locationItems: BinderItem[] = React.useMemo(
+        () =>
+            locations.map((location) => ({
+                id: location.id,
+                label: normalizeLabel(location.name, "Untitled Location"),
+                kind: "location" as const,
+            })),
+        [locations],
+    );
 
     const locationRows = React.useMemo(() => {
-        const locationsById = new Map(
-            locations.map((location) => [location.id, location]),
-        );
         const childIds = new Set<string>();
         locations.forEach((location) => {
             location.sublocationIds.forEach((childId) => {
@@ -584,15 +599,19 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
         });
 
         return rows;
-    }, [collapsedLocationIds, locations, rootLocationIds]);
+    }, [collapsedLocationIds, locations, locationsById, rootLocationIds]);
 
-    const getLocationDescendantCount = React.useCallback(
-        (locationId: string): number => {
-            const locationsById = new Map(
-                locations.map((location) => [location.id, location]),
-            );
+    const locationRowById = React.useMemo(
+        () => new Map(locationRows.map((row) => [row.id, row])),
+        [locationRows],
+    );
+
+    const descendantCountByLocationId = React.useMemo(() => {
+        const counts = new Map<string, number>();
+
+        locations.forEach((location) => {
             let count = 0;
-            const stack = [locationId];
+            const stack = [location.id];
             const visited = new Set<string>();
 
             while (stack.length > 0) {
@@ -602,7 +621,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                 }
                 visited.add(currentId);
 
-                if (currentId !== locationId) {
+                if (currentId !== location.id) {
                     count += 1;
                 }
 
@@ -611,22 +630,35 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
                     continue;
                 }
 
-                current.sublocationIds.forEach((childId) =>
-                    stack.push(childId),
-                );
+                current.sublocationIds.forEach((childId) => {
+                    stack.push(childId);
+                });
             }
 
-            return count;
+            counts.set(location.id, count);
+        });
+
+        return counts;
+    }, [locations, locationsById]);
+
+    const getLocationDescendantCount = React.useCallback(
+        (locationId: string): number => {
+            return descendantCountByLocationId.get(locationId) ?? 0;
         },
-        [locations],
+        [descendantCountByLocationId],
     );
 
-    const organizationItems: BinderItem[] = organizations.map(
-        (organization) => ({
-            id: organization.id,
-            label: normalizeLabel(organization.name, "Untitled Organization"),
-            kind: "organization",
-        }),
+    const organizationItems: BinderItem[] = React.useMemo(
+        () =>
+            organizations.map((organization) => ({
+                id: organization.id,
+                label: normalizeLabel(
+                    organization.name,
+                    "Untitled Organization",
+                ),
+                kind: "organization" as const,
+            })),
+        [organizations],
     );
 
     const sections: BinderSection[] = [
@@ -942,9 +974,7 @@ export const DocumentBinder: React.FC<DocumentBinderProps> = ({
 
                                     const locationRow =
                                         activeSection.kind === "location"
-                                            ? locationRows.find(
-                                                  (row) => row.id === item.id,
-                                              )
+                                            ? locationRowById.get(item.id)
                                             : undefined;
 
                                     return (

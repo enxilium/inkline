@@ -12,6 +12,8 @@ import {
     getReferenceKey,
     isElementPartOfLanguageToolProblem,
 } from "./documentReferencePreview";
+import { transformHtmlForNightDisplay } from "../../utils/displayColorShift";
+import { useDisplayColorShiftEnabled } from "../../utils/useDisplayColorShiftEnabled";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Types for document references
@@ -77,10 +79,19 @@ export const ListInput: React.FC<ListInputProps> = ({
         popup: TippyInstance;
         anchor: HTMLElement;
     } | null>(null);
+    const shouldShiftDisplayColors = useDisplayColorShiftEnabled();
 
     const referenceLookup = React.useMemo(
         () => createReferenceLookup(availableDocuments),
         [availableDocuments],
+    );
+
+    const displayItems = React.useMemo(
+        () =>
+            value.map((item) =>
+                transformHtmlForNightDisplay(item, shouldShiftDisplayColors),
+            ),
+        [value, shouldShiftDisplayColors],
     );
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -306,7 +317,7 @@ export const ListInput: React.FC<ListInputProps> = ({
                 <div className="list-input-items">
                     {value.map((item, index) => (
                         <div
-                            key={index}
+                            key={`${item}-${index}`}
                             className="list-input-item"
                             onClick={handleItemClick}
                             onMouseOver={handleItemMouseOver}
@@ -349,7 +360,7 @@ export const ListInput: React.FC<ListInputProps> = ({
                                         className="list-input-item-text rich-text-content"
                                         onClick={() => startEditing(index)}
                                         dangerouslySetInnerHTML={{
-                                            __html: item,
+                                            __html: displayItems[index],
                                         }}
                                     />
                                     <button

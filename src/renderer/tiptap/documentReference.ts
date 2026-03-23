@@ -464,6 +464,10 @@ export const DocumentReference = Mention.extend<DocumentReferenceOptions>({
             span.addEventListener("mouseleave", closePreview);
 
             span.addEventListener("click", (e) => {
+                if (isElementPartOfLanguageToolProblem(span)) {
+                    return;
+                }
+
                 e.preventDefault();
                 e.stopPropagation();
 

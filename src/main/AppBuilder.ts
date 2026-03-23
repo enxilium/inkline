@@ -635,6 +635,8 @@ export class AppBuilder {
                     repo.user,
                     svc.storage,
                     repo.asset,
+                    repo.metafieldDefinition,
+                    repo.editorTemplate,
                 ),
                 loadProjectList: new LoadProjectList(repo.project, repo.asset),
                 openProject: new OpenProject(

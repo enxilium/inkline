@@ -384,9 +384,7 @@ const LegalStep: React.FC<{
     policies: LegalPoliciesResponse | null;
     isLoading: boolean;
     error: string | null;
-    hasScrolledToEnd: boolean;
     hasAccepted: boolean;
-    onScrolledToEnd: () => void;
     onAcceptedChange: (accepted: boolean) => void;
     onNext: () => void;
     onBack: () => void;
@@ -394,32 +392,13 @@ const LegalStep: React.FC<{
     policies,
     isLoading,
     error,
-    hasScrolledToEnd,
     hasAccepted,
-    onScrolledToEnd,
     onAcceptedChange,
     onNext,
     onBack,
 }) => {
     const canContinue =
-        !isLoading &&
-        !error &&
-        Boolean(policies) &&
-        hasScrolledToEnd &&
-        hasAccepted;
-
-    const handleScroll = (event: React.UIEvent<HTMLDivElement>) => {
-        if (hasScrolledToEnd) {
-            return;
-        }
-
-        const element = event.currentTarget;
-        const scrollOffset =
-            element.scrollHeight - element.scrollTop - element.clientHeight;
-        if (scrollOffset <= 8) {
-            onScrolledToEnd();
-        }
-    };
+        !isLoading && !error && Boolean(policies) && hasAccepted;
 
     return (
         <div style={styles.stepContainer}>
@@ -438,10 +417,7 @@ const LegalStep: React.FC<{
             {policies && !error && (
                 <>
                     <div style={styles.summaryBox}>
-                        <div
-                            style={styles.legalScrollBox}
-                            onScroll={handleScroll}
-                        >
+                        <div style={styles.legalScrollBox}>
                             <div style={styles.legalMarkdown}>
                                 <ReactMarkdown
                                     components={{
@@ -483,17 +459,10 @@ const LegalStep: React.FC<{
                             </div>
                         </div>
                     </div>
-                    {!hasScrolledToEnd && (
-                        <p style={styles.featureNote}>
-                            Scroll to the end of the legal text to enable
-                            acceptance.
-                        </p>
-                    )}
                     <label style={styles.legalCheckboxRow}>
                         <input
                             type="checkbox"
                             checked={hasAccepted}
-                            disabled={!hasScrolledToEnd}
                             onChange={(event) =>
                                 onAcceptedChange(event.target.checked)
                             }
@@ -1176,7 +1145,6 @@ const SetupWizard: React.FC = () => {
     const [legalPoliciesError, setLegalPoliciesError] = useState<string | null>(
         null,
     );
-    const [hasScrolledToEnd, setHasScrolledToEnd] = useState(false);
     const [hasAcceptedLegal, setHasAcceptedLegal] = useState(false);
     const [config, setConfig] = useState<SetupConfig>({
         features: {
@@ -1393,9 +1361,7 @@ const SetupWizard: React.FC = () => {
                         policies={legalPolicies}
                         isLoading={legalPoliciesLoading}
                         error={legalPoliciesError}
-                        hasScrolledToEnd={hasScrolledToEnd}
                         hasAccepted={hasAcceptedLegal}
-                        onScrolledToEnd={() => setHasScrolledToEnd(true)}
                         onAcceptedChange={handleLegalAcceptanceChange}
                         onNext={goNext}
                         onBack={goBack}

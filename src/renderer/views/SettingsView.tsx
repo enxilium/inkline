@@ -79,6 +79,7 @@ export const SettingsView: React.FC = () => {
     const [audioProgress, setAudioProgress] =
         useState<FeatureDownloadProgress | null>(null);
     const [togglingFeature, setTogglingFeature] = useState<string | null>(null);
+    const accentSaveTimerRef = React.useRef<number | null>(null);
 
     const setThemeMode = useCallback((mode: ThemeMode) => {
         const root = document.documentElement;
@@ -157,7 +158,9 @@ export const SettingsView: React.FC = () => {
                     });
                 }
             })
-            .catch((): void => { /* noop */ });
+            .catch((): void => {
+                /* noop */
+            });
     }, []);
 
     // Listen for download progress events (from settings toggles OR startup prompt)
@@ -214,7 +217,9 @@ export const SettingsView: React.FC = () => {
                             setFeatureConfig(c);
                             setTogglingFeature(null);
                         })
-                        .catch((): void => { /* noop */ });
+                        .catch((): void => {
+                            /* noop */
+                        });
                 }
             },
         );
@@ -282,7 +287,9 @@ export const SettingsView: React.FC = () => {
                 window.featureApi
                     .getConfig()
                     .then((c) => setFeatureConfig(c))
-                    .catch((): void => { /* noop */ });
+                    .catch((): void => {
+                        /* noop */
+                    });
             }
         },
         [featureConfig, togglingFeature],
@@ -331,6 +338,15 @@ export const SettingsView: React.FC = () => {
         [currentUserId, saveUserSettings],
     );
 
+    useEffect(() => {
+        return () => {
+            if (accentSaveTimerRef.current !== null) {
+                window.clearTimeout(accentSaveTimerRef.current);
+                accentSaveTimerRef.current = null;
+            }
+        };
+    }, []);
+
     const handleAccentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         setAccent(val);
@@ -338,7 +354,15 @@ export const SettingsView: React.FC = () => {
         updateCssVar("--accent-transparent", val + "11");
         updateCssVar("--accent-transparent2", val + "44");
         updateCssVar("--accent-light", val);
-        void saveAppearancePreferences({ accentColor: val });
+
+        if (accentSaveTimerRef.current !== null) {
+            window.clearTimeout(accentSaveTimerRef.current);
+        }
+
+        accentSaveTimerRef.current = window.setTimeout(() => {
+            accentSaveTimerRef.current = null;
+            void saveAppearancePreferences({ accentColor: val });
+        }, 250);
     };
 
     const handleThemeModeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -349,6 +373,11 @@ export const SettingsView: React.FC = () => {
     };
 
     const handleReset = () => {
+        if (accentSaveTimerRef.current !== null) {
+            window.clearTimeout(accentSaveTimerRef.current);
+            accentSaveTimerRef.current = null;
+        }
+
         setAccent("#2ef6ad");
         setThemeMode("dark");
 

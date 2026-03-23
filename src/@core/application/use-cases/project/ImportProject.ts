@@ -7,11 +7,14 @@ import { ITimelineRepository } from "../../../domain/repositories/ITimelineRepos
 import { IUserRepository } from "../../../domain/repositories/IUserRepository";
 import { IStorageService } from "../../../domain/services/IStorageService";
 import { IAssetRepository } from "../../../domain/repositories/IAssetRepository";
+import { IMetafieldDefinitionRepository } from "../../../domain/repositories/IMetafieldDefinitionRepository";
+import { IEditorTemplateRepository } from "../../../domain/repositories/IEditorTemplateRepository";
 import { Project } from "../../../domain/entities/story/Project";
 import { Chapter } from "../../../domain/entities/story/Chapter";
 import { Timeline } from "../../../domain/entities/story/timeline/Timeline";
 import { Image } from "../../../domain/entities/story/world/Image";
 import { generateId } from "../../utils/id";
+import { initializeDefaultEditorTemplates } from "./defaultEditorTemplateBootstrap";
 
 export interface ImportProjectRequest {
     userId: string;
@@ -41,6 +44,8 @@ export class ImportProject {
         private readonly userRepository: IUserRepository,
         private readonly storageService: IStorageService,
         private readonly assetRepository: IAssetRepository,
+        private readonly metafieldDefinitionRepository: IMetafieldDefinitionRepository,
+        private readonly editorTemplateRepository: IEditorTemplateRepository,
     ) {}
 
     async execute(
@@ -193,6 +198,13 @@ export class ImportProject {
         );
 
         await this.timelineRepository.create(projectId, mainTimeline);
+
+        await initializeDefaultEditorTemplates(
+            projectId,
+            now,
+            this.metafieldDefinitionRepository,
+            this.editorTemplateRepository,
+        );
         report(96);
 
         // 8. Update user's project list
