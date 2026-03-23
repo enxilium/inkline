@@ -64,16 +64,18 @@ export function Header() {
                                     <ChevronDown className="h-3.5 w-3.5" />
                                 </Link>
                                 {featuresOpen && (
-                                    <div className="absolute top-full left-0 mt-2 w-56 rounded-xl border border-border bg-elevated p-2 shadow-xl">
-                                        {link.children.map((child) => (
-                                            <Link
-                                                key={child.href}
-                                                href={child.href}
-                                                className="block rounded-lg px-4 py-2.5 text-sm text-muted transition-colors hover:bg-card hover:text-foreground"
-                                            >
-                                                {child.label}
-                                            </Link>
-                                        ))}
+                                    <div className="absolute top-full left-0 w-56 pt-2">
+                                        <div className="rounded-xl border border-border bg-elevated p-2 shadow-xl">
+                                            {link.children.map((child) => (
+                                                <Link
+                                                    key={child.href}
+                                                    href={child.href}
+                                                    className="block rounded-lg px-4 py-2.5 text-sm text-muted transition-colors hover:bg-card hover:text-foreground"
+                                                >
+                                                    {child.label}
+                                                </Link>
+                                            ))}
+                                        </div>
                                     </div>
                                 )}
                             </div>

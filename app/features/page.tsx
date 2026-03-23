@@ -15,6 +15,7 @@ import {
     Music,
     ImageIcon,
     MessageSquare,
+    ArrowUpDown,
     Cloud,
     FileDown,
     Import,
@@ -55,6 +56,14 @@ const categories = [
         icon: Sparkles,
         href: "/features/ai",
         image: "/images/features-minimal-interface.png",
+    },
+    {
+        title: "Sync & Export",
+        description:
+            "Keep projects synced across devices, import existing drafts, and export polished EPUB files.",
+        icon: ArrowUpDown,
+        href: "/features/sync-export",
+        image: "/images/features-import.png",
     },
 ];
 

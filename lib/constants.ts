@@ -34,6 +34,7 @@ export const NAV_LINKS = [
             { label: "Writing & Editing", href: "/features/writing" },
             { label: "Worldbuilding", href: "/features/worldbuilding" },
             { label: "AI Tools", href: "/features/ai" },
+            { label: "Sync & Export", href: "/features/sync-export" },
         ],
     },
     { label: "Download", href: "/download" },
@@ -88,6 +89,6 @@ export const FEATURES_OVERVIEW = [
         description:
             "Work across devices with cloud sync, export to EPUB, and import from Google Docs or Word.",
         icon: "arrow-up-down" as const,
-        href: "/download",
+        href: "/features/sync-export",
     },
 ] as const;

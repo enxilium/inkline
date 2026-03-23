@@ -231,7 +231,7 @@ export default function Home() {
                         title="Designed for focus"
                         description="A clean, purposeful interface that stays out of your way — until you need it."
                     />
-                    <div className="grid gap-8 md:grid-cols-2">
+                    <div className="space-y-10">
                         <FadeIn delay={150}>
                             <div className="overflow-hidden rounded-2xl border border-border">
                                 <Image
@@ -282,7 +282,7 @@ export default function Home() {
                         title="One-click import"
                         description="Bring your existing work into Inkline in seconds. Import EPUBs created from tools like Google Docs and Microsoft Word with a single click."
                     />
-                    <div className="grid gap-8 md:grid-cols-2 md:items-center">
+                    <div className="space-y-5">
                         <FadeIn delay={150}>
                             <div className="overflow-hidden rounded-2xl border border-border glow">
                                 <Image
@@ -295,16 +295,16 @@ export default function Home() {
                             </div>
                         </FadeIn>
                         <FadeIn>
-                            <div className="rounded-2xl p-6 md:p-8">
-                                <h3 className="text-2xl font-semibold">
+                            <div>
+                                <h3 className="text-lg font-semibold md:text-xl">
                                     Move from docs to drafts, instantly
                                 </h3>
-                                <p className="mt-3 text-muted">
+                                <p className="mt-1 text-sm text-muted md:text-base">
                                     Export your manuscript as EPUB from Google
                                     Docs or Microsoft Word, then import it into
                                     Inkline with one click.
                                 </p>
-                                <p className="mt-2 text-muted">
+                                <p className="mt-2 text-sm text-muted md:text-base">
                                     Your chapters come in ready for editing,
                                     so you can keep writing without manual
                                     copy-paste cleanup.
