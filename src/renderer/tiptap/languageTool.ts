@@ -247,7 +247,69 @@ const createProofreader = (
     ) => void,
 ) => {
     const MAX_CHUNK_CHAR_LENGTH = 3200;
+    const HOVER_UPDATE_EVENT = "inkline:languagetool-hover-update";
     let delegatedListenerAttached = false;
+
+    const handleDelegatedEvent = (e: Event) => {
+        const target = e.target as HTMLElement;
+
+        // Find the closest .lt element (decoration)
+        const ltElement = target.closest(".lt") as HTMLElement | null;
+        if (!ltElement) {
+            return;
+        }
+
+        const matchString = ltElement.getAttribute("data-match");
+        if (!matchString) return;
+
+        try {
+            const { match, matchId } = JSON.parse(matchString) as {
+                match: Match;
+                matchId: string;
+            };
+
+            // Get current positions from actual decoration
+            const state = getPluginState();
+            if (!state) return;
+
+            // Find decoration to get current from/to positions
+            const allDecorations = state.decorationSet.find();
+            const decoration = allDecorations.find(
+                (d) => d.spec?.matchId === matchId,
+            );
+
+            // Get positions from decoration if found, otherwise compute from DOM
+            let from: number;
+            let to: number;
+
+            if (decoration) {
+                from = decoration.from;
+                to = decoration.to;
+            } else {
+                // Fallback: compute position from DOM element
+                const pos = view.posAtDOM(ltElement, 0);
+                if (pos === undefined || pos === null) return;
+                from = pos;
+                to = pos + (ltElement.textContent?.length ?? 0);
+            }
+
+            // Update storage to trigger React re-render
+            updateStorage(match, { from, to }, matchId);
+
+            // Notify popup components immediately. Hover updates do not
+            // inherently produce editor transactions.
+            view.dom.dispatchEvent(
+                new CustomEvent(HOVER_UPDATE_EVENT, {
+                    bubbles: true,
+                }),
+            );
+        } catch (error) {
+            console.error(
+                "[LanguageTool] Error handling decoration event:",
+                error,
+            );
+        }
+    };
 
     const buildProofreadChunk = (doc: PMNode, nodePos = 0): ProofreadChunk => {
         const chars: string[] = [];
@@ -359,62 +421,19 @@ const createProofreader = (
         if (delegatedListenerAttached) return;
         delegatedListenerAttached = true;
 
-        const handleEvent = (e: Event) => {
-            const target = e.target as HTMLElement;
-
-            // Find the closest .lt element (decoration)
-            const ltElement = target.closest(".lt") as HTMLElement | null;
-            if (!ltElement) {
-                return;
-            }
-
-            const matchString = ltElement.getAttribute("data-match");
-            if (!matchString) return;
-
-            try {
-                const { match, matchId } = JSON.parse(matchString) as {
-                    match: Match;
-                    matchId: string;
-                };
-
-                // Get current positions from actual decoration
-                const state = getPluginState();
-                if (!state) return;
-
-                // Find decoration to get current from/to positions
-                const allDecorations = state.decorationSet.find();
-                const decoration = allDecorations.find(
-                    (d) => d.spec?.matchId === matchId,
-                );
-
-                // Get positions from decoration if found, otherwise compute from DOM
-                let from: number;
-                let to: number;
-
-                if (decoration) {
-                    from = decoration.from;
-                    to = decoration.to;
-                } else {
-                    // Fallback: compute position from DOM element
-                    const pos = view.posAtDOM(ltElement, 0);
-                    if (pos === undefined || pos === null) return;
-                    from = pos;
-                    to = pos + (ltElement.textContent?.length ?? 0);
-                }
-
-                // Update storage to trigger React re-render
-                updateStorage(match, { from, to }, matchId);
-            } catch (error) {
-                console.error(
-                    "[LanguageTool] Error handling decoration event:",
-                    error,
-                );
-            }
-        };
-
         // Use event delegation on the editor DOM
-        view.dom.addEventListener("click", handleEvent);
-        view.dom.addEventListener("mouseenter", handleEvent, true); // Capture phase for mouseenter
+        view.dom.addEventListener("click", handleDelegatedEvent);
+        view.dom.addEventListener("mouseover", handleDelegatedEvent);
+    };
+
+    const teardownDelegatedListener = () => {
+        if (!delegatedListenerAttached) {
+            return;
+        }
+
+        delegatedListenerAttached = false;
+        view.dom.removeEventListener("click", handleDelegatedEvent);
+        view.dom.removeEventListener("mouseover", handleDelegatedEvent);
     };
 
     // No longer needed - we use delegation now
@@ -626,6 +645,7 @@ const createProofreader = (
         debouncedProofreadAndDecorate,
         onNodeChanged,
         addEventListenersToDecorations,
+        teardownDelegatedListener,
     };
 };
 
@@ -1031,6 +1051,7 @@ export const LanguageTool = Extension.create<
                         },
                         destroy: () => {
                             // Cleanup - could cancel pending requests here if needed
+                            proofreader.teardownDelegatedListener();
                         },
                     };
                 },

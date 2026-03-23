@@ -13,6 +13,8 @@ import {
     getReferenceKey,
     isElementPartOfLanguageToolProblem,
 } from "./documentReferencePreview";
+import { transformHtmlForNightDisplay } from "../../utils/displayColorShift";
+import { useDisplayColorShiftEnabled } from "../../utils/useDisplayColorShiftEnabled";
 
 export interface RichListItem {
     title: string;
@@ -57,10 +59,22 @@ export const RichListInput: React.FC<RichListInputProps> = ({
         popup: TippyInstance;
         anchor: HTMLElement;
     } | null>(null);
+    const shouldShiftDisplayColors = useDisplayColorShiftEnabled();
 
     const referenceLookup = React.useMemo(
         () => createReferenceLookup(availableDocuments),
         [availableDocuments],
+    );
+
+    const displayDescriptions = React.useMemo(
+        () =>
+            value.map((item) =>
+                transformHtmlForNightDisplay(
+                    item.description,
+                    shouldShiftDisplayColors,
+                ),
+            ),
+        [value, shouldShiftDisplayColors],
     );
 
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -287,7 +301,7 @@ export const RichListInput: React.FC<RichListInputProps> = ({
                 <div className="list-input-items">
                     {value.map((item, index) => (
                         <div
-                            key={index}
+                            key={`${item.title}-${index}`}
                             className="list-input-item rich-list-item"
                             onClick={handleItemClick}
                             onMouseOver={handleItemMouseOver}
@@ -347,7 +361,9 @@ export const RichListInput: React.FC<RichListInputProps> = ({
                                         <div
                                             className="rich-list-item-description rich-text-content"
                                             dangerouslySetInnerHTML={{
-                                                __html: item.description,
+                                                __html: displayDescriptions[
+                                                    index
+                                                ],
                                             }}
                                         />
                                     </div>

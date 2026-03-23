@@ -68,7 +68,9 @@ const fontOptions = [
     { label: "IBM Plex Mono", value: "'IBM Plex Mono', monospace" },
 ];
 
-const noop = (): void => {/* noop */};
+const noop = (): void => {
+    /* noop */
+};
 
 export const TextEditor: React.FC<TextEditorProps> = ({
     editor,
@@ -82,21 +84,7 @@ export const TextEditor: React.FC<TextEditorProps> = ({
     onAcceptReplacement,
     activeCommentId = null,
 }) => {
-    const DEFAULT_FALLBACK_COLOR = "#f6f7fb";
-    const [themeTextColor, setThemeTextColor] = React.useState(
-        DEFAULT_FALLBACK_COLOR,
-    );
-
-    React.useEffect(() => {
-        const computed = window
-            .getComputedStyle(document.documentElement)
-            .getPropertyValue("--text")
-            .trim();
-
-        if (/^#[0-9a-fA-F]{6}$/.test(computed)) {
-            setThemeTextColor(computed);
-        }
-    }, []);
+    const DEFAULT_FALLBACK_COLOR = "#000000";
 
     const normalizeHtmlColor = React.useCallback(
         (value: string | null | undefined) => {
@@ -118,9 +106,9 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                 }
             }
 
-            return themeTextColor;
+            return DEFAULT_FALLBACK_COLOR;
         },
-        [themeTextColor],
+        [],
     );
     const stage = useAppStore((state) => state.stage);
     const [renderTick, setRenderTick] = React.useState(0);
@@ -137,6 +125,8 @@ export const TextEditor: React.FC<TextEditorProps> = ({
         React.useState(false);
     const [pendingCommentRequest, setPendingCommentRequest] =
         React.useState(false);
+    const rerenderFrameRef = React.useRef<number | null>(null);
+    const pendingColorRef = React.useRef<string | null>(null);
 
     // Track whether this editor instance triggered the most recent context menu.
     const didTriggerContextMenuRef = React.useRef(false);
@@ -187,13 +177,29 @@ export const TextEditor: React.FC<TextEditorProps> = ({
             return;
         }
 
-        const rerender = () => setRenderTick((prev) => prev + 1);
+        const rerender = () => {
+            // Coalesce bursts of transactions (e.g. large formatting changes)
+            // into a single React state update per frame.
+            if (rerenderFrameRef.current !== null) {
+                return;
+            }
+
+            rerenderFrameRef.current = window.requestAnimationFrame(() => {
+                rerenderFrameRef.current = null;
+                setRenderTick((prev) => prev + 1);
+            });
+        };
+
         editor.on("selectionUpdate", rerender);
         editor.on("transaction", rerender);
 
         return () => {
             editor.off("selectionUpdate", rerender);
             editor.off("transaction", rerender);
+            if (rerenderFrameRef.current !== null) {
+                window.cancelAnimationFrame(rerenderFrameRef.current);
+                rerenderFrameRef.current = null;
+            }
         };
     }, [editor, stage]);
 
@@ -284,6 +290,27 @@ export const TextEditor: React.FC<TextEditorProps> = ({
 
         editor.commands.setCaseSensitive(caseSensitive);
     }, [caseSensitive, editor, isFindOpen]);
+
+    const applyPendingColor = React.useCallback(() => {
+        if (!editor) {
+            return;
+        }
+
+        const color = pendingColorRef.current;
+        pendingColorRef.current = null;
+        if (!color) {
+            return;
+        }
+
+        // Commit once after picker interaction ends to avoid drag-time churn.
+        editor.chain().focus().setColor(color).run();
+    }, [editor]);
+
+    React.useEffect(() => {
+        return () => {
+            pendingColorRef.current = null;
+        };
+    }, [editor]);
 
     const hasAnyResults = React.useMemo(() => {
         return (editor?.storage.searchAndReplace.results.length ?? 0) > 0;
@@ -506,13 +533,11 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                                 value={normalizeHtmlColor(
                                     editor.getAttributes("textStyle").color,
                                 )}
-                                onChange={(event) =>
-                                    editor
-                                        .chain()
-                                        .focus()
-                                        .setColor(event.target.value)
-                                        .run()
-                                }
+                                onChange={(event) => {
+                                    pendingColorRef.current =
+                                        event.target.value;
+                                }}
+                                onBlur={applyPendingColor}
                             />
                             <div className="toolbar-divider" />
                             <ToolbarButton
