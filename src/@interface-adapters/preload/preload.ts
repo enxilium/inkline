@@ -279,6 +279,12 @@ const windowControls = {
 
 contextBridge.exposeInMainWorld("windowControls", windowControls);
 
+const appInfoApi = {
+    getVersion: (): Promise<string> => ipcRenderer.invoke("app:getVersion"),
+};
+
+contextBridge.exposeInMainWorld("appInfoApi", appInfoApi);
+
 // LanguageTool API - all HTTP calls are made from main process to avoid CORS
 interface GrammarCheckRequest {
     text: string;
@@ -415,6 +421,7 @@ declare global {
         syncEvents: typeof syncEvents;
         generationEvents: typeof generationEvents;
         windowControls: typeof windowControls;
+        appInfoApi: typeof appInfoApi;
         languageTool: typeof languageTool;
         fileDialog: typeof fileDialog;
         featureApi: typeof featureApi;

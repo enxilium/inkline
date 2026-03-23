@@ -55,6 +55,7 @@ export const SettingsView: React.FC = () => {
     const [isSubmittingAccount, setIsSubmittingAccount] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+    const [appVersion, setAppVersion] = useState<string>("-");
 
     // Feature management
     const [featureConfig, setFeatureConfig] = useState<{
@@ -124,6 +125,25 @@ export const SettingsView: React.FC = () => {
         // Seed fields with current values (without exposing secrets).
         setNewEmail(user.email);
     }, [user]);
+
+    useEffect(() => {
+        let isMounted = true;
+
+        window.appInfoApi
+            .getVersion()
+            .then((version) => {
+                if (isMounted && version.trim().length > 0) {
+                    setAppVersion(version);
+                }
+            })
+            .catch((): void => {
+                /* noop */
+            });
+
+        return () => {
+            isMounted = false;
+        };
+    }, []);
 
     // Load feature config on mount
     useEffect(() => {
@@ -564,6 +584,7 @@ export const SettingsView: React.FC = () => {
                     <p className="panel-subtitle">
                         Configure Inkline to fit your needs.
                     </p>
+                    <p className="helper-text">App Version: {appVersion}</p>
                 </div>
                 <div className="settings-header-actions">
                     <Button onClick={handleReset} variant="ghost" size="sm">

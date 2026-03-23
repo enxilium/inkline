@@ -31,9 +31,9 @@ import {
 import {
     SETUP_CHANNELS,
     FEATURE_CHANNELS,
+    type FeatureKind,
+    type StartupIntegrityStatus,
 } from "../@interface-adapters/controllers/setup/setupChannels";
-import type { FeatureKind } from "../@interface-adapters/controllers/setup/setupChannels";
-import type { StartupIntegrityStatus } from "../@interface-adapters/controllers/setup/setupChannels";
 
 const logger = createTerminalLogger("Main");
 installTerminalErrorRedirection("Console");
@@ -1089,6 +1089,10 @@ ipcMain.handle(
         }
     },
 );
+
+ipcMain.handle("app:getVersion", async () => {
+    return app.getVersion();
+});
 
 // LanguageTool IPC handlers - all HTTP calls are made from main process to avoid CORS
 ipcMain.handle(

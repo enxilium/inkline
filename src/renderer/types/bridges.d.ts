@@ -54,6 +54,9 @@ declare global {
                 }) => void,
             ): () => IpcRenderer;
         };
+        appInfoApi: {
+            getVersion: () => Promise<string>;
+        };
         tutorialApi: {
             getState: () => Promise<TutorialState>;
             markCompleted: () => Promise<void>;
