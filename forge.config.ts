@@ -3,9 +3,13 @@ import { AutoUnpackNativesPlugin } from "@electron-forge/plugin-auto-unpack-nati
 import { WebpackPlugin } from "@electron-forge/plugin-webpack";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
+import { config as loadDotenv } from "dotenv";
 
 import { mainConfig } from "./webpack.main.config";
 import { rendererConfig } from "./webpack.renderer.config";
+
+// Read signing/config values from .env only.
+loadDotenv({ path: ".env" });
 
 const get7zaResourcePath = (): string => {
     if (process.platform === "darwin") {
@@ -18,6 +22,10 @@ const get7zaResourcePath = (): string => {
 
     return "./node_modules/7zip-bin/win/x64/7za.exe";
 };
+
+const windowsCertificateFile =
+    process.env.WINDOWS_CERTIFICATE_FILE ?? ".\\devcert.pfx";
+const windowsCertificatePassword = process.env.WINDOWS_CERTIFICATE_PASSWORD;
 
 const config: ForgeConfig = {
     packagerConfig: {
@@ -35,11 +43,21 @@ const config: ForgeConfig = {
     rebuildConfig: {},
     makers: [
         {
-            name: "@electron-forge/maker-squirrel",
+            name: "@electron-forge/maker-msix",
+            platforms: ["win32"],
             config: {
-                iconUrl:
-                    "https://github.com/enxilium/inkline/blob/main/assets/app-icon.ico",
-                setupIcon: "./assets/installer.ico",
+                appManifest: ".\\appxmanifest.xml",
+                packageAssets: ".\\Assets",
+                windowsKitVersion: "10.0.26100.0",
+                logLevel: "debug",
+                windowsSignOptions: {
+                    certificateFile: windowsCertificateFile,
+                    ...(windowsCertificatePassword
+                        ? {
+                              certificatePassword: windowsCertificatePassword,
+                          }
+                        : {}),
+                },
             },
         },
         {
