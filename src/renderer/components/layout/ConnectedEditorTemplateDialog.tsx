@@ -2037,7 +2037,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                 disabled={isSavingTemplate}
                             />
                             <select
-                                className="input"
+                                className="input template-new-field-kind-select"
                                 value={templateNewFieldKind}
                                 onChange={(event) =>
                                     setTemplateNewFieldKind(
@@ -2061,7 +2061,7 @@ export const ConnectedEditorTemplateDialog: React.FC<EditorTemplateDialogProps> 
                                 }}
                                 disabled={isSavingTemplate || !templateNewFieldName.trim()}
                             >
-                                Create & Add
+                                Create
                             </Button>
                         </div>
                     </div>

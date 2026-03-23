@@ -806,6 +806,14 @@ h2 {
     gap: 0.35rem;
 }
 
+.template-new-field-kind-select {
+    width: auto;
+    min-width: 106px;
+    max-width: 122px;
+    flex: 0 0 auto;
+    padding-right: 1.45rem;
+}
+
 .dialog-actions {
     margin-top: 0.5rem;
     display: flex;
