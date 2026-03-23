@@ -2244,7 +2244,8 @@ export const ConnectedEditorTemplateDialog: React.FC<
                                                                     key={itemId}
                                                                     id={itemId}
                                                                     dragHandleTutorialId={
-                                                                        index === 0
+                                                                        index ===
+                                                                        0
                                                                             ? "template-first-card-drag-handle"
                                                                             : undefined
                                                                     }
