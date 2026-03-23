@@ -43,3 +43,7 @@ next-env.d.ts
 dist
 out
 .webpack
+
+devcert.*
+storedevcert.*
+.winapp/*
