@@ -42,6 +42,7 @@ export const ConnectedLocationEditor: React.FC<
         generateLocationImage,
         generateLocationSong,
         generateLocationPlaylist,
+        deleteAsset,
         importAsset,
         setAutosaveStatus: setGlobalAutosaveStatus,
         setAutosaveError: setGlobalAutosaveError,
@@ -93,20 +94,36 @@ export const ConnectedLocationEditor: React.FC<
 
         return null;
     }, [locations, locationId]);
-    const resolveStoredImageUrls = React.useCallback(
-        (galleryIds: string[]): string[] =>
+    const resolveStoredImages = React.useCallback(
+        (galleryIds: string[]): Array<{ id: string; url: string }> =>
             galleryIds
-                .map((id) => assets.images[id]?.url)
-                .filter((url): url is string => Boolean(url)),
+                .map((id) => {
+                    const image = assets.images[id];
+                    return image ? { id: image.id, url: image.url } : null;
+                })
+                .filter(
+                    (image): image is { id: string; url: string } =>
+                        Boolean(image),
+                ),
         [assets.images],
     );
 
-    const gallerySources = React.useMemo(
+    const galleryImages = React.useMemo(
         () =>
             location
-                ? resolveStoredImageUrls(location.galleryImageIds ?? [])
+                ? resolveStoredImages(location.galleryImageIds ?? [])
                 : [],
-        [location, resolveStoredImageUrls],
+        [location, resolveStoredImages],
+    );
+
+    const galleryImageIds = React.useMemo(
+        () => galleryImages.map((image) => image.id),
+        [galleryImages],
+    );
+
+    const gallerySources = React.useMemo(
+        () => galleryImages.map((image) => image.url),
+        [galleryImages],
     );
 
     const songUrl = React.useMemo(
@@ -309,6 +326,41 @@ export const ConnectedLocationEditor: React.FC<
             addImageLocally(response.image);
         }
     };
+
+    const handleDeletePortrait = React.useCallback(
+        async (imageId: string) => {
+            if (!projectId || !location) {
+                return;
+            }
+
+            await deleteAsset({
+                projectId,
+                assetId: imageId,
+                kind: "image",
+            });
+
+            useAppStore.setState((state) => {
+                const nextImages = { ...state.assets.images };
+                delete nextImages[imageId];
+                return {
+                    assets: {
+                        ...state.assets,
+                        images: nextImages,
+                    },
+                };
+            });
+
+            if (location.galleryImageIds.includes(imageId)) {
+                updateLocationLocally(location.id, {
+                    galleryImageIds: location.galleryImageIds.filter(
+                        (existingId) => existingId !== imageId,
+                    ),
+                    updatedAt: new Date(),
+                });
+            }
+        },
+        [deleteAsset, location, projectId, updateLocationLocally],
+    );
 
     const handleGenerateSong = async () => {
         if (!projectId || !location) return;
@@ -618,12 +670,14 @@ export const ConnectedLocationEditor: React.FC<
             metafieldDefinitions={metafieldDefinitions}
             metafieldAssignments={locationMetafieldAssignments}
             imageOptions={imageOptions}
+            galleryImageIds={galleryImageIds}
             gallerySources={gallerySources}
             songUrl={songUrl}
             availableDocuments={availableDocuments}
             onSubmit={handleSubmit}
             onGeneratePortrait={handleGeneratePortrait}
             onImportPortrait={handleImportPortrait}
+            onDeletePortrait={handleDeletePortrait}
             onGenerateSong={handleGenerateSong}
             onImportSong={handleImportSong}
             onGeneratePlaylist={handleGeneratePlaylist}

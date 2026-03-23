@@ -36,6 +36,7 @@ export type OrganizationEditorProps = {
     metafieldDefinitions: WorkspaceMetafieldDefinition[];
     metafieldAssignments: WorkspaceMetafieldAssignment[];
     imageOptions: SelectOption[];
+    galleryImageIds: string[];
     gallerySources: string[];
     songUrl?: string;
     availableDocuments?: DocumentRef[];
@@ -43,6 +44,7 @@ export type OrganizationEditorProps = {
     onNavigateToDocument?: (ref: DocumentRef) => void;
     onGeneratePortrait: () => Promise<void>;
     onImportPortrait: (file: File) => Promise<void>;
+    onDeletePortrait: (imageId: string) => Promise<void>;
     onGenerateSong: () => Promise<void>;
     onImportSong: (file: File) => Promise<void>;
     onGeneratePlaylist: () => Promise<void>;
@@ -120,6 +122,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     metafieldDefinitions,
     metafieldAssignments,
     imageOptions,
+    galleryImageIds,
     gallerySources,
     songUrl,
     availableDocuments = [],
@@ -127,6 +130,7 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
     onNavigateToDocument,
     onGeneratePortrait,
     onImportPortrait,
+    onDeletePortrait,
     onGenerateSong,
     onImportSong,
     onGeneratePlaylist,
@@ -230,12 +234,14 @@ export const OrganizationEditor: React.FC<OrganizationEditorProps> = ({
             metafieldDefinitions={metafieldDefinitions}
             metafieldAssignments={metafieldAssignments}
             imageOptions={imageOptions}
+            galleryImageIds={galleryImageIds}
             gallerySources={gallerySources}
             songUrl={songUrl}
             availableDocuments={availableDocuments}
             onNavigateToDocument={onNavigateToDocument}
             onGeneratePortrait={onGeneratePortrait}
             onImportPortrait={onImportPortrait}
+            onDeletePortrait={onDeletePortrait}
             onGenerateSong={onGenerateSong}
             onImportSong={onImportSong}
             onGeneratePlaylist={onGeneratePlaylist}

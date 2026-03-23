@@ -1,5 +1,5 @@
 import * as React from "react";
-import { PlusIcon } from "./Icons";
+import { PlusIcon, type IconProps } from "./Icons";
 
 export interface ActionDropdownOption {
     label: string;
@@ -11,12 +11,16 @@ export interface ActionDropdownProps {
     options: ActionDropdownOption[];
     disabled?: boolean;
     size?: number;
+    TriggerIcon?: React.ComponentType<IconProps>;
+    menuAlign?: "left" | "right";
 }
 
 export const ActionDropdown: React.FC<ActionDropdownProps> = ({
     options,
     disabled,
-    size = 16,
+    size = 14,
+    TriggerIcon = PlusIcon,
+    menuAlign = "right",
 }) => {
     const [open, setOpen] = React.useState(false);
     const containerRef = React.useRef<HTMLDivElement>(null);
@@ -40,10 +44,12 @@ export const ActionDropdown: React.FC<ActionDropdownProps> = ({
                 onClick={() => setOpen((v) => !v)}
                 disabled={disabled}
             >
-                <PlusIcon size={size} />
+                <TriggerIcon size={size} />
             </button>
             {open && (
-                <div className="action-dropdown-menu">
+                <div
+                    className={`action-dropdown-menu${menuAlign === "left" ? " is-align-left" : ""}`}
+                >
                     {options.map((opt, i) => (
                         <button
                             key={i}

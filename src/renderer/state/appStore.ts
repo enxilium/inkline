@@ -831,6 +831,7 @@ type AppStore = {
     removeMetafieldFromEntity: RendererApi["metafield"]["removeMetafieldFromEntity"];
     deleteMetafieldDefinitionGlobal: RendererApi["metafield"]["deleteMetafieldDefinitionGlobal"];
     submitBugReport: RendererApi["support"]["submitBugReport"];
+    deleteAsset: RendererApi["asset"]["deleteAsset"];
     importAsset: RendererApi["asset"]["importAsset"];
     generateCharacterImage: RendererApi["generation"]["generateCharacterImage"];
     generateCharacterSong: RendererApi["generation"]["generateCharacterSong"];
@@ -4082,6 +4083,9 @@ export const useAppStore = create<AppStore>((set, get) => {
         },
         submitBugReport: async (request) => {
             return rendererApi.support.submitBugReport(request);
+        },
+        deleteAsset: async (request) => {
+            return rendererApi.asset.deleteAsset(request);
         },
         importAsset: async (request) => {
             return rendererApi.asset.importAsset(request);
