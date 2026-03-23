@@ -165,6 +165,7 @@ const LEGAL_POLICIES_RELATIVE_PATH = path.join(
     "legal",
     "policies.md",
 );
+const PACKAGED_LEGAL_POLICIES_RELATIVE_PATH = path.join("legal", "policies.md");
 
 const EMPTY_STARTUP_INTEGRITY_STATUS: StartupIntegrityStatus = {
     state: "idle",
@@ -453,9 +454,12 @@ const createSetupWindow = (): Promise<void> => {
 
 const readLegalPoliciesMarkdown = async (): Promise<string> => {
     const candidatePaths = [
+        path.join(process.resourcesPath, PACKAGED_LEGAL_POLICIES_RELATIVE_PATH),
         path.join(process.resourcesPath, LEGAL_POLICIES_RELATIVE_PATH),
         path.join(app.getAppPath(), LEGAL_POLICIES_RELATIVE_PATH),
+        path.join(app.getAppPath(), PACKAGED_LEGAL_POLICIES_RELATIVE_PATH),
         path.join(process.cwd(), LEGAL_POLICIES_RELATIVE_PATH),
+        path.join(process.cwd(), PACKAGED_LEGAL_POLICIES_RELATIVE_PATH),
     ];
 
     for (const candidatePath of candidatePaths) {
