@@ -12,8 +12,8 @@
   IgnorableNamespaces="uap uap2 uap3 uap10 desktop desktop6 rescap">
 
   <Identity
-    Name="inkline"
-    Publisher="CN=enxilium"
+    Name="enxilium.Inkline"
+    Publisher="CN=5B66C477-496B-4C07-9C68-E57AA75C6DAB"
     Version="1.0.1.0" />
 
   <Properties>
