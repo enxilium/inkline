@@ -414,6 +414,19 @@ const normalizeTemplateSelectOptions = (
     return normalizedOptions;
 };
 
+const TEMPLATE_DRAFT_DEFINITION_PREFIX = "template-draft:";
+
+const isTemplateDraftDefinitionId = (definitionId: string): boolean =>
+    definitionId.startsWith(TEMPLATE_DRAFT_DEFINITION_PREFIX);
+
+const createTemplateDraftDefinitionId = (): string =>
+    `${TEMPLATE_DRAFT_DEFINITION_PREFIX}${Date.now()}-${Math.random()
+        .toString(36)
+        .slice(2, 10)}`;
+
+const normalizeDraftMetafieldName = (name: string): string =>
+    name.trim().replace(/\s+/g, " ").toLowerCase();
+
 const sortTemplateSelectOptions = (
     options: Array<
         TemplateSelectOptionDraft & {
@@ -620,6 +633,7 @@ export const ConnectedEditorTemplateDialog: React.FC<
         metafieldDefinitions,
         metafieldAssignments,
         createOrReuseMetafieldDefinition,
+        deleteMetafieldDefinitionGlobal,
         saveMetafieldSelectOptions,
         saveEditorTemplate,
         reloadProjectTemplateData,
@@ -1007,81 +1021,81 @@ export const ConnectedEditorTemplateDialog: React.FC<
             return;
         }
 
-        setTemplateDraftError(null);
-
-        try {
-            const response = await createOrReuseMetafieldDefinition({
-                projectId,
-                name,
-                scope: editorType,
-                valueType:
-                    templateNewFieldKind === "select" ? "string[]" : "string",
-            });
-
-            setCreatedDefinitionsById((current) => {
-                const next = new Map(current);
-                next.set(response.definition.id, {
-                    id: response.definition.id,
-                    name: response.definition.name,
-                    valueType: response.definition.valueType,
-                    scope: response.definition.scope,
-                    selectOptions: response.definition.selectOptions,
-                });
-                return next;
-            });
-
-            const definitionId = response.definition.id;
-            if (
-                templateDraftFields.some(
-                    (field) => field.definitionId === definitionId,
-                )
-            ) {
-                setTemplateDraftError(
-                    "This metafield is already in the template.",
-                );
-                return;
+        const normalizedName = normalizeDraftMetafieldName(name);
+        const hasDraftNameConflict = templateDraftFields.some((field) => {
+            const definition = templateDefinitionById.get(field.definitionId);
+            if (!definition) {
+                return false;
             }
 
-            setTemplateDraftFields((current) => [
-                ...current,
-                {
-                    definitionId,
-                    kind: templateNewFieldKind,
-                    column: "left",
-                },
-            ]);
-            setTemplateSectionPlacement((current) => ({
-                left: [...current.left, toTemplateCardItemId(definitionId)],
-                right: current.right,
-            }));
-            setTemplateNewFieldName("");
-            setTemplateNewFieldKind("field");
-            setTemplateNewFieldOptionsDraft([]);
-            setTemplateDraftTouched(true);
+            return (
+                normalizeDraftMetafieldName(definition.name) === normalizedName
+            );
+        });
+
+        if (hasDraftNameConflict) {
+            setTemplateDraftError("This metafield is already in the template.");
+            return;
+        }
+
+        setTemplateDraftError(null);
+
+        const definitionId = createTemplateDraftDefinitionId();
+        const draftSelectOptions =
+            templateNewFieldKind === "select"
+                ? normalizeTemplateSelectOptions(
+                      templateNewFieldOptionsDraft,
+                  ).map((option, index) => ({
+                      id: option.id ?? `${definitionId}:option:${index}`,
+                      label: option.label,
+                      orderIndex: index,
+                      ...(option.icon ? { icon: option.icon } : {}),
+                  }))
+                : [];
+
+        setCreatedDefinitionsById((current) => {
+            const next = new Map(current);
+            next.set(definitionId, {
+                id: definitionId,
+                name,
+                valueType:
+                    templateNewFieldKind === "select" ? "string[]" : "string",
+                scope: editorType,
+                selectOptions: draftSelectOptions,
+            });
+            return next;
+        });
+
+        setTemplateDraftFields((current) => [
+            ...current,
+            {
+                definitionId,
+                kind: templateNewFieldKind,
+                column: "left",
+            },
+        ]);
+        setTemplateSectionPlacement((current) => ({
+            left: [...current.left, toTemplateCardItemId(definitionId)],
+            right: current.right,
+        }));
+        setTemplateNewFieldName("");
+        setTemplateNewFieldKind("field");
+        setTemplateNewFieldOptionsDraft([]);
+        setTemplateDraftTouched(true);
+        if (draftSelectOptions.length > 0) {
             setTemplateSelectOptionsByDefinitionId((current) => ({
                 ...current,
-                [definitionId]: sortTemplateSelectOptions(
-                    response.definition.selectOptions as Array<{
-                        id: string;
-                        label: string;
-                        icon?: string;
-                        orderIndex?: number;
-                    }>,
-                ).map((option) => ({
+                [definitionId]: draftSelectOptions.map((option) => ({
                     id: option.id,
                     label: option.label,
                     ...(option.icon ? { icon: option.icon } : {}),
                 })),
             }));
-        } catch (error) {
-            setTemplateDraftError(
-                normalizeUserFacingError(error, "Failed to create metafield."),
-            );
         }
     }, [
-        createOrReuseMetafieldDefinition,
         editorType,
         projectId,
+        templateDefinitionById,
         templateDraftFields,
         templateNewFieldKind,
         templateNewFieldName,
@@ -1123,6 +1137,42 @@ export const ConnectedEditorTemplateDialog: React.FC<
             const definition = templateDefinitionById.get(definitionId);
             if (!definition || definition.valueType !== "string[]") {
                 return;
+            }
+
+            if (isTemplateDraftDefinitionId(definitionId)) {
+                const normalizedDraftOptions = options.map((option, index) => ({
+                    id: option.id ?? `${definitionId}:option:${index}`,
+                    label: option.label,
+                    ...(option.icon ? { icon: option.icon } : {}),
+                }));
+
+                setTemplateSelectOptionsByDefinitionId((current) => ({
+                    ...current,
+                    [definitionId]: normalizedDraftOptions,
+                }));
+
+                setCreatedDefinitionsById((current) => {
+                    const definitionEntry = current.get(definitionId);
+                    if (!definitionEntry) {
+                        return current;
+                    }
+
+                    const next = new Map(current);
+                    next.set(definitionId, {
+                        ...definitionEntry,
+                        selectOptions: normalizedDraftOptions.map(
+                            (option, index) => ({
+                                id: option.id,
+                                label: option.label,
+                                orderIndex: index,
+                                ...(option.icon ? { icon: option.icon } : {}),
+                            }),
+                        ),
+                    });
+                    return next;
+                });
+
+                return normalizedDraftOptions;
             }
 
             const existingOptions =
@@ -1968,17 +2018,135 @@ export const ConnectedEditorTemplateDialog: React.FC<
                 (field) => field.kind === "select",
             );
             for (const field of selectFields) {
+                if (isTemplateDraftDefinitionId(field.definitionId)) {
+                    continue;
+                }
                 await persistTemplateSelectOptions(field.definitionId);
             }
+
+            const resolvedDefinitionIds = new Map<string, string>();
+
+            for (const field of dedupedFields) {
+                if (!isTemplateDraftDefinitionId(field.definitionId)) {
+                    continue;
+                }
+
+                const draftDefinition = templateDefinitionById.get(
+                    field.definitionId,
+                );
+                if (!draftDefinition) {
+                    throw new Error(
+                        "Draft metafield definition is missing from template state.",
+                    );
+                }
+
+                const draftNameNormalized = normalizeDraftMetafieldName(
+                    draftDefinition.name,
+                );
+                const existingScopedDefinition = metafieldDefinitions.find(
+                    (definition) =>
+                        definition.scope === editorType &&
+                        normalizeDraftMetafieldName(definition.name) ===
+                            draftNameNormalized,
+                );
+
+                let persistedDefinitionId: string;
+                if (existingScopedDefinition) {
+                    if (
+                        existingScopedDefinition.valueType !==
+                        draftDefinition.valueType
+                    ) {
+                        await deleteMetafieldDefinitionGlobal({
+                            definitionId: existingScopedDefinition.id,
+                        });
+
+                        const recreated =
+                            await createOrReuseMetafieldDefinition({
+                                projectId,
+                                name: draftDefinition.name,
+                                scope: editorType,
+                                valueType:
+                                    draftDefinition.valueType === "string[]"
+                                        ? "string[]"
+                                        : "string",
+                            });
+
+                        persistedDefinitionId = recreated.definition.id;
+                    } else {
+                        persistedDefinitionId = existingScopedDefinition.id;
+                    }
+                } else {
+                    const created = await createOrReuseMetafieldDefinition({
+                        projectId,
+                        name: draftDefinition.name,
+                        scope: editorType,
+                        valueType:
+                            draftDefinition.valueType === "string[]"
+                                ? "string[]"
+                                : "string",
+                    });
+
+                    persistedDefinitionId = created.definition.id;
+                }
+
+                resolvedDefinitionIds.set(
+                    field.definitionId,
+                    persistedDefinitionId,
+                );
+
+                if (field.kind !== "select") {
+                    continue;
+                }
+
+                const draftOptions = normalizeTemplateSelectOptions(
+                    templateSelectOptionsByDefinitionId[field.definitionId] ??
+                        draftDefinition.selectOptions?.map((option) => ({
+                            id: option.id,
+                            label: option.label,
+                            ...(option.icon ? { icon: option.icon } : {}),
+                        })) ??
+                        [],
+                );
+
+                await saveMetafieldSelectOptions({
+                    definitionId: persistedDefinitionId,
+                    options: draftOptions.map((option) => ({
+                        label: option.label,
+                        ...(option.icon ? { icon: option.icon } : {}),
+                    })),
+                });
+            }
+
+            const resolvedFields = dedupedFields.map((field) => ({
+                ...field,
+                definitionId:
+                    resolvedDefinitionIds.get(field.definitionId) ??
+                    field.definitionId,
+            }));
+
+            const resolvePlacementDefinitionId = (definitionId: string) =>
+                resolvedDefinitionIds.get(definitionId) ?? definitionId;
+
+            const resolvedPlacementLeft = placementLeft.map((placementId) =>
+                staticCardIds.has(placementId)
+                    ? placementId
+                    : resolvePlacementDefinitionId(placementId),
+            );
+
+            const resolvedPlacementRight = placementRight.map((placementId) =>
+                staticCardIds.has(placementId)
+                    ? placementId
+                    : resolvePlacementDefinitionId(placementId),
+            );
 
             await saveEditorTemplate({
                 projectId,
                 editorType,
                 placement: {
-                    left: placementLeft,
-                    right: placementRight,
+                    left: resolvedPlacementLeft,
+                    right: resolvedPlacementRight,
                 },
-                fields: dedupedFields.map((field) => ({
+                fields: resolvedFields.map((field) => ({
                     definitionId: field.definitionId,
                     kind: field.kind,
                 })),
@@ -2000,18 +2168,24 @@ export const ConnectedEditorTemplateDialog: React.FC<
             setIsSavingTemplate(false);
         }
     }, [
+        createOrReuseMetafieldDefinition,
+        deleteMetafieldDefinitionGlobal,
         editorType,
+        metafieldDefinitions,
         onOpenChange,
         onTemplateSaved,
         projectId,
         reloadProjectTemplateData,
         saveEditorTemplate,
+        saveMetafieldSelectOptions,
         persistTemplateSelectOptions,
         staticCardIds,
         staticLeftItems,
         staticRightItems,
         templateDraftByDefinitionId,
+        templateDefinitionById,
         templateDraftFields,
+        templateSelectOptionsByDefinitionId,
         templateSectionPlacement.left,
         templateSectionPlacement.right,
     ]);

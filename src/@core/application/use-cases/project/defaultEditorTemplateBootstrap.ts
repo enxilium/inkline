@@ -144,8 +144,9 @@ async function findOrCreateDefinition(
 ): Promise<MetafieldDefinition> {
     const normalizedName = normalizeMetafieldName(seed.name);
     const existing =
-        await metafieldDefinitionRepository.findByProjectAndNameNormalized(
+        await metafieldDefinitionRepository.findByProjectScopeAndNameNormalized(
             projectId,
+            scope,
             normalizedName,
         );
 

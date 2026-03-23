@@ -121,6 +121,22 @@ export class FileSystemMetafieldDefinitionRepository implements IMetafieldDefini
         );
     }
 
+    async findByProjectScopeAndNameNormalized(
+        projectId: string,
+        scope: MetafieldScope,
+        nameNormalized: string,
+    ): Promise<MetafieldDefinition | null> {
+        const normalized = normalizeMetafieldName(nameNormalized);
+        const definitions = await this.findByProjectAndScope(projectId, scope);
+        return (
+            definitions.find(
+                (definition) =>
+                    normalizeMetafieldName(definition.nameNormalized) ===
+                    normalized,
+            ) ?? null
+        );
+    }
+
     async findByProjectAndScope(
         projectId: string,
         scope: MetafieldScope,

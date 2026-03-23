@@ -83,8 +83,9 @@ export class CreateOrReuseMetafieldDefinition {
         }
 
         const existing =
-            await this.definitionRepository.findByProjectAndNameNormalized(
+            await this.definitionRepository.findByProjectScopeAndNameNormalized(
                 projectId,
+                request.scope,
                 normalized,
             );
 
@@ -107,11 +108,6 @@ export class CreateOrReuseMetafieldDefinition {
                 );
             }
 
-            const canPromoteToProjectScope =
-                existing.scope !== request.scope &&
-                existing.scope !== "project" &&
-                request.scope !== "project";
-
             if (needsNormalization) {
                 existing.name = name;
                 existing.nameNormalized = normalized;
@@ -119,13 +115,10 @@ export class CreateOrReuseMetafieldDefinition {
                 await this.definitionRepository.update(existing);
             }
 
-            if (canPromoteToProjectScope) {
-                existing.scope = "project";
-                existing.updatedAt = now;
-                await this.definitionRepository.update(existing);
-            }
-
-            if (existing.valueType === "string[]" && normalizedSelectOptions.length) {
+            if (
+                existing.valueType === "string[]" &&
+                normalizedSelectOptions.length
+            ) {
                 const byNormalized = new Map(
                     existing.selectOptions.map((option) => [
                         option.labelNormalized,
@@ -149,7 +142,10 @@ export class CreateOrReuseMetafieldDefinition {
                     };
                     nextOrderIndex += 1;
                     existing.selectOptions.push(createdOption);
-                    byNormalized.set(createdOption.labelNormalized, createdOption);
+                    byNormalized.set(
+                        createdOption.labelNormalized,
+                        createdOption,
+                    );
                 }
 
                 existing.selectOptions.sort(
@@ -217,7 +213,9 @@ export class CreateOrReuseMetafieldDefinition {
             seen.add(normalizedLabel);
 
             const rawIcon =
-                typeof entry === "string" ? undefined : entry.icon ?? undefined;
+                typeof entry === "string"
+                    ? undefined
+                    : (entry.icon ?? undefined);
             const icon = rawIcon?.trim() || undefined;
 
             normalized.push({

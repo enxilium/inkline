@@ -172,6 +172,28 @@ export class SupabaseMetafieldDefinitionRepository implements IMetafieldDefiniti
         return mapRowToDefinition(data as MetafieldDefinitionRow);
     }
 
+    async findByProjectScopeAndNameNormalized(
+        projectId: string,
+        scope: MetafieldScope,
+        nameNormalized: string,
+    ): Promise<MetafieldDefinition | null> {
+        const normalized = normalizeMetafieldName(nameNormalized);
+        const client = SupabaseService.getClient();
+        const { data, error } = await client
+            .from("metafield_definitions")
+            .select("*")
+            .eq("project_id", projectId)
+            .eq("scope", scope)
+            .eq("name_normalized", normalized)
+            .maybeSingle();
+
+        if (error || !data) {
+            return null;
+        }
+
+        return mapRowToDefinition(data as MetafieldDefinitionRow);
+    }
+
     async findByProjectAndScope(
         projectId: string,
         scope: MetafieldScope,

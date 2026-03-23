@@ -7,6 +7,11 @@ export interface IMetafieldDefinitionRepository {
     create(definition: MetafieldDefinition): Promise<void>;
     findById(id: string): Promise<MetafieldDefinition | null>;
     findByProjectId(projectId: string): Promise<MetafieldDefinition[]>;
+    findByProjectScopeAndNameNormalized(
+        projectId: string,
+        scope: MetafieldScope,
+        nameNormalized: string,
+    ): Promise<MetafieldDefinition | null>;
     findByProjectAndNameNormalized(
         projectId: string,
         nameNormalized: string,
