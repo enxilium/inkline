@@ -8,6 +8,7 @@ import * as http from "http";
 import { spawn } from "child_process";
 import { EventEmitter } from "events";
 import { createTerminalLogger } from "./TerminalLogger";
+import { getRuntimeServerBasePath } from "./ServerRuntimePath";
 
 const logger = createTerminalLogger("ModelDownloadService");
 
@@ -255,10 +256,7 @@ export class ModelDownloadService extends EventEmitter {
     }
 
     private getServerPath(): string {
-        if (app.isPackaged) {
-            return path.join(process.resourcesPath, "server");
-        }
-        return path.join(app.getAppPath(), "server");
+        return getRuntimeServerBasePath();
     }
 
     /**
@@ -520,10 +518,7 @@ export class ModelDownloadService extends EventEmitter {
                 await fsPromises.copyFile(srcPath, destPath);
                 restored.push(modelType);
             } catch (err) {
-                logger.warn(
-                    `Could not restore workflow ${workflowFile}`,
-                    err,
-                );
+                logger.warn(`Could not restore workflow ${workflowFile}`, err);
             }
         }
 
@@ -1128,8 +1123,12 @@ export class ModelDownloadService extends EventEmitter {
             "run_nvidia_gpu.bat",
             "run_nvidia_gpu_fast_fp16_accumulation.bat",
             "README_VERY_IMPORTANT.txt",
+            "ComfyUI_portable.7z",
+            "ComfyUI_portable.7z.download",
             ...WORKFLOW_FILES,
         ];
+
+        const comfyTempDirPatterns = [/^ComfyUI_windows_portable/i];
 
         for (const name of comfyDirs) {
             const dirPath = path.join(this.serverBasePath, name);
@@ -1153,6 +1152,54 @@ export class ModelDownloadService extends EventEmitter {
             const filePath = path.join(this.serverBasePath, name);
             await fsPromises.unlink(filePath).catch(() => {});
         }
+
+        await this.removeDirsByPattern(comfyTempDirPatterns);
+    }
+
+    /**
+     * Delete LanguageTool runtime artifacts (embedded Java + server files + temp archives)
+     */
+    async deleteLanguageTool(): Promise<void> {
+        this.refreshBasePaths();
+
+        const languageToolDirs = ["java_embeded", "language"];
+        const languageToolTempDirPatterns = [
+            /^jdk-.*-jre$/i,
+            /^LanguageTool-/i,
+        ];
+        const languageToolFiles = [
+            "java_jre.zip",
+            "java_jre.zip.download",
+            "java_jre.tar.gz",
+            "java_jre.tar.gz.download",
+            "languagetool.zip",
+            "languagetool.zip.download",
+        ];
+
+        for (const name of languageToolDirs) {
+            const dirPath = path.join(this.serverBasePath, name);
+            try {
+                const stats = await fsPromises
+                    .stat(dirPath)
+                    .catch((): null => null);
+                if (stats?.isDirectory()) {
+                    await fsPromises.rm(dirPath, {
+                        recursive: true,
+                        force: true,
+                    });
+                    logger.info(`Deleted ${dirPath}`);
+                }
+            } catch (err) {
+                logger.warn(`Failed to delete ${dirPath}`, err);
+            }
+        }
+
+        for (const name of languageToolFiles) {
+            const filePath = path.join(this.serverBasePath, name);
+            await fsPromises.unlink(filePath).catch(() => {});
+        }
+
+        await this.removeDirsByPattern(languageToolTempDirPatterns);
     }
 
     /**
@@ -1166,6 +1213,7 @@ export class ModelDownloadService extends EventEmitter {
             model.subfolder,
             model.filename,
         );
+        const tempModelPath = modelPath + ".download";
 
         try {
             const stats = await fsPromises
@@ -1177,6 +1225,30 @@ export class ModelDownloadService extends EventEmitter {
             }
         } catch (err) {
             logger.warn(`Failed to delete model ${modelPath}`, err);
+        }
+
+        await fsPromises.unlink(tempModelPath).catch(() => {});
+    }
+
+    private async removeDirsByPattern(patterns: RegExp[]): Promise<void> {
+        const entries = await fsPromises
+            .readdir(this.serverBasePath, {
+                withFileTypes: true,
+            })
+            .catch(() => [] as fs.Dirent[]);
+
+        for (const entry of entries) {
+            if (!entry.isDirectory()) {
+                continue;
+            }
+
+            if (!patterns.some((pattern) => pattern.test(entry.name))) {
+                continue;
+            }
+
+            const fullPath = path.join(this.serverBasePath, entry.name);
+            await fsPromises.rm(fullPath, { recursive: true, force: true });
+            logger.info(`Deleted ${fullPath}`);
         }
     }
 

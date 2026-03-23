@@ -28,6 +28,7 @@ import {
     createTerminalLogger,
     installTerminalErrorRedirection,
 } from "../@infrastructure/services/TerminalLogger";
+import { getRuntimeServerBasePath } from "../@infrastructure/services/ServerRuntimePath";
 import {
     SETUP_CHANNELS,
     FEATURE_CHANNELS,
@@ -90,7 +91,7 @@ const handleSquirrelEvent = (): boolean => {
         // Clean up downloaded AI files and user data
         try {
             const userDataPath = app.getPath("userData");
-            const serverPath = path.join(process.resourcesPath || "", "server");
+            const serverPath = getRuntimeServerBasePath();
 
             // Delete setup config
             const configPath = path.join(userDataPath, "inkline-setup.json");
@@ -952,11 +953,24 @@ const applyForcedFreshSetupIfRequested = async (): Promise<void> => {
     }
 
     const dataDirectory = path.join(userDataPath, "inkline-data");
+    const runtimeServerDirectory = getRuntimeServerBasePath();
     try {
         await fs.promises.rm(dataDirectory, { recursive: true, force: true });
     } catch (error) {
         logger.warn(
             "[Setup] Failed to clear inkline-data during force setup",
+            error,
+        );
+    }
+
+    try {
+        await fs.promises.rm(runtimeServerDirectory, {
+            recursive: true,
+            force: true,
+        });
+    } catch (error) {
+        logger.warn(
+            "[Setup] Failed to clear runtime server directory during force setup",
             error,
         );
     }
@@ -1173,6 +1187,9 @@ app.on("window-all-closed", () => {
 // Cleanup child processes before quitting to prevent orphan processes
 app.on("before-quit", async () => {
     logger.info("Cleaning up before quit");
+
+    // Ensure in-flight downloads/extractions are aborted and partial files cleaned.
+    modelDownloadService.cancelAllDownloads();
 
     // Stop sync service (clears intervals and realtime subscriptions)
     dependencies.syncService.stopAutoSync("shutdown");

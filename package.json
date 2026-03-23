@@ -18,10 +18,10 @@
     },
     "keywords": [],
     "author": {
-        "name": "zk",
+        "name": "enxilium",
         "email": "79335627+enxilium@users.noreply.github.com"
     },
-    "license": "MIT",
+    "license": "GNU AFFERO GENERAL PUBLIC LICENSE Version 3 (AGPL3)",
     "devDependencies": {
         "@babel/core": "^7.28.5",
         "@babel/preset-env": "^7.28.5",

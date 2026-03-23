@@ -18,9 +18,9 @@ import {
 import { spawn, ChildProcess } from "child_process";
 import path from "path";
 import fs from "fs";
-import { app } from "electron";
 import { GoogleGenAI } from "@google/genai";
 import { createTerminalLogger } from "../services/TerminalLogger";
+import { getRuntimeServerBasePath } from "../services/ServerRuntimePath";
 
 import { ICreativeAssetGenerationService } from "../../@core/domain/services/ICreativeAssetGenerationService";
 
@@ -124,9 +124,7 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
         }
 
         try {
-            this.basePath = app.isPackaged
-                ? path.join(process.resourcesPath, "server")
-                : path.join(app.getAppPath(), "server");
+            this.basePath = getRuntimeServerBasePath();
 
             const pythonPath = path.join(
                 this.basePath,

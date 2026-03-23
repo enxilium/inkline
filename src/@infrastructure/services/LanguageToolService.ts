@@ -6,13 +6,13 @@
  * All HTTP calls are made from the main process to avoid CORS.
  */
 
-import { app } from "electron";
 import { spawn, ChildProcess } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
 import portfinder from "portfinder";
 import { EventEmitter } from "events";
 import { createTerminalLogger } from "./TerminalLogger";
+import { getRuntimeServerBasePath } from "./ServerRuntimePath";
 import type {
     GrammarCheckRequest,
     ILanguageToolService,
@@ -40,9 +40,7 @@ export class LanguageToolService
     }
 
     private getJavaCandidatePaths(): string[] {
-        const basePath = app.isPackaged
-            ? path.join(process.resourcesPath, "server")
-            : path.join(app.getAppPath(), "server");
+        const basePath = getRuntimeServerBasePath();
         const javaExec = this.getJavaExecutableName();
 
         return [
@@ -67,10 +65,7 @@ export class LanguageToolService
      * Get the base path for the LanguageTool server
      */
     private getServerPath(): string {
-        if (app.isPackaged) {
-            return path.join(process.resourcesPath, "server", "language");
-        }
-        return path.join(app.getAppPath(), "server", "language");
+        return path.join(getRuntimeServerBasePath(), "language");
     }
 
     /**
