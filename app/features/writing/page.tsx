@@ -67,7 +67,7 @@ const managementFeatures = [
         icon: Wand2,
         title: "Grammar & Spell Check",
         description:
-            "Integrated LanguageTool provides real-time grammar, spelling, and style feedback as you write.",
+            "Real-time grammar and spelling feedback. Smarter than your average spellcheck, with suggestions for improving clarity and style.",
     },
     {
         icon: FileDown,

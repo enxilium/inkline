@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { headers } from "next/headers";
 import {
     PenTool,
     Map,
@@ -19,9 +20,36 @@ import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FadeIn } from "@/components/ui/FadeIn";
 import {
     GITHUB_REPO,
-    CURRENT_VERSION,
     FEATURES_OVERVIEW,
+    getCurrentVersionFromApi,
+    getLicenseFromApi,
 } from "@/lib/constants";
+
+async function getBaseUrl(): Promise<string> {
+    const requestHeaders = await headers();
+    const forwardedHost = requestHeaders.get("x-forwarded-host");
+    const host = forwardedHost ?? requestHeaders.get("host");
+
+    if (!host) {
+        return "http://localhost:3000";
+    }
+
+    const forwardedProto = requestHeaders.get("x-forwarded-proto");
+    const protocol =
+        forwardedProto ?? (host.includes("localhost") ? "http" : "https");
+
+    return `${protocol}://${host}`;
+}
+
+async function getRuntimeMeta() {
+    const baseUrl = await getBaseUrl();
+    const [latestVersion, license] = await Promise.all([
+        getCurrentVersionFromApi(baseUrl),
+        getLicenseFromApi(baseUrl),
+    ]);
+
+    return { latestVersion, license };
+}
 
 const iconMap = {
     "pen-tool": PenTool,
@@ -60,13 +88,6 @@ const comparisonFeatures = [
         campfire: false,
     },
     {
-        feature: "Flexible Timelines",
-        inkline: true,
-        scrivener: false,
-        gdocs: false,
-        campfire: false,
-    },
-    {
         feature: "EPUB Export",
         inkline: true,
         scrivener: true,
@@ -89,7 +110,9 @@ const comparisonFeatures = [
     },
 ];
 
-export default function Home() {
+export default async function Home() {
+    const { latestVersion, license } = await getRuntimeMeta();
+
     return (
         <>
             {/* Hero */}
@@ -99,7 +122,7 @@ export default function Home() {
                     <FadeIn className="flex flex-col items-center text-center">
                         <Badge className="mb-6">
                             <Github className="h-3.5 w-3.5" />
-                            Open Source &middot; {CURRENT_VERSION}
+                            Open Source &middot; {latestVersion}
                         </Badge>
                         <h1 className="max-w-4xl text-4xl font-bold tracking-tight md:text-6xl lg:text-7xl">
                             Every story starts with a{" "}
@@ -166,7 +189,7 @@ export default function Home() {
                             </div>
                             <div className="flex items-center gap-2 text-sm text-muted">
                                 <div className="h-2 w-2 rounded-full bg-primary" />
-                                MIT Licensed
+                                {license} Licensed
                             </div>
                             <div className="flex items-center gap-2 text-sm text-muted">
                                 <div className="h-2 w-2 rounded-full bg-primary-dark" />
@@ -305,8 +328,8 @@ export default function Home() {
                                     Inkline with one click.
                                 </p>
                                 <p className="mt-2 text-sm text-muted md:text-base">
-                                    Your chapters come in ready for editing,
-                                    so you can keep writing without manual
+                                    Your chapters come in ready for editing, so
+                                    you can keep writing without manual
                                     copy-paste cleanup.
                                 </p>
                             </div>

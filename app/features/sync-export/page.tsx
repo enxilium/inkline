@@ -21,7 +21,7 @@ import { FadeIn } from "@/components/ui/FadeIn";
 export const metadata: Metadata = {
     title: "Sync & Export",
     description:
-        "Keep projects in sync across devices, export polished EPUB files, and import existing drafts from tools like Google Docs and Word.",
+        "Keep projects in sync across devices, work offline, export polished EPUB files, and import existing drafts from tools like Google Docs and Word.",
 };
 
 const workflowFeatures = [
@@ -85,7 +85,7 @@ export default function SyncExportPage() {
                         </h1>
                         <p className="mt-6 text-lg text-muted">
                             Move your manuscript smoothly from first draft to
-                            final file. Sync across devices, import existing
+                            final file. Sync across devices, work offline, import existing
                             drafts, and export publication-ready EPUBs without
                             breaking your writing flow.
                         </p>

@@ -1,10 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import { headers } from "next/headers";
 import {
-    Download,
-    Monitor,
-    Apple,
-    Terminal,
     Github,
     Cpu,
     HardDrive,
@@ -17,7 +14,28 @@ import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FadeIn } from "@/components/ui/FadeIn";
-import { DOWNLOADS, CURRENT_VERSION, GITHUB_REPO } from "@/lib/constants";
+import { DownloadPlatforms } from "@/components/download/DownloadPlatforms";
+import {
+    DOWNLOADS,
+    GITHUB_REPO,
+    getReleasesDataFromApi,
+} from "@/lib/constants";
+
+async function getBaseUrl(): Promise<string> {
+    const requestHeaders = await headers();
+    const forwardedHost = requestHeaders.get("x-forwarded-host");
+    const host = forwardedHost ?? requestHeaders.get("host");
+
+    if (!host) {
+        return "http://localhost:3000";
+    }
+
+    const forwardedProto = requestHeaders.get("x-forwarded-proto");
+    const protocol =
+        forwardedProto ?? (host.includes("localhost") ? "http" : "https");
+
+    return `${protocol}://${host}`;
+}
 
 export const metadata: Metadata = {
     title: "Download",
@@ -25,51 +43,29 @@ export const metadata: Metadata = {
         "Download Inkline Studio for Windows, macOS, or Linux. Free and open-source, always.",
 };
 
-const platforms = [
-    {
-        key: "windows" as const,
-        icon: Monitor,
-        ...DOWNLOADS.windows,
-    },
-    {
-        key: "macos" as const,
-        icon: Apple,
-        ...DOWNLOADS.macos,
-    },
-    {
-        key: "linux" as const,
-        icon: Terminal,
-        ...DOWNLOADS.linux,
-    },
-];
+export default async function DownloadPage() {
+    const baseUrl = await getBaseUrl();
+    const releaseData = await getReleasesDataFromApi(baseUrl);
 
-const changelog = [
-    {
-        version: "v0.1.1-alpha",
-        date: "March 2026",
-        changes: [
-            "Added auto-update functionality",
-            "Various bug fixes and stability improvements",
-            "Multi-platform installer support (Windows, macOS, Linux)",
-        ],
-    },
-    {
-        version: "v0.1.0-alpha",
-        date: "January 2025",
-        changes: [
-            "Initial alpha release",
-            "Core manuscript editor with rich text support",
-            "Character, location, and organization editors",
-            "Timeline system with custom calendar support",
-            "AI chat assistant integration",
-            "EPUB export and document import",
-            "Cloud sync via Supabase",
-            "LanguageTool integration for grammar checking",
-        ],
-    },
-];
+    const platforms = [
+        {
+            key: "windows" as const,
+            ...DOWNLOADS.windows,
+        },
+        {
+            key: "macos" as const,
+            ...DOWNLOADS.macos,
+            url: releaseData.downloads.macosUrl,
+            fileName: releaseData.downloads.macosFileName,
+        },
+        {
+            key: "linux" as const,
+            ...DOWNLOADS.linux,
+            url: releaseData.downloads.linuxUrl,
+            fileName: releaseData.downloads.linuxFileName,
+        },
+    ];
 
-export default function DownloadPage() {
     return (
         <>
             {/* Hero */}
@@ -88,7 +84,9 @@ export default function DownloadPage() {
                             and Linux. No accounts, no paywalls — just download
                             and start writing.
                         </p>
-                        <Badge className="mt-4">{CURRENT_VERSION}</Badge>
+                        <Badge className="mt-4">
+                            {releaseData.latestVersion}
+                        </Badge>
                     </FadeIn>
                 </Container>
             </section>
@@ -112,40 +110,7 @@ export default function DownloadPage() {
             </section>
 
             {/* Platform Cards */}
-            <section className="py-16 md:py-24">
-                <Container size="md">
-                    <div className="grid gap-6 md:grid-cols-3">
-                        {platforms.map((platform, i) => (
-                            <FadeIn key={platform.key} delay={i * 100}>
-                                <Card className="flex flex-col items-center text-center h-full p-8">
-                                    <div className="mb-4 rounded-2xl bg-primary/10 p-4">
-                                        <platform.icon className="h-8 w-8 text-primary" />
-                                    </div>
-                                    <h3 className="text-xl font-bold">
-                                        {platform.label}
-                                    </h3>
-                                    <p className="mt-2 text-sm text-muted">
-                                        {platform.description}
-                                    </p>
-                                    <div className="mt-6 w-full">
-                                        <Button
-                                            href={platform.url}
-                                            external
-                                            className="w-full"
-                                        >
-                                            <Download className="h-4 w-4" />
-                                            Download
-                                        </Button>
-                                    </div>
-                                    <p className="mt-3 text-xs text-muted">
-                                        {platform.fileName}
-                                    </p>
-                                </Card>
-                            </FadeIn>
-                        ))}
-                    </div>
-                </Container>
-            </section>
+            <DownloadPlatforms platforms={platforms} />
 
             {/* System Requirements */}
             <section className="py-16 md:py-24 bg-card/50">
@@ -215,29 +180,50 @@ export default function DownloadPage() {
                         description="Track the latest changes and improvements."
                     />
                     <div className="space-y-8">
-                        {changelog.map((release, i) => (
-                            <FadeIn key={release.version} delay={i * 100}>
-                                <Card hover={false}>
-                                    <div className="flex items-center gap-3 mb-4">
-                                        <Badge>{release.version}</Badge>
-                                        <span className="text-sm text-muted">
-                                            {release.date}
-                                        </span>
-                                    </div>
-                                    <ul className="space-y-2">
-                                        {release.changes.map((change) => (
-                                            <li
-                                                key={change}
-                                                className="flex items-start gap-2 text-sm text-muted"
+                        {releaseData.changelog.length > 0 ? (
+                            releaseData.changelog.map((release, i) => (
+                                <FadeIn key={release.version} delay={i * 100}>
+                                    <Card hover={false}>
+                                        <div className="mb-4 flex flex-wrap items-center gap-3">
+                                            <Badge>{release.version}</Badge>
+                                            <span className="text-sm text-muted">
+                                                {release.date}
+                                            </span>
+                                            <a
+                                                href={release.url}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="inline-flex items-center gap-1 text-xs text-primary hover:opacity-80"
                                             >
-                                                <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                                                {change}
-                                            </li>
-                                        ))}
-                                    </ul>
+                                                Release notes
+                                                <ExternalLink className="h-3.5 w-3.5" />
+                                            </a>
+                                        </div>
+                                        <ul className="space-y-2">
+                                            {release.changes.map((change) => (
+                                                <li
+                                                    key={`${release.version}-${change}`}
+                                                    className="flex items-start gap-2 text-sm text-muted"
+                                                >
+                                                    <div className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
+                                                    {change}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </Card>
+                                </FadeIn>
+                            ))
+                        ) : (
+                            <FadeIn>
+                                <Card hover={false}>
+                                    <p className="text-sm text-muted">
+                                        Changelog data is temporarily
+                                        unavailable. Please check the full
+                                        release history on GitHub.
+                                    </p>
                                 </Card>
                             </FadeIn>
-                        ))}
+                        )}
                     </div>
                     <FadeIn delay={200}>
                         <div className="mt-8 text-center">
@@ -265,7 +251,7 @@ export default function DownloadPage() {
                                 Build from source
                             </h2>
                             <p className="mt-4 text-muted">
-                                Inkline is open-source under the MIT License.
+                                Inkline is open-source under the AGPL License.
                                 Clone the repository, explore the code, and
                                 build it yourself.
                             </p>

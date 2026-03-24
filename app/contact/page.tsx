@@ -40,7 +40,7 @@ const contactMethods = [
         title: "Email",
         description: "For partnerships, press inquiries, or anything else.",
         detail: "We'll get back to you as soon as we can",
-        href: "mailto:contact@inklinestudio.com",
+        href: "mailto:jace.zk.dev@gmail.com",
         cta: "Send Email",
     },
 ];
@@ -48,11 +48,11 @@ const contactMethods = [
 const faqs = [
     {
         question: "Is Inkline really free?",
-        answer: "Yes — completely free, forever. Inkline is open-source under the MIT License. There are no premium tiers, no feature gates, and no subscriptions.",
+        answer: "Yes — completely free, forever. Inkline is open-source under the AGPL-3.0 License. There are no premium tiers, no feature gates, and no subscriptions.",
     },
     {
         question: "Where is my data stored?",
-        answer: "By default, your data is stored locally on your machine. If you enable cloud sync, your data is stored securely on Supabase — but local storage always remains available.",
+        answer: "By default, your data is stored locally on your machine. If you enable cloud sync, your data is stored securely in the cloud database — but local storage always remains available.",
     },
     {
         question: "Can I use Inkline offline?",
@@ -60,7 +60,7 @@ const faqs = [
     },
     {
         question: "Do I need an AI API key?",
-        answer: "AI features are optional. Grammar checking works offline via LanguageTool. For AI chat and generation features, you'll need a Gemini API key (free tier available). Local image/music generation uses ComfyUI with no API key needed.",
+        answer: "AI features are optional. Grammar checking works offline. For AI chat and generation features, you'll need a Gemini API key (free tier available).",
     },
     {
         question: "What formats can I export to?",
@@ -68,26 +68,61 @@ const faqs = [
     },
     {
         question: "How do I report a bug?",
-        answer: "The best way is to open an issue on our GitHub repository. Include steps to reproduce the bug, your operating system, and the Inkline version you're using.",
+        answer: "The best way is to fill out the form on the contact page. For technical issues, providing details about your operating system, steps to reproduce, and screenshots can help us resolve the issue and also get back to you faster.",
     },
 ];
 
 export default function ContactPage() {
     const [submitted, setSubmitted] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [submitError, setSubmitError] = useState<string | null>(null);
     const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
 
-    function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    async function handleSubmit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
         const form = e.currentTarget;
         const formData = new FormData(form);
 
-        // Build mailto link as a fallback
-        const subject = encodeURIComponent(formData.get("subject") as string);
-        const body = encodeURIComponent(
-            `Name: ${formData.get("name")}\nEmail: ${formData.get("email")}\n\n${formData.get("message")}`,
-        );
-        window.location.href = `mailto:contact@inklinestudio.com?subject=${subject}&body=${body}`;
-        setSubmitted(true);
+        setIsSubmitting(true);
+        setSubmitError(null);
+
+        const payload = {
+            name: String(formData.get("name") ?? ""),
+            email: String(formData.get("email") ?? ""),
+            subject: String(formData.get("subject") ?? ""),
+            message: String(formData.get("message") ?? ""),
+            company: String(formData.get("company") ?? ""),
+        };
+
+        try {
+            const response = await fetch("/api/contact", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+            });
+
+            const result = (await response.json().catch(() => null)) as {
+                ok?: boolean;
+                error?: string;
+            } | null;
+
+            if (!response.ok || !result?.ok) {
+                setSubmitError(
+                    result?.error ||
+                        "Unable to send your message right now. Please try again.",
+                );
+                return;
+            }
+
+            setSubmitted(true);
+            form.reset();
+        } catch {
+            setSubmitError(
+                "Unable to send your message right now. Please try again.",
+            );
+        } finally {
+            setIsSubmitting(false);
+        }
     }
 
     return (
@@ -159,16 +194,25 @@ export default function ContactPage() {
                                     <Check className="h-6 w-6 text-primary" />
                                 </div>
                                 <h3 className="text-xl font-semibold">
-                                    Message prepared
+                                    Message sent
                                 </h3>
                                 <p className="mt-2 text-muted">
-                                    Your email client should have opened with
-                                    the message. If not, reach us directly at
-                                    contact@inklinestudio.com.
+                                    Thanks for reaching out. We received your
+                                    message and will get back to you soon.
                                 </p>
                             </Card>
                         ) : (
                             <form onSubmit={handleSubmit} className="space-y-6">
+                                <div className="hidden" aria-hidden="true">
+                                    <label htmlFor="company">Company</label>
+                                    <input
+                                        id="company"
+                                        name="company"
+                                        type="text"
+                                        autoComplete="off"
+                                        tabIndex={-1}
+                                    />
+                                </div>
                                 <div className="grid gap-6 sm:grid-cols-2">
                                     <div>
                                         <label
@@ -251,10 +295,18 @@ export default function ContactPage() {
                                 <Button
                                     type="submit"
                                     className="w-full sm:w-auto"
+                                    disabled={isSubmitting}
                                 >
                                     <Send className="h-4 w-4" />
-                                    Send Message
+                                    {isSubmitting
+                                        ? "Sending..."
+                                        : "Send Message"}
                                 </Button>
+                                {submitError && (
+                                    <p className="text-sm text-destructive">
+                                        {submitError}
+                                    </p>
+                                )}
                             </form>
                         )}
                     </FadeIn>

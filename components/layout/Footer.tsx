@@ -1,7 +1,12 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { Github } from "lucide-react";
 import { Container } from "@/components/ui/Container";
-import { GITHUB_REPO, CURRENT_VERSION } from "@/lib/constants";
+import {
+    GITHUB_REPO,
+    getCurrentVersionFromApi,
+    getLicenseFromApi,
+} from "@/lib/constants";
 
 const footerLinks = {
     Product: [
@@ -20,7 +25,29 @@ const footerLinks = {
     ],
 };
 
-export function Footer() {
+async function getBaseUrl(): Promise<string> {
+    const requestHeaders = await headers();
+    const forwardedHost = requestHeaders.get("x-forwarded-host");
+    const host = forwardedHost ?? requestHeaders.get("host");
+
+    if (!host) {
+        return "http://localhost:3000";
+    }
+
+    const forwardedProto = requestHeaders.get("x-forwarded-proto");
+    const protocol =
+        forwardedProto ?? (host.includes("localhost") ? "http" : "https");
+
+    return `${protocol}://${host}`;
+}
+
+export async function Footer() {
+    const baseUrl = await getBaseUrl();
+    const [latestVersion, license] = await Promise.all([
+        getCurrentVersionFromApi(baseUrl),
+        getLicenseFromApi(baseUrl),
+    ]);
+
     return (
         <footer className="border-t border-border bg-background">
             <Container className="py-16">
@@ -86,8 +113,8 @@ export function Footer() {
                 {/* Bottom Bar */}
                 <div className="mt-12 flex flex-col items-center justify-between gap-4 border-t border-border pt-8 md:flex-row">
                     <p className="text-xs text-muted">
-                        &copy; {new Date().getFullYear()} Inkline Studio. MIT
-                        License. {CURRENT_VERSION}
+                        &copy; {new Date().getFullYear()} Inkline Studio.{" "}
+                        {license} License. {latestVersion}
                     </p>
                     <p className="text-xs text-muted">
                         Made with care by{" "}

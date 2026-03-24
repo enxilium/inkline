@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import {
     Sparkles,
     MessageSquare,
@@ -11,10 +10,8 @@ import {
     Cpu,
     Download,
     Eye,
-    BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
-import { Badge } from "@/components/ui/Badge";
 import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
@@ -43,7 +40,7 @@ const aiFeatures = [
         icon: Wand2,
         title: "Grammar & Style",
         description:
-            "Integrated LanguageTool provides real-time grammar, spelling, and style suggestions as you write — no AI key required.",
+            "Integrated real-time grammar and spelling feedback. Smarter than your average spellcheck, with suggestions for improving clarity and style. No more paying for Grammarly Premium.",
         highlights: [
             "Real-time feedback while typing",
             "Spelling and grammar corrections",
@@ -71,21 +68,18 @@ const generationFeatures = [
         title: "Image Generation",
         description:
             "Generate reference portraits for characters, landscapes for locations, and insignia for organizations — all from their descriptions.",
-        tag: "Flux Model",
     },
     {
         icon: Music,
         title: "Music Generation",
         description:
             "Create thematic background music for characters, locations, and organizations that matches their personality and atmosphere.",
-        tag: "ComfyUI",
     },
     {
         icon: ListMusic,
         title: "Playlist Curation",
         description:
             "AI curates Spotify and YouTube playlists to match each character, location, or organization — find the perfect soundtrack for your story.",
-        tag: "Gemini AI",
     },
 ];
 
@@ -97,11 +91,8 @@ export default function AIPage() {
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
                 <Container className="relative">
                     <FadeIn className="max-w-3xl">
-                        <div className="mb-4 flex items-center gap-3">
-                            <div className="inline-flex rounded-xl bg-primary/10 p-3">
-                                <Sparkles className="h-6 w-6 text-primary" />
-                            </div>
-                            <Badge variant="outline">Optional</Badge>
+                        <div className="mb-4 inline-flex rounded-xl bg-primary/10 p-3">
+                            <Sparkles className="h-6 w-6 text-primary" />
                         </div>
                         <h1 className="text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl">
                             AI Tools
@@ -194,19 +185,14 @@ export default function AIPage() {
                     <SectionHeader
                         label="Asset Generation"
                         title="Create reference assets from scratch"
-                        description="Generate images, music, and playlists based on your character, location, and organization descriptions."
+                        description="Generate images, music, and playlists based on your character, location, and organization profiles. Immerse yourself in your world like never before."
                     />
                     <div className="grid gap-6 md:grid-cols-3">
                         {generationFeatures.map((feature, i) => (
                             <FadeIn key={feature.title} delay={i * 100}>
                                 <Card className="h-full">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div className="rounded-lg bg-primary/10 p-2.5">
-                                            <feature.icon className="h-5 w-5 text-primary" />
-                                        </div>
-                                        <Badge variant="outline">
-                                            {feature.tag}
-                                        </Badge>
+                                    <div className="mb-4 rounded-lg bg-primary/10 p-2.5 w-fit">
+                                        <feature.icon className="h-5 w-5 text-primary" />
                                     </div>
                                     <h3 className="text-lg font-semibold">
                                         {feature.title}
@@ -239,11 +225,6 @@ export default function AIPage() {
                                 computer. Currently available on Windows with a
                                 dedicated GPU.
                             </p>
-                            <div className="mt-6 flex flex-wrap gap-3">
-                                <Badge>Privacy-First</Badge>
-                                <Badge>No API Keys Required</Badge>
-                                <Badge>GPU Accelerated</Badge>
-                            </div>
                         </div>
                     </FadeIn>
                 </Container>

@@ -34,7 +34,7 @@ const values = [
         icon: Code,
         title: "Open Source Forever",
         description:
-            "Inkline is MIT licensed and always will be. No premium tiers, no feature gates. The complete tool is free for everyone.",
+            "Inkline is fully open-source and always will be. No premium tiers, no feature gates. The complete tool is free for everyone.",
     },
     {
         icon: Shield,
@@ -118,9 +118,8 @@ export default function AboutPage() {
                                         We believe in building tools that
                                         respect writers — their creativity,
                                         their data, and their wallets.
-                                        That&apos;s why Inkline is open-source
-                                        under the MIT License, with no premium
-                                        tiers or feature restrictions.
+                                        That&apos;s why Inkline is open-source, with no premium
+                                        tiers or feature restrictions. And any AI features? All fully opt-in, and aim to enhance your workflow rather than replace it.
                                     </p>
                                 </div>
                             </div>

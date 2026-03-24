@@ -36,7 +36,7 @@ const entities = [
             "Relationship tracking — current location, background, and organization membership",
             "Visual gallery with reference images and generated portraits",
             "Themed background music and curated playlists",
-            "Custom tags for categorization and filtering",
+            "Custom metafields to fit any story",
         ],
     },
     {
@@ -62,7 +62,7 @@ const entities = [
             "Member rosters with character links",
             "Locations where the organization operates",
             "Visual assets, background music, and playlists",
-            "Custom tags for easy reference",
+            "Custom metafields to fit any story need",
         ],
     },
 ];
@@ -182,7 +182,7 @@ export default function WorldbuildingPage() {
             <section className="py-16 md:py-24 bg-card/50">
                 <Container>
                     <SectionHeader
-                        label="Timelines"
+                        label="Coming Soon: Timelines"
                         title="Plot your story across time"
                         description="Create flexible timelines with support for real-world calendars, fantasy ages, or fully custom systems."
                     />
@@ -251,10 +251,10 @@ export default function WorldbuildingPage() {
                                 <div className="rounded-xl border border-border bg-background p-4 text-center">
                                     <Tag className="mx-auto h-8 w-8 text-primary-dark mb-2" />
                                     <p className="text-sm font-medium">
-                                        Custom Tags
+                                        Custom Metafields
                                     </p>
                                     <p className="text-xs text-muted mt-1">
-                                        Organize your way
+                                        Define your way
                                     </p>
                                 </div>
                             </div>

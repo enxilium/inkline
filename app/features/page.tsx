@@ -112,7 +112,7 @@ const allFeatures = [
         icon: Wand2,
         title: "Grammar & Style",
         description:
-            "Integrated LanguageTool for real-time grammar and spelling feedback.",
+            "Integrated real-time grammar and spelling feedback. Smarter than your average spellcheck, with suggestions for improving clarity and style. No more paying for Grammarly Premium.",
     },
     {
         icon: ImageIcon,
