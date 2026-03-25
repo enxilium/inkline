@@ -8,7 +8,7 @@ export const PROJECT_LICENSE = "MIT";
 
 export const DOWNLOADS = {
     windows: {
-        url: "https://github.com/enxilium/inkline/releases/download/v0.1.1-alpha/inkline-0.1.1-alpha.Setup.exe",
+        url: "https://apps.microsoft.com/detail/9pn8ch8zf8v6",
         label: "Windows",
         description: "Windows 10 or later",
         fileName: "inkline-0.1.1-alpha.Setup.exe",

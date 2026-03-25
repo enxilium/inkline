@@ -133,7 +133,7 @@ export function DownloadPlatforms({ platforms }: DownloadPlatformsProps) {
                                             </h3>
                                             {isRecommended && (
                                                 <Badge className="text-[10px]">
-                                                    Recommended
+                                                    Detected
                                                 </Badge>
                                             )}
                                         </div>
