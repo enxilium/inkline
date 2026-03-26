@@ -3443,6 +3443,11 @@ input.toolbar-color:focus {
     border-color: var(--accent);
 }
 
+.report-issue-error {
+    font-size: var(--text-sm);
+    color: #f87171;
+}
+
 .portrait-card {
     border: 1px solid var(--overlay-10);
     border-radius: var(--radius);

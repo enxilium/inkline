@@ -1336,6 +1336,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         entityType: payload.entityType,
                         entityId: payload.entityId,
                         failureFingerprint: payload.failureFingerprint,
+                        reportSource: "sync_terminal",
                         payload: diagnosticsPayload,
                         note: note || null,
                         appVersion: null,

@@ -8,7 +8,8 @@ export type SubmitBugReportRequest = {
     projectId?: string | null;
     entityType?: string | null;
     entityId?: string | null;
-    failureFingerprint: string;
+    failureFingerprint?: string | null;
+    reportSource?: "sync_terminal" | "manual_help_menu";
     payload: Record<string, unknown>;
     note?: string | null;
     appVersion?: string | null;
@@ -24,6 +25,15 @@ export class SubmitBugReport {
 
     constructor(private readonly bugReportRepository: IBugReportRepository) {}
 
+    private buildFailureFingerprint(raw?: string | null): string {
+        const normalized = raw?.trim();
+        if (normalized) {
+            return normalized;
+        }
+
+        return `manual-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    }
+
     async execute(
         request: SubmitBugReportRequest,
     ): Promise<SubmitBugReportResponse> {
@@ -34,10 +44,18 @@ export class SubmitBugReport {
             );
         }
 
-        const failureFingerprint = request.failureFingerprint.trim();
+        const failureFingerprint = this.buildFailureFingerprint(
+            request.failureFingerprint,
+        );
         if (!failureFingerprint) {
             throw new Error("Failure fingerprint is required.");
         }
+
+        const reportSource = request.reportSource
+            ? request.reportSource
+            : request.failureFingerprint?.trim()
+              ? "sync_terminal"
+              : "manual_help_menu";
 
         const note = (request.note ?? "").trim();
         if (note.length > SubmitBugReport.MAX_NOTE_LENGTH) {
@@ -65,6 +83,7 @@ export class SubmitBugReport {
             entityType: request.entityType?.trim() || null,
             entityId: request.entityId?.trim() || null,
             failureFingerprint,
+            reportSource,
             payload,
             note: note || null,
             appVersion: request.appVersion?.trim() || null,

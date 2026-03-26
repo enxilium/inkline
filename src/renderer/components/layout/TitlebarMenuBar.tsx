@@ -15,9 +15,10 @@ import { getTextStats } from "../../utils/textStats";
 import { normalizeUserFacingError } from "../../utils/userFacingError";
 import { EditChapterRangeDialog } from "../dialogs/EditChapterRangeDialog";
 import { ExportDialog } from "../dialogs/ExportDialog";
+import { ReportIssueDialog } from "../dialogs/ReportIssueDialog";
 import { showToast } from "../ui/GenerationProgressToast";
 
-type MenuKey = "file" | "edit" | "view" | null;
+type MenuKey = "file" | "edit" | "view" | "help" | null;
 
 export const TitlebarMenuBar: React.FC = () => {
     const {
@@ -33,11 +34,15 @@ export const TitlebarMenuBar: React.FC = () => {
         workspaceViewMode,
         setWorkspaceViewMode,
         requestTutorialReplay,
+        user,
+        syncStatus,
+        submitBugReport,
     } = useAppStore();
     const [openMenu, setOpenMenu] = React.useState<MenuKey>(null);
     const [isRangeDialogOpen, setIsRangeDialogOpen] = React.useState(false);
     const [isExportDialogOpen, setIsExportDialogOpen] = React.useState(false);
     const [isProjectStatsOpen, setIsProjectStatsOpen] = React.useState(false);
+    const [isReportIssueOpen, setIsReportIssueOpen] = React.useState(false);
     const [rangeStart, setRangeStart] = React.useState("");
     const [rangeEnd, setRangeEnd] = React.useState("");
     const [isApplyingEdits, setIsApplyingEdits] = React.useState(false);
@@ -83,6 +88,57 @@ export const TitlebarMenuBar: React.FC = () => {
             return current === key ? current : key;
         });
     };
+
+    const handleReportIssueSubmit = React.useCallback(
+        async (description: string) => {
+            if (syncStatus === "offline") {
+                throw new Error(
+                    "Reconnect to the internet before submitting an issue report.",
+                );
+            }
+
+            const userId = user?.id?.trim();
+            if (!userId) {
+                throw new Error("You must be signed in to submit a report.");
+            }
+
+            let appVersion: string | null = null;
+            try {
+                appVersion = await window.appInfoApi.getVersion();
+            } catch {
+                appVersion = null;
+            }
+
+            const runtimeNavigator =
+                typeof navigator === "undefined" ? null : navigator;
+
+            await submitBugReport({
+                userId,
+                projectId: projectId || null,
+                entityType: null,
+                entityId: null,
+                reportSource: "manual_help_menu",
+                payload: {
+                    source: "help_menu",
+                    description,
+                    submittedAt: new Date().toISOString(),
+                    platform: runtimeNavigator?.platform ?? null,
+                    userAgent: runtimeNavigator?.userAgent ?? null,
+                    language: runtimeNavigator?.language ?? null,
+                },
+                note: null,
+                appVersion,
+            });
+
+            showToast({
+                variant: "success",
+                title: "Issue sent",
+                description: "Thanks. Your report was sent successfully.",
+                durationMs: 3000,
+            });
+        },
+        [projectId, submitBugReport, syncStatus, user?.id],
+    );
 
     return (
         <div className="titlebar-menubar" data-titlebar-menubar-root>
@@ -246,6 +302,39 @@ export const TitlebarMenuBar: React.FC = () => {
                         </div>
                     ) : null}
                 </div>
+
+                <div className="titlebar-menubar-item">
+                    <button
+                        type="button"
+                        className={cx(
+                            "titlebar-menubar-button titlebar-no-drag",
+                            openMenu === "help" && "is-open",
+                        )}
+                        onClick={() => toggleMenu("help")}
+                        onMouseEnter={() => openOnHoverIfAnyOpen("help")}
+                    >
+                        Help
+                    </button>
+
+                    {openMenu === "help" ? (
+                        <div
+                            className="titlebar-menu titlebar-no-drag"
+                            role="menu"
+                        >
+                            <button
+                                type="button"
+                                className="project-card-menu-item"
+                                role="menuitem"
+                                onClick={() => {
+                                    setOpenMenu(null);
+                                    setIsReportIssueOpen(true);
+                                }}
+                            >
+                                Report Issue
+                            </button>
+                        </div>
+                    ) : null}
+                </div>
             </div>
 
             <EditChapterRangeDialog
@@ -385,6 +474,12 @@ export const TitlebarMenuBar: React.FC = () => {
                         author,
                     });
                 }}
+            />
+
+            <ReportIssueDialog
+                open={isReportIssueOpen}
+                onOpenChange={setIsReportIssueOpen}
+                onSubmit={handleReportIssueSubmit}
             />
         </div>
     );

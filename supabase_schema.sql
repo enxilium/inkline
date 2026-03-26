@@ -34,6 +34,8 @@ create table if not exists public.bug_reports (
   entity_type text,
   entity_id text,
   failure_fingerprint text not null,
+  report_source text not null default 'sync_terminal'
+    check (report_source in ('sync_terminal', 'manual_help_menu')),
   payload jsonb not null default '{}'::jsonb,
   note varchar(280),
   app_version text,
