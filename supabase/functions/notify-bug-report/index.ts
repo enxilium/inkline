@@ -99,13 +99,10 @@ Deno.serve(async (request) => {
 
     if (!resendResponse.ok) {
         const errorText = await resendResponse.text();
-        return new Response(
-            JSON.stringify({ ok: false, message: errorText }),
-            {
-                status: 502,
-                headers: { "Content-Type": "application/json" },
-            },
-        );
+        return new Response(JSON.stringify({ ok: false, message: errorText }), {
+            status: 502,
+            headers: { "Content-Type": "application/json" },
+        });
     }
 
     return new Response(JSON.stringify({ ok: true }), {
