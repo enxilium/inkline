@@ -17,11 +17,30 @@ import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FadeIn } from "@/components/ui/FadeIn";
+import { SITE_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
     title: "Writing & Editing",
     description:
         "Inkline Studio offers a distraction-free rich text editor with chapter management, grammar checking, EPUB export, and one-click import.",
+    alternates: {
+        canonical: "/features/writing",
+    },
+    openGraph: {
+        title: `Writing & Editing | ${SITE_NAME}`,
+        description:
+            "Inkline Studio offers a distraction-free rich text editor with chapter management, grammar checking, EPUB export, and one-click import.",
+        url: "/features/writing",
+        type: "website",
+        images: [{ url: "/images/features-minimal-interface.png" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: `Writing & Editing | ${SITE_NAME}`,
+        description:
+            "Inkline Studio offers a distraction-free rich text editor with chapter management, grammar checking, EPUB export, and one-click import.",
+        images: ["/images/features-minimal-interface.png"],
+    },
 };
 
 const editorFeatures = [
@@ -84,8 +103,39 @@ const managementFeatures = [
 ];
 
 export default function WritingPage() {
+    const breadcrumbSchema = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+            {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: "https://inklinestudio.com/",
+            },
+            {
+                "@type": "ListItem",
+                position: 2,
+                name: "Features",
+                item: "https://inklinestudio.com/features",
+            },
+            {
+                "@type": "ListItem",
+                position: 3,
+                name: "Writing & Editing",
+                item: "https://inklinestudio.com/features/writing",
+            },
+        ],
+    };
+
     return (
         <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(breadcrumbSchema),
+                }}
+            />
             {/* Hero */}
             <section className="relative overflow-hidden py-20 md:py-28">
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />

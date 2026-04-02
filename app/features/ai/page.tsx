@@ -16,11 +16,30 @@ import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FadeIn } from "@/components/ui/FadeIn";
+import { SITE_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
     title: "AI Tools",
     description:
         "Inkline Studio's optional AI features — chat assistant, grammar checking, image generation, music generation, and playlist curation.",
+    alternates: {
+        canonical: "/features/ai",
+    },
+    openGraph: {
+        title: `AI Tools | ${SITE_NAME}`,
+        description:
+            "Inkline Studio's optional AI features — chat assistant, grammar checking, image generation, music generation, and playlist curation.",
+        url: "/features/ai",
+        type: "website",
+        images: [{ url: "/images/features-minimal-interface.png" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: `AI Tools | ${SITE_NAME}`,
+        description:
+            "Inkline Studio's optional AI features — chat assistant, grammar checking, image generation, music generation, and playlist curation.",
+        images: ["/images/features-minimal-interface.png"],
+    },
 };
 
 const aiFeatures = [
@@ -84,8 +103,40 @@ const generationFeatures = [
 ];
 
 export default function AIPage() {
+    const breadcrumbSchema = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+            {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: "https://inklinestudio.com/",
+            },
+            {
+                "@type": "ListItem",
+                position: 2,
+                name: "Features",
+                item: "https://inklinestudio.com/features",
+            },
+            {
+                "@type": "ListItem",
+                position: 3,
+                name: "AI Tools",
+                item: "https://inklinestudio.com/features/ai",
+            },
+        ],
+    };
+
     return (
         <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(breadcrumbSchema),
+                }}
+            />
+
             {/* Hero */}
             <section className="relative overflow-hidden py-20 md:py-28">
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />

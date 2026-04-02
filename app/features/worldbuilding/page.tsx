@@ -18,11 +18,30 @@ import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FadeIn } from "@/components/ui/FadeIn";
+import { SITE_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
     title: "Worldbuilding",
     description:
         "Build immersive worlds with dedicated editors for characters, locations, organizations, and timelines — all interconnected.",
+    alternates: {
+        canonical: "/features/worldbuilding",
+    },
+    openGraph: {
+        title: `Worldbuilding | ${SITE_NAME}`,
+        description:
+            "Build immersive worlds with dedicated editors for characters, locations, organizations, and timelines — all interconnected.",
+        url: "/features/worldbuilding",
+        type: "website",
+        images: [{ url: "/images/features-special-editor.png" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: `Worldbuilding | ${SITE_NAME}`,
+        description:
+            "Build immersive worlds with dedicated editors for characters, locations, organizations, and timelines — all interconnected.",
+        images: ["/images/features-special-editor.png"],
+    },
 };
 
 const entities = [
@@ -95,8 +114,39 @@ const timelineFeatures = [
 ];
 
 export default function WorldbuildingPage() {
+    const breadcrumbSchema = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+            {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: "https://inklinestudio.com/",
+            },
+            {
+                "@type": "ListItem",
+                position: 2,
+                name: "Features",
+                item: "https://inklinestudio.com/features",
+            },
+            {
+                "@type": "ListItem",
+                position: 3,
+                name: "Worldbuilding",
+                item: "https://inklinestudio.com/features/worldbuilding",
+            },
+        ],
+    };
+
     return (
         <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(breadcrumbSchema),
+                }}
+            />
             {/* Hero */}
             <section className="relative overflow-hidden py-20 md:py-28">
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />

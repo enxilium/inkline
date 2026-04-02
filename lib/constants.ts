@@ -41,6 +41,7 @@ export const NAV_LINKS = [
     { label: "Download", href: "/download" },
     { label: "About", href: "/about" },
     { label: "Contact", href: "/contact" },
+    { label: "FAQ", href: "/faq" },
 ] as const;
 
 export const SOCIAL_LINKS = {

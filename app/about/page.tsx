@@ -15,12 +15,30 @@ import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FadeIn } from "@/components/ui/FadeIn";
-import { GITHUB_REPO, TEAM } from "@/lib/constants";
+import { GITHUB_REPO, SITE_NAME, TEAM } from "@/lib/constants";
 
 export const metadata: Metadata = {
     title: "About",
     description:
         "Learn about Inkline Studio — our mission, our team, and our commitment to free, open-source software for creative writers.",
+    alternates: {
+        canonical: "/about",
+    },
+    openGraph: {
+        title: `About | ${SITE_NAME}`,
+        description:
+            "Learn about Inkline Studio — our mission, our team, and our commitment to free, open-source software for creative writers.",
+        url: "/about",
+        type: "website",
+        images: [{ url: "/images/banner.png" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: `About | ${SITE_NAME}`,
+        description:
+            "Learn about Inkline Studio — our mission, our team, and our commitment to free, open-source software for creative writers.",
+        images: ["/images/banner.png"],
+    },
 };
 
 const values = [
@@ -118,8 +136,11 @@ export default function AboutPage() {
                                         We believe in building tools that
                                         respect writers — their creativity,
                                         their data, and their wallets.
-                                        That&apos;s why Inkline is open-source, with no premium
-                                        tiers or feature restrictions. And any AI features? All fully opt-in, and aim to enhance your workflow rather than replace it.
+                                        That&apos;s why Inkline is open-source,
+                                        with no premium tiers or feature
+                                        restrictions. And any AI features? All
+                                        fully opt-in, and aim to enhance your
+                                        workflow rather than replace it.
                                     </p>
                                 </div>
                             </div>

@@ -17,11 +17,30 @@ import { Badge } from "@/components/ui/Badge";
 import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FadeIn } from "@/components/ui/FadeIn";
+import { SITE_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
     title: "Sync & Export",
     description:
         "Keep projects in sync across devices, work offline, export polished EPUB files, and import existing drafts from tools like Google Docs and Word.",
+    alternates: {
+        canonical: "/features/sync-export",
+    },
+    openGraph: {
+        title: `Sync & Export | ${SITE_NAME}`,
+        description:
+            "Keep projects in sync across devices, work offline, export polished EPUB files, and import existing drafts from tools like Google Docs and Word.",
+        url: "/features/sync-export",
+        type: "website",
+        images: [{ url: "/images/features-import.png" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: `Sync & Export | ${SITE_NAME}`,
+        description:
+            "Keep projects in sync across devices, work offline, export polished EPUB files, and import existing drafts from tools like Google Docs and Word.",
+        images: ["/images/features-import.png"],
+    },
 };
 
 const workflowFeatures = [
@@ -67,8 +86,39 @@ const portabilityFeatures = [
 ];
 
 export default function SyncExportPage() {
+    const breadcrumbSchema = {
+        "@context": "https://schema.org",
+        "@type": "BreadcrumbList",
+        itemListElement: [
+            {
+                "@type": "ListItem",
+                position: 1,
+                name: "Home",
+                item: "https://inklinestudio.com/",
+            },
+            {
+                "@type": "ListItem",
+                position: 2,
+                name: "Features",
+                item: "https://inklinestudio.com/features",
+            },
+            {
+                "@type": "ListItem",
+                position: 3,
+                name: "Sync & Export",
+                item: "https://inklinestudio.com/features/sync-export",
+            },
+        ],
+    };
+
     return (
         <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(breadcrumbSchema),
+                }}
+            />
             {/* Hero */}
             <section className="relative overflow-hidden py-20 md:py-28">
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
@@ -85,9 +135,9 @@ export default function SyncExportPage() {
                         </h1>
                         <p className="mt-6 text-lg text-muted">
                             Move your manuscript smoothly from first draft to
-                            final file. Sync across devices, work offline, import existing
-                            drafts, and export publication-ready EPUBs without
-                            breaking your writing flow.
+                            final file. Sync across devices, work offline,
+                            import existing drafts, and export publication-ready
+                            EPUBs without breaking your writing flow.
                         </p>
                     </FadeIn>
                 </Container>

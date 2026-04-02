@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -19,11 +20,35 @@ import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FadeIn } from "@/components/ui/FadeIn";
 import {
+    SITE_NAME,
+    SITE_DESCRIPTION,
+    SITE_URL,
     GITHUB_REPO,
     FEATURES_OVERVIEW,
     getCurrentVersionFromApi,
     getLicenseFromApi,
 } from "@/lib/constants";
+
+export const metadata: Metadata = {
+    title: "Free Open-Source Writing Software",
+    description: SITE_DESCRIPTION,
+    alternates: {
+        canonical: "/",
+    },
+    openGraph: {
+        title: SITE_NAME,
+        description: SITE_DESCRIPTION,
+        url: "/",
+        type: "website",
+        images: [{ url: "/images/banner.png" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: SITE_NAME,
+        description: SITE_DESCRIPTION,
+        images: ["/images/banner.png"],
+    },
+};
 
 async function getBaseUrl(): Promise<string> {
     const requestHeaders = await headers();
@@ -112,9 +137,45 @@ const comparisonFeatures = [
 
 export default async function Home() {
     const { latestVersion, license } = await getRuntimeMeta();
+    const organizationSchema = {
+        "@context": "https://schema.org",
+        "@type": "Organization",
+        name: SITE_NAME,
+        url: SITE_URL,
+        description: SITE_DESCRIPTION,
+        sameAs: [GITHUB_REPO, `${GITHUB_REPO}/stargazers`],
+    };
+
+    const softwareSchema = {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: SITE_NAME,
+        applicationCategory: "WritingApplication",
+        operatingSystem: "Windows, macOS, Linux",
+        softwareVersion: latestVersion,
+        license: `${GITHUB_REPO}/blob/main/LICENSE`,
+        offers: {
+            "@type": "Offer",
+            price: "0",
+            priceCurrency: "USD",
+        },
+        url: SITE_URL,
+    };
 
     return (
         <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(organizationSchema),
+                }}
+            />
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(softwareSchema),
+                }}
+            />
             {/* Hero */}
             <section className="relative overflow-hidden">
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />

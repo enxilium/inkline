@@ -9,6 +9,7 @@ import {
     ExternalLink,
     Send,
     Check,
+    ArrowRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
@@ -16,6 +17,7 @@ import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FadeIn } from "@/components/ui/FadeIn";
 import { GITHUB_REPO } from "@/lib/constants";
+import { FAQS } from "@/lib/faqs";
 
 const contactMethods = [
     {
@@ -45,38 +47,23 @@ const contactMethods = [
     },
 ];
 
-const faqs = [
-    {
-        question: "Is Inkline really free?",
-        answer: "Yes — completely free, forever. Inkline is open-source under the AGPL-3.0 License. There are no premium tiers, no feature gates, and no subscriptions.",
-    },
-    {
-        question: "Where is my data stored?",
-        answer: "By default, your data is stored locally on your machine. If you enable cloud sync, your data is stored securely in the cloud database — but local storage always remains available.",
-    },
-    {
-        question: "Can I use Inkline offline?",
-        answer: "Yes. Inkline is built with a local-first architecture. You can write, edit, and manage your projects entirely offline, and sync when you're ready.",
-    },
-    {
-        question: "Do I need an AI API key?",
-        answer: "AI features are optional. Grammar checking works offline. For AI chat and generation features, you'll need a Gemini API key (free tier available).",
-    },
-    {
-        question: "What formats can I export to?",
-        answer: "Currently, Inkline supports EPUB export. PDF and additional formats are planned for future releases.",
-    },
-    {
-        question: "How do I report a bug?",
-        answer: "The best way is to fill out the form on the contact page. For technical issues, providing details about your operating system, steps to reproduce, and screenshots can help us resolve the issue and also get back to you faster.",
-    },
-];
-
 export default function ContactPage() {
     const [submitted, setSubmitted] = useState(false);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [submitError, setSubmitError] = useState<string | null>(null);
     const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+    const faqSchema = {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: FAQS.map((faq) => ({
+            "@type": "Question",
+            name: faq.question,
+            acceptedAnswer: {
+                "@type": "Answer",
+                text: faq.answer,
+            },
+        })),
+    };
 
     async function handleSubmit(e: FormEvent<HTMLFormElement>) {
         e.preventDefault();
@@ -127,6 +114,12 @@ export default function ContactPage() {
 
     return (
         <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(faqSchema),
+                }}
+            />
             {/* Hero */}
             <section className="relative overflow-hidden py-20 md:py-28">
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
@@ -319,9 +312,16 @@ export default function ContactPage() {
                     <SectionHeader
                         label="FAQ"
                         title="Frequently asked questions"
+                        description="Need a full support reference? Visit the dedicated FAQ page."
                     />
+                    <div className="mb-5 text-center">
+                        <Button href="/faq" variant="secondary" size="sm">
+                            View full FAQ
+                            <ArrowRight className="h-4 w-4" />
+                        </Button>
+                    </div>
                     <div className="space-y-3">
-                        {faqs.map((faq, i) => (
+                        {FAQS.map((faq, i) => (
                             <FadeIn key={faq.question} delay={i * 50}>
                                 <button
                                     onClick={() =>

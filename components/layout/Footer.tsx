@@ -17,6 +17,7 @@ const footerLinks = {
     Resources: [
         { label: "GitHub", href: GITHUB_REPO },
         { label: "Issues", href: `${GITHUB_REPO}/issues` },
+        { label: "FAQ", href: "/faq" },
         { label: "Contributing", href: `${GITHUB_REPO}#contributing` },
     ],
     Company: [

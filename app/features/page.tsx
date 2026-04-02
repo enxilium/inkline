@@ -25,11 +25,30 @@ import { Card } from "@/components/ui/Card";
 import { Container } from "@/components/ui/Container";
 import { SectionHeader } from "@/components/ui/SectionHeader";
 import { FadeIn } from "@/components/ui/FadeIn";
+import { SITE_NAME } from "@/lib/constants";
 
 export const metadata: Metadata = {
     title: "Features",
     description:
         "Discover all the features that make Inkline Studio the perfect writing tool — from manuscript editing to worldbuilding and AI-powered creative tools.",
+    alternates: {
+        canonical: "/features",
+    },
+    openGraph: {
+        title: `Features | ${SITE_NAME}`,
+        description:
+            "Discover all the features that make Inkline Studio the perfect writing tool — from manuscript editing to worldbuilding and AI-powered creative tools.",
+        url: "/features",
+        type: "website",
+        images: [{ url: "/images/banner.png" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: `Features | ${SITE_NAME}`,
+        description:
+            "Discover all the features that make Inkline Studio the perfect writing tool — from manuscript editing to worldbuilding and AI-powered creative tools.",
+        images: ["/images/banner.png"],
+    },
 };
 
 const categories = [

@@ -18,6 +18,8 @@ import { DownloadPlatforms } from "@/components/download/DownloadPlatforms";
 import {
     DOWNLOADS,
     GITHUB_REPO,
+    SITE_NAME,
+    SITE_URL,
     getReleasesDataFromApi,
 } from "@/lib/constants";
 
@@ -41,6 +43,24 @@ export const metadata: Metadata = {
     title: "Download",
     description:
         "Download Inkline Studio for Windows, macOS, or Linux. Free and open-source, always.",
+    alternates: {
+        canonical: "/download",
+    },
+    openGraph: {
+        title: `Download | ${SITE_NAME}`,
+        description:
+            "Download Inkline Studio for Windows, macOS, or Linux. Free and open-source, always.",
+        url: "/download",
+        type: "website",
+        images: [{ url: "/images/download.png" }],
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: `Download | ${SITE_NAME}`,
+        description:
+            "Download Inkline Studio for Windows, macOS, or Linux. Free and open-source, always.",
+        images: ["/images/download.png"],
+    },
 };
 
 export default async function DownloadPage() {
@@ -66,8 +86,30 @@ export default async function DownloadPage() {
         },
     ];
 
+    const softwareSchema = {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        name: SITE_NAME,
+        applicationCategory: "WritingApplication",
+        operatingSystem: "Windows, macOS, Linux",
+        softwareVersion: releaseData.latestVersion,
+        downloadUrl: platforms.map((platform) => platform.url),
+        offers: {
+            "@type": "Offer",
+            price: "0",
+            priceCurrency: "USD",
+        },
+        url: `${SITE_URL}/download`,
+    };
+
     return (
         <>
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{
+                    __html: JSON.stringify(softwareSchema),
+                }}
+            />
             {/* Hero */}
             <section className="relative overflow-hidden py-20 md:py-28">
                 <div className="absolute inset-0 bg-gradient-to-b from-primary/5 via-transparent to-transparent" />
