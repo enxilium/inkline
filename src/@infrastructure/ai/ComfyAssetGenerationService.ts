@@ -53,6 +53,7 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
     private basePath = "";
     private serverReady: Promise<void>;
     private genAI: GoogleGenAI | null = null;
+    private activeGeminiApiKey: string | null = null;
 
     constructor(
         sessionStore: IUserSessionStore,
@@ -228,14 +229,13 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
     }
 
     private async getGeminiClient(): Promise<GoogleGenAI> {
-        if (this.genAI) {
-            return this.genAI;
-        }
-
         const user = await this.sessionStore.load();
-        const key = user?.preferences.geminiApiKey
-            ? user.preferences.geminiApiKey
-            : process.env.GEMINI_API_KEY;
+        const localPreferences = await this.sessionStore.loadLocalPreferences();
+        const key =
+            user?.preferences.geminiApiKey?.trim() ||
+            localPreferences.geminiApiKey?.trim() ||
+            process.env.GEMINI_API_KEY?.trim() ||
+            "";
 
         if (!key) {
             throw new Error(
@@ -243,7 +243,12 @@ export class ComfyAssetGenerationService implements ICreativeAssetGenerationServ
             );
         }
 
+        if (this.genAI && this.activeGeminiApiKey === key) {
+            return this.genAI;
+        }
+
         this.genAI = new GoogleGenAI({ apiKey: key });
+        this.activeGeminiApiKey = key;
         return this.genAI;
     }
 

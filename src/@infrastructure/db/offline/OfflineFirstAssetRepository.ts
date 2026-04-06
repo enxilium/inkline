@@ -56,7 +56,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         }
 
         const local = await this.fsRepo.findImageById(id);
-        const result = this.pickMostRecent(local, remote);
+        const result = await this.pickPlayableAsset(local, remote);
 
         if (result) {
             await this.resolveLocalUrl(result);
@@ -73,7 +73,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         }
 
         const local = await this.fsRepo.findImagesByProjectId(projectId);
-        const merged = this.mergeByMostRecent(local, remote);
+        const merged = await this.mergePlayableAssets(local, remote);
 
         for (const img of merged) {
             await this.resolveLocalUrl(img);
@@ -97,7 +97,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         try {
             const local = await this.fsRepo.findImageById(id);
             if (local?.storagePath) {
-                const localPath = path.join("assets", local.storagePath);
+                const localPath = this.toLocalObjectPath(local.storagePath);
                 if (await fileSystemService.exists(localPath)) {
                     await fileSystemService.deleteFile(localPath);
                 }
@@ -189,7 +189,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         }
 
         const local = await this.fsRepo.findBGMById(id);
-        const result = this.pickMostRecent(local, remote);
+        const result = await this.pickPlayableAsset(local, remote);
 
         if (result) {
             await this.resolveLocalUrl(result);
@@ -206,7 +206,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         }
 
         const local = await this.fsRepo.findBGMByProjectId(projectId);
-        const merged = this.mergeByMostRecent(local, remote);
+        const merged = await this.mergePlayableAssets(local, remote);
 
         for (const bgm of merged) {
             await this.resolveLocalUrl(bgm);
@@ -230,7 +230,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         try {
             const local = await this.fsRepo.findBGMById(id);
             if (local?.storagePath) {
-                const localPath = path.join("assets", local.storagePath);
+                const localPath = this.toLocalObjectPath(local.storagePath);
                 if (await fileSystemService.exists(localPath)) {
                     await fileSystemService.deleteFile(localPath);
                 }
@@ -350,7 +350,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         try {
             const local = await this.fsRepo.findPlaylistById(id);
             if (local?.storagePath) {
-                const localPath = path.join("assets", local.storagePath);
+                const localPath = this.toLocalObjectPath(local.storagePath);
                 if (await fileSystemService.exists(localPath)) {
                     await fileSystemService.deleteFile(localPath);
                 }
@@ -447,6 +447,26 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         return Array.from(map.values());
     }
 
+    private async mergePlayableAssets<T extends Image | BGM>(
+        local: T[],
+        remote: T[],
+    ): Promise<T[]> {
+        const localById = new Map(local.map((item) => [item.id, item]));
+        const remoteById = new Map(remote.map((item) => [item.id, item]));
+        const merged = this.mergeByMostRecent(local, remote);
+        const resolved: T[] = [];
+
+        for (const item of merged) {
+            const selected = await this.pickPlayableAsset(
+                localById.get(item.id) ?? null,
+                remoteById.get(item.id) ?? null,
+            );
+            resolved.push(selected ?? item);
+        }
+
+        return resolved;
+    }
+
     /**
      * Get the project ID for an asset from local storage or remote.
      */
@@ -501,6 +521,68 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
         return null;
     }
 
+    private normalizeStoragePath(storagePath: string): string {
+        return storagePath.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+    }
+
+    private toLocalObjectPath(storagePath: string): string {
+        const normalized = this.normalizeStoragePath(storagePath);
+        if (!normalized) {
+            return "";
+        }
+
+        return normalized.startsWith("assets/")
+            ? normalized
+            : `assets/${normalized}`;
+    }
+
+    private toLocalAbsolutePath(storagePath: string): string {
+        const objectPath = this.toLocalObjectPath(storagePath);
+        return path.join(fileSystemService.getBasePath(), objectPath);
+    }
+
+    private async hasLocalAssetFile(storagePath: string): Promise<boolean> {
+        if (!storagePath.trim()) {
+            return false;
+        }
+
+        try {
+            await fs.access(this.toLocalAbsolutePath(storagePath));
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
+    private isCloudUrl(url: string): boolean {
+        const normalized = url.trim().toLowerCase();
+        return (
+            normalized.startsWith("http://") ||
+            normalized.startsWith("https://")
+        );
+    }
+
+    private async pickPlayableAsset<T extends Image | BGM>(
+        local: T | null,
+        remote: T | null,
+    ): Promise<T | null> {
+        const selected = this.pickMostRecent(local, remote);
+        if (!selected || !local || !remote) {
+            return selected;
+        }
+
+        if (selected !== local) {
+            return selected;
+        }
+
+        const localExists = await this.hasLocalAssetFile(local.storagePath);
+        if (localExists) {
+            return local;
+        }
+
+        return this.isCloudUrl(remote.url) ? remote : selected;
+    }
+
     /**
      * Resolve a local file URL for an asset if the file exists locally.
      * Uses the custom inkline-asset:// protocol for secure local file access.
@@ -508,17 +590,17 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
     private async resolveLocalUrl(asset: Image | BGM): Promise<void> {
         if (!asset.storagePath) return;
 
-        const localPath = path.join(
-            fileSystemService.getBasePath(),
-            "assets",
-            asset.storagePath,
-        );
+        const localPath = this.toLocalAbsolutePath(asset.storagePath);
+        const objectPath = this.toLocalObjectPath(asset.storagePath);
+        if (!objectPath) {
+            return;
+        }
 
         try {
             await fs.access(localPath);
-            // Use custom protocol: inkline-asset://local/assets/{storagePath}
+            // Use custom protocol: inkline-asset://local/{objectPath}
             // The "local" host is a placeholder, the pathname contains the actual path
-            asset.url = `inkline-asset://local/assets/${asset.storagePath.replace(/\\/g, "/")}`;
+            asset.url = `inkline-asset://local/${objectPath}`;
         } catch {
             // Keep remote URL
         }

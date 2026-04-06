@@ -97,10 +97,7 @@ export const TitlebarMenuBar: React.FC = () => {
                 );
             }
 
-            const userId = user?.id?.trim();
-            if (!userId) {
-                throw new Error("You must be signed in to submit a report.");
-            }
+            const userId = user?.id?.trim() || null;
 
             let appVersion: string | null = null;
             try {

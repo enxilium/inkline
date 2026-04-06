@@ -27,6 +27,7 @@ import {
     type SyncTerminalFailurePayload,
     type EntityType as SyncEntityType,
 } from "../controllers/sync/SyncStateGateway";
+import type { GenerationProgressPayload } from "../controllers/generation/generationProgress";
 
 type AsyncHandler = (...args: unknown[]) => Promise<unknown>;
 
@@ -228,16 +229,13 @@ const createSyncEvents = () => {
 const syncEvents = createSyncEvents();
 contextBridge.exposeInMainWorld("syncEvents", syncEvents);
 
-type GenerationProgressListener = (payload: {
-    type: "audio" | "image";
-    progress: number;
-}) => void;
+type GenerationProgressListener = (payload: GenerationProgressPayload) => void;
 
 const createGenerationEvents = () => {
     const onProgress = (listener: GenerationProgressListener) => {
         const handler = (
             _event: Electron.IpcRendererEvent,
-            payload: { type: "audio" | "image"; progress: number },
+            payload: GenerationProgressPayload,
         ) => {
             listener(payload);
         };

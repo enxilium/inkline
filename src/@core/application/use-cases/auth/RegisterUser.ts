@@ -1,7 +1,6 @@
 import { User } from "../../../domain/entities/user/User";
 import { IUserRepository } from "../../../domain/repositories/IUserRepository";
 import { IAuthService } from "../../../domain/services/IAuthService";
-import { IUserSessionStore } from "../../../domain/services/IUserSessionStore";
 
 export interface RegisterUserRequest {
     email: string;
@@ -16,7 +15,6 @@ export class RegisterUser {
     constructor(
         private readonly authService: IAuthService,
         private readonly userRepository: IUserRepository,
-        private readonly sessionStore: IUserSessionStore
     ) {}
 
     async execute(request: RegisterUserRequest): Promise<RegisterUserResponse> {
@@ -62,8 +60,6 @@ export class RegisterUser {
             // If it already exists (e.g. via trigger), just ensure fields are up to date
             await this.userRepository.update(user);
         }
-
-        await this.sessionStore.save(user);
 
         return { user };
     }

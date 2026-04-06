@@ -132,18 +132,33 @@ export class SupabaseUserRepository implements IUserRepository {
 
     private async fetchProjectIds(userId: string): Promise<string[]> {
         const client = SupabaseService.getClient();
-        const { data, error } = await client
-            .from("projects")
-            .select("id")
-            .eq("user_id", userId);
+        const pageSize = 500;
+        const ids: string[] = [];
+        let offset = 0;
 
-        if (error) {
-            throw new Error(error.message);
+        while (true) {
+            const { data, error } = await client
+                .from("projects")
+                .select("id")
+                .eq("user_id", userId)
+                .order("id", { ascending: true })
+                .range(offset, offset + pageSize - 1);
+
+            if (error) {
+                throw new Error(error.message);
+            }
+
+            const batch = (data as Array<{ id: string }> | null) ?? [];
+            ids.push(...batch.map((row) => row.id));
+
+            if (batch.length < pageSize) {
+                break;
+            }
+
+            offset += pageSize;
         }
 
-        return ((data as Array<{ id: string }> | null) ?? []).map(
-            (row) => row.id,
-        );
+        return ids;
     }
 
     private serializePreferences(

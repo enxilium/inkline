@@ -27,7 +27,7 @@ const mapConversationRow = (row: ChatConversationRow): ChatConversation =>
         row.id,
         row.title,
         new Date(row.created_at),
-        new Date(row.updated_at)
+        new Date(row.updated_at),
     );
 
 const mapMessageRow = (row: ChatMessageRow): ChatMessage =>
@@ -35,20 +35,22 @@ const mapMessageRow = (row: ChatMessageRow): ChatMessage =>
         row.conversation_id,
         row.role,
         row.content,
-        new Date(row.created_at)
+        new Date(row.created_at),
     );
 
-export class SupabaseChatConversationRepository
-    implements IChatConversationRepository
-{
+export class SupabaseChatConversationRepository implements IChatConversationRepository {
     async createConversation(
-        input: CreateConversationInput
+        input: CreateConversationInput,
     ): Promise<ChatConversation> {
         const client = SupabaseService.getClient();
         const now = new Date().toISOString();
+        const normalizedConversationId = input.conversationId?.trim();
         const { data, error } = await client
             .from("chat_conversations")
             .insert({
+                ...(normalizedConversationId
+                    ? { id: normalizedConversationId }
+                    : {}),
                 project_id: input.projectId,
                 title: null,
                 created_at: now,
@@ -59,7 +61,7 @@ export class SupabaseChatConversationRepository
 
         if (error || !data) {
             throw new Error(
-                error?.message ?? "Unable to create chat conversation."
+                error?.message ?? "Unable to create chat conversation.",
             );
         }
 
@@ -72,7 +74,7 @@ export class SupabaseChatConversationRepository
     }
 
     async getConversationsByProjectId(
-        projectId: string
+        projectId: string,
     ): Promise<ChatConversation[]> {
         const client = SupabaseService.getClient();
         const { data, error } = await client
@@ -109,7 +111,7 @@ export class SupabaseChatConversationRepository
 
     async appendMessage(message: ChatMessage): Promise<void> {
         const conversation = await this.fetchConversationRow(
-            message.conversationId
+            message.conversationId,
         );
 
         if (!conversation) {
@@ -146,7 +148,7 @@ export class SupabaseChatConversationRepository
     }
 
     private async fetchConversationRow(
-        id: string
+        id: string,
     ): Promise<ChatConversationRow | null> {
         const client = SupabaseService.getClient();
         const { data, error } = await client

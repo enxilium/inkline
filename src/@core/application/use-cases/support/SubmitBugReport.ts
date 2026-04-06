@@ -4,7 +4,7 @@ import {
 } from "../../../domain/repositories/IBugReportRepository";
 
 export type SubmitBugReportRequest = {
-    userId: string;
+    userId?: string | null;
     projectId?: string | null;
     entityType?: string | null;
     entityId?: string | null;
@@ -37,12 +37,8 @@ export class SubmitBugReport {
     async execute(
         request: SubmitBugReportRequest,
     ): Promise<SubmitBugReportResponse> {
-        const userId = request.userId.trim();
-        if (!userId) {
-            throw new Error(
-                "Authenticated user is required to submit a bug report.",
-            );
-        }
+        const normalizedUserId = request.userId?.trim();
+        const userId = normalizedUserId ? normalizedUserId : null;
 
         const failureFingerprint = this.buildFailureFingerprint(
             request.failureFingerprint,

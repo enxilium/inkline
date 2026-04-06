@@ -9,6 +9,7 @@ import type { LoginUserController } from "./auth/LoginUserController";
 import type { LogoutUserController } from "./auth/LogoutUserController";
 import type { RegisterUserController } from "./auth/RegisterUserController";
 import type { GetAuthStateController } from "./auth/GetAuthStateController";
+import type { ResolveGuestTransitionController } from "./auth/ResolveGuestTransitionController";
 import type { UpdateUserEmailController } from "./auth/UpdateUserEmailController";
 import type { UpdateUserPasswordController } from "./auth/UpdateUserPasswordController";
 import type { ResetPasswordController } from "./auth/ResetPasswordController";
@@ -96,6 +97,7 @@ export interface ControllerInstanceMap {
         logoutUser: LogoutUserController;
         registerUser: RegisterUserController;
         getState: GetAuthStateController;
+        resolveGuestTransition: ResolveGuestTransitionController;
         updateEmail: UpdateUserEmailController;
         updatePassword: UpdateUserPasswordController;
         resetPassword: ResetPasswordController;
@@ -213,6 +215,7 @@ export const controllerChannels: ControllerChannelMap = {
         logoutUser: "auth:logoutUser",
         registerUser: "auth:registerUser",
         getState: "auth:getState",
+        resolveGuestTransition: "auth:resolveGuestTransition",
         updateEmail: "auth:updateEmail",
         updatePassword: "auth:updatePassword",
         resetPassword: "auth:resetPassword",

@@ -5,20 +5,52 @@ import {
     AUTH_STATE_CHANGED_CHANNEL,
     type AuthStateGateway,
     type AuthStatePayload,
+    createGuestSnapshot,
     mapUserToSerializable,
+    type SetAuthStateOptions,
 } from "../../@interface-adapters/controllers/auth/AuthStateGateway";
 
 export class ElectronAuthStateGateway
     extends EventEmitter
     implements AuthStateGateway
 {
-    private snapshot: AuthStatePayload = { user: null };
+    private snapshot: AuthStatePayload = createGuestSnapshot();
 
-    setUser(user: User | null): void {
+    setUser(user: User | null, options?: SetAuthStateOptions): void {
+        if (user) {
+            this.snapshot = {
+                user: mapUserToSerializable(user),
+                currentUserId: user.id,
+                isAuthenticated: true,
+                isGuest: false,
+                migrationInProgress:
+                    options?.migrationInProgress ??
+                    this.snapshot.migrationInProgress,
+            };
+        } else {
+            this.snapshot = createGuestSnapshot({
+                currentUserId: options?.currentUserId,
+                migrationInProgress:
+                    options?.migrationInProgress ??
+                    this.snapshot.migrationInProgress,
+            });
+        }
+
+        this.emit("auth-changed", this.snapshot);
+        this.broadcast();
+    }
+
+    setMigrationInProgress(value: boolean): void {
+        if (this.snapshot.migrationInProgress === value) {
+            return;
+        }
+
         this.snapshot = {
-            user: user ? mapUserToSerializable(user) : null,
+            ...this.snapshot,
+            migrationInProgress: value,
         };
-        this.emit("auth-changed", user);
+
+        this.emit("auth-changed", this.snapshot);
         this.broadcast();
     }
 

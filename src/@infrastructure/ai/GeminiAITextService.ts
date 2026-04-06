@@ -25,7 +25,8 @@ export class GeminiAITextService implements IAITextService {
     private locationRepository: ILocationRepository;
     private organizationRepository: IOrganizationRepository;
     private scrapNoteRepository: IScrapNoteRepository;
-    private genAI: GoogleGenAI;
+    private genAI: GoogleGenAI | null = null;
+    private activeGeminiApiKey: string | null = null;
 
     constructor(
         sessionStore: IUserSessionStore,
@@ -44,18 +45,26 @@ export class GeminiAITextService implements IAITextService {
     }
 
     private async getModel(): Promise<GoogleGenAI> {
-        if (!this.genAI) {
-            const user = await this.sessionStore.load();
-            const key = user?.preferences.geminiApiKey;
+        const user = await this.sessionStore.load();
+        const localPreferences = await this.sessionStore.loadLocalPreferences();
+        const key =
+            user?.preferences.geminiApiKey?.trim() ||
+            localPreferences.geminiApiKey?.trim() ||
+            process.env.GEMINI_API_KEY?.trim() ||
+            "";
 
-            if (!key) {
-                throw new Error(
-                    "Gemini API Key is missing. Please add it in Settings.",
-                );
-            }
-
-            this.genAI = new GoogleGenAI({ apiKey: key });
+        if (!key) {
+            throw new Error(
+                "Gemini API Key is missing. Please add it in Settings.",
+            );
         }
+
+        if (this.genAI && this.activeGeminiApiKey === key) {
+            return this.genAI;
+        }
+
+        this.genAI = new GoogleGenAI({ apiKey: key });
+        this.activeGeminiApiKey = key;
 
         return this.genAI;
     }

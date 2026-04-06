@@ -88,6 +88,7 @@ import { LoginUserController } from "../@interface-adapters/controllers/auth/Log
 import { LogoutUserController } from "../@interface-adapters/controllers/auth/LogoutUserController";
 import { RegisterUserController } from "../@interface-adapters/controllers/auth/RegisterUserController";
 import { GetAuthStateController } from "../@interface-adapters/controllers/auth/GetAuthStateController";
+import { ResolveGuestTransitionController } from "../@interface-adapters/controllers/auth/ResolveGuestTransitionController";
 import { UpdateUserEmailController } from "../@interface-adapters/controllers/auth/UpdateUserEmailController";
 import { UpdateUserPasswordController } from "../@interface-adapters/controllers/auth/UpdateUserPasswordController";
 import { ResetPasswordController } from "../@interface-adapters/controllers/auth/ResetPasswordController";
@@ -174,6 +175,7 @@ import type { IEpubImportService } from "../@core/domain/services/IEpubImportSer
 import type { IPlaylistGenerationService } from "../@core/domain/services/IPlaylistGenerationService";
 import type { IStorageService } from "../@core/domain/services/IStorageService";
 import type { IUserSessionStore } from "../@core/domain/services/IUserSessionStore";
+import type { IGuestSessionTransitionService } from "../@core/domain/services/IGuestSessionTransitionService";
 import { ElectronAuthStateGateway } from "./auth/ElectronAuthStateGateway";
 import { ElectronSyncStateGateway } from "../@interface-adapters/controllers/sync/SyncStateGateway";
 import { setupService } from "../@infrastructure/services/SetupService";
@@ -207,9 +209,13 @@ export type ServiceDependencies = {
     playlistGeneration: IPlaylistGenerationService;
     storage: IStorageService;
     sessionStore: IUserSessionStore;
+    guestTransition: IGuestSessionTransitionService;
 };
 
 import { SynchronizationService } from "../@infrastructure/services/SynchronizationService";
+import { deletionLog } from "../@infrastructure/db/offline/DeletionLog";
+import { pendingUpdates } from "../@infrastructure/db/offline/PendingUpdates";
+import { pendingRemoteDeletionLogs } from "../@infrastructure/db/offline/PendingRemoteDeletionLogs";
 
 export interface AppBuilderDependencies {
     repositories: RepositoryDependencies;
@@ -352,12 +358,19 @@ export class AppBuilder {
             this.syncStateGateway,
         );
 
-        this.authStateGateway.on("auth-changed", (user) => {
-            if (user) {
-                this.dependencies.syncService.startAutoSync(user.id);
+        this.authStateGateway.on("auth-changed", (snapshot) => {
+            if (snapshot.isAuthenticated && !snapshot.migrationInProgress) {
+                this.dependencies.syncService.startAutoSync(
+                    snapshot.currentUserId,
+                );
             } else {
-                this.dependencies.syncService.stopAutoSync("logout");
+                this.dependencies.syncService.stopAutoSync("switch-user");
             }
+
+            // Keep offline sync queues scoped even in guest mode.
+            deletionLog.setActiveUserId(snapshot.currentUserId);
+            pendingUpdates.setActiveUserId(snapshot.currentUserId);
+            pendingRemoteDeletionLogs.setActiveUserId(snapshot.currentUserId);
         });
 
         // Register conflict resolution IPC handler
@@ -436,11 +449,7 @@ export class AppBuilder {
             auth: {
                 loginUser: new LoginUser(svc.auth, repo.user, svc.sessionStore),
                 logoutUser: new LogoutUser(svc.auth, svc.sessionStore),
-                registerUser: new RegisterUser(
-                    svc.auth,
-                    repo.user,
-                    svc.sessionStore,
-                ),
+                registerUser: new RegisterUser(svc.auth, repo.user),
                 loadStoredSession: new LoadStoredSession(
                     svc.sessionStore,
                     svc.auth,
@@ -769,6 +778,7 @@ export class AppBuilder {
                 loginUser: new LoginUserController(
                     useCases.auth.loginUser,
                     this.authStateGateway,
+                    this.dependencies.services.guestTransition,
                 ),
                 logoutUser: new LogoutUserController(
                     useCases.auth.logoutUser,
@@ -776,9 +786,14 @@ export class AppBuilder {
                 ),
                 registerUser: new RegisterUserController(
                     useCases.auth.registerUser,
-                    this.authStateGateway,
                 ),
                 getState: new GetAuthStateController(this.authStateGateway),
+                resolveGuestTransition: new ResolveGuestTransitionController(
+                    this.dependencies.services.guestTransition,
+                    this.dependencies.services.auth,
+                    this.dependencies.services.sessionStore,
+                    this.authStateGateway,
+                ),
                 updateEmail: new UpdateUserEmailController(
                     useCases.auth.updateEmail,
                     this.authStateGateway,
@@ -1008,6 +1023,7 @@ export class AppBuilder {
             this.authStateGateway.setUser(user);
         } catch (error) {
             console.error("Failed to initialize auth state", error);
+            this.authStateGateway.setUser(null);
         }
     }
 

@@ -605,6 +605,41 @@ h2 {
     gap: 8px;
 }
 
+.titlebar-account {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+}
+
+.titlebar-account-menu {
+    left: auto;
+    right: 0;
+    min-width: 220px;
+}
+
+.titlebar-account-summary {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 8px 10px;
+}
+
+.titlebar-account-summary p {
+    margin: 0;
+    color: var(--text-subtle);
+    font-size: var(--text-3xs);
+}
+
+.titlebar-account-email {
+    display: block;
+    color: var(--text);
+    font-size: var(--text-sm2);
+    max-width: 240px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 /* ============================================================
  * UTILITIES
  * ============================================================ */

@@ -147,17 +147,23 @@ export const GenerationProgressToast: React.FC = () => {
                     Math.min(100, payload.progress),
                 );
                 const label = payload.type === "audio" ? "audio" : "image";
+                const hasStatusText =
+                    typeof payload.statusText === "string" &&
+                    payload.statusText.trim().length > 0;
+                const description = hasStatusText
+                    ? payload.statusText
+                    : `${Math.round(cappedProgress)}% complete`;
 
                 showToast({
                     id: toastId,
                     variant: "progress",
                     title: `Generating ${label}`,
-                    description: `${Math.round(cappedProgress)}% complete`,
+                    description,
                     color: "var(--accent)",
                     progress: cappedProgress,
                 });
 
-                if (cappedProgress >= 100) {
+                if (!hasStatusText && cappedProgress >= 100) {
                     showToast({
                         id: toastId,
                         variant: "success",

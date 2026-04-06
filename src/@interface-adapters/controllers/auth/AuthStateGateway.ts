@@ -1,5 +1,6 @@
 import type { User } from "../../../@core/domain/entities/user/User";
 import type { ThemePreference } from "../../../@core/domain/entities/user/UserPreferences";
+import { GUEST_USER_ID } from "../../../@core/domain/constants/GuestUserConstants";
 
 export const AUTH_STATE_CHANGED_CHANNEL = "auth:stateChanged";
 
@@ -23,12 +24,32 @@ export type SerializableUser = {
 
 export type AuthStatePayload = {
     user: SerializableUser | null;
+    currentUserId: string;
+    isAuthenticated: boolean;
+    isGuest: boolean;
+    migrationInProgress: boolean;
+};
+
+export type SetAuthStateOptions = {
+    currentUserId?: string;
+    migrationInProgress?: boolean;
 };
 
 export interface AuthStateGateway {
-    setUser(user: User | null): void;
+    setUser(user: User | null, options?: SetAuthStateOptions): void;
+    setMigrationInProgress(value: boolean): void;
     getSnapshot(): AuthStatePayload;
 }
+
+export const createGuestSnapshot = (
+    options?: SetAuthStateOptions,
+): AuthStatePayload => ({
+    user: null,
+    currentUserId: options?.currentUserId?.trim() || GUEST_USER_ID,
+    isAuthenticated: false,
+    isGuest: true,
+    migrationInProgress: options?.migrationInProgress ?? false,
+});
 
 export const mapUserToSerializable = (user: User): SerializableUser => ({
     id: user.id,

@@ -11,6 +11,7 @@ import type {
     SyncTerminalFailurePayload,
     EntityType as SyncEntityType,
 } from "../../@interface-adapters/controllers/sync/SyncStateGateway";
+import type { GenerationProgressPayload } from "../../@interface-adapters/controllers/generation/generationProgress";
 
 export type ContextMenuType =
     | "editor"
@@ -48,10 +49,7 @@ declare global {
         };
         generationEvents: {
             onProgress(
-                listener: (payload: {
-                    type: "audio" | "image";
-                    progress: number;
-                }) => void,
+                listener: (payload: GenerationProgressPayload) => void,
             ): () => IpcRenderer;
         };
         appInfoApi: {

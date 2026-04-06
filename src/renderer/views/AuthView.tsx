@@ -18,7 +18,10 @@ type AuthViewProps = {
     mode: AuthMode;
     form: AuthForm;
     error: string | null;
+    notice: string | null;
     isSubmitting: boolean;
+    pendingGuestProjectCount: number | null;
+    isResolvingGuestTransition: boolean;
     resetPasswordSuccess: boolean;
     onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
     onFieldChange: (
@@ -27,19 +30,28 @@ type AuthViewProps = {
     onToggleMode: () => void;
     onForgotPassword: () => void;
     onResetPassword: (event: React.FormEvent<HTMLFormElement>) => void;
+    onCancel: () => void;
+    onResolveGuestTransition: (
+        decision: "migrate" | "discard" | "cancel",
+    ) => void;
 };
 
 export const AuthView: React.FC<AuthViewProps> = ({
     mode,
     form,
     error,
+    notice,
     isSubmitting,
+    pendingGuestProjectCount,
+    isResolvingGuestTransition,
     resetPasswordSuccess,
     onSubmit,
     onFieldChange,
     onToggleMode,
     onForgotPassword,
     onResetPassword,
+    onCancel,
+    onResolveGuestTransition,
 }) => {
     const lottieContainerRef = useRef<HTMLDivElement>(null);
 
@@ -62,6 +74,55 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
         return () => anim.destroy();
     }, []);
+
+    if (pendingGuestProjectCount !== null) {
+        return (
+            <section className="gateway-panel auth-card">
+                <p className="panel-label">Guest Transition</p>
+                <h2>Transfer guest projects?</h2>
+                <p className="panel-subtitle">
+                    {pendingGuestProjectCount > 0
+                        ? `We found ${pendingGuestProjectCount} guest project${pendingGuestProjectCount === 1 ? "" : "s"}.`
+                        : "We found guest data on this device."}{" "}
+                    Choose whether to migrate those files into your signed-in
+                    account before we restart.
+                </p>
+                {error ? (
+                    <span className="card-hint is-error">{error}</span>
+                ) : null}
+                {notice ? <span className="card-hint">{notice}</span> : null}
+                <Button
+                    type="button"
+                    variant="primary"
+                    style={{ marginBottom: "0.5rem" }}
+                    onClick={() => onResolveGuestTransition("migrate")}
+                    disabled={isResolvingGuestTransition}
+                >
+                    {isResolvingGuestTransition
+                        ? "Applying..."
+                        : "Migrate and continue"}
+                </Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    style={{ width: "100%", marginBottom: "0.5rem" }}
+                    onClick={() => onResolveGuestTransition("discard")}
+                    disabled={isResolvingGuestTransition}
+                >
+                    Continue without guest data
+                </Button>
+                <Button
+                    type="button"
+                    variant="ghost"
+                    style={{ width: "100%", border: "0px" }}
+                    onClick={() => onResolveGuestTransition("cancel")}
+                    disabled={isResolvingGuestTransition}
+                >
+                    Cancel and stay in guest mode
+                </Button>
+            </section>
+        );
+    }
 
     if (mode === "resetPassword") {
         return (
@@ -93,7 +154,14 @@ export const AuthView: React.FC<AuthViewProps> = ({
                     </div>
                 ) : (
                     <>
-                        <div ref={lottieContainerRef} style={{ width: "100%", height: "20px", marginBottom: "1rem" }} />
+                        <div
+                            ref={lottieContainerRef}
+                            style={{
+                                width: "100%",
+                                height: "20px",
+                                marginBottom: "1rem",
+                            }}
+                        />
                         <form className="auth-form" onSubmit={onResetPassword}>
                             <div className="auth-form-inputs">
                                 <div className="input-field">
@@ -133,6 +201,14 @@ export const AuthView: React.FC<AuthViewProps> = ({
                         >
                             Back to sign in
                         </Button>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            style={{ width: "100%", border: "0px" }}
+                            onClick={onCancel}
+                        >
+                            Back to projects
+                        </Button>
                     </>
                 )}
             </section>
@@ -141,7 +217,10 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
     return (
         <section className="gateway-panel auth-card">
-            <div ref={lottieContainerRef} style={{ width: "100%", height: "30px", marginBottom: "1rem" }} />
+            <div
+                ref={lottieContainerRef}
+                style={{ width: "100%", height: "30px", marginBottom: "1rem" }}
+            />
             <p className="panel-label">Welcome</p>
             <h2>
                 {mode === "login"
@@ -191,6 +270,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 {error ? (
                     <span className="card-hint is-error">{error}</span>
                 ) : null}
+                {notice ? <span className="card-hint">{notice}</span> : null}
                 <Button
                     type="submit"
                     variant="primary"
@@ -215,6 +295,14 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 {mode === "login"
                     ? "Need an account? Register"
                     : "Already have an account? Log in"}
+            </Button>
+            <Button
+                type="button"
+                variant="ghost"
+                style={{ width: "100%", border: "0px" }}
+                onClick={onCancel}
+            >
+                Continue as guest
             </Button>
         </section>
     );

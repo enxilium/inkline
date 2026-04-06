@@ -31,6 +31,9 @@ export const Titlebar: React.FC = () => {
         isChatOpen,
         toggleChat,
         openSettings,
+        openAuthScreen,
+        isGuestSession,
+        user,
         globalFind,
         setActiveDocument,
         workspaceViewMode,
@@ -39,6 +42,7 @@ export const Titlebar: React.FC = () => {
 
     const [searchTerm, setSearchTerm] = React.useState("");
     const [isSearchFocused, setIsSearchFocused] = React.useState(false);
+    const [isAccountMenuOpen, setIsAccountMenuOpen] = React.useState(false);
 
     const [searchResults, setSearchResults] = React.useState<
         GlobalFindResult[]
@@ -46,6 +50,33 @@ export const Titlebar: React.FC = () => {
     const [isSearching, setIsSearching] = React.useState(false);
 
     const latestSearchIdRef = React.useRef(0);
+    const accountMenuRef = React.useRef<HTMLDivElement>(null);
+
+    React.useEffect(() => {
+        if (!isAccountMenuOpen) {
+            return;
+        }
+
+        const handleMouseDown = (event: MouseEvent) => {
+            const target = event.target as Node | null;
+            if (!target) {
+                return;
+            }
+
+            if (accountMenuRef.current?.contains(target)) {
+                return;
+            }
+
+            setIsAccountMenuOpen(false);
+        };
+
+        document.addEventListener("mousedown", handleMouseDown);
+        return () => document.removeEventListener("mousedown", handleMouseDown);
+    }, [isAccountMenuOpen]);
+
+    React.useEffect(() => {
+        setIsAccountMenuOpen(false);
+    }, [stage, isGuestSession, user?.email]);
 
     React.useEffect(() => {
         if (stage !== "workspace") {
@@ -358,6 +389,61 @@ export const Titlebar: React.FC = () => {
                         </div>
                     ) : stage === "projectSelect" ? (
                         <div className="titlebar-actions titlebar-no-drag">
+                            <div
+                                className="titlebar-account"
+                                ref={accountMenuRef}
+                            >
+                                <button
+                                    type="button"
+                                    className="titlebar-action-icon"
+                                    aria-label="Account"
+                                    title="Account"
+                                    aria-haspopup="menu"
+                                    aria-expanded={isAccountMenuOpen}
+                                    onClick={() =>
+                                        setIsAccountMenuOpen(
+                                            (current) => !current,
+                                        )
+                                    }
+                                >
+                                    <PersonIcon size={16} />
+                                </button>
+
+                                {isAccountMenuOpen ? (
+                                    <div
+                                        className="titlebar-menu titlebar-account-menu"
+                                        role="menu"
+                                    >
+                                        <div className="titlebar-account-summary">
+                                            <p>
+                                                {isGuestSession
+                                                    ? "Guest mode"
+                                                    : "Signed in as"}
+                                            </p>
+                                            <span className="titlebar-account-email">
+                                                {isGuestSession
+                                                    ? "Not signed in"
+                                                    : (user?.email ??
+                                                      "your account")}
+                                            </span>
+                                        </div>
+                                        {isGuestSession ? (
+                                            <button
+                                                type="button"
+                                                className="project-card-menu-item"
+                                                role="menuitem"
+                                                onClick={() => {
+                                                    setIsAccountMenuOpen(false);
+                                                    openAuthScreen();
+                                                }}
+                                            >
+                                                Sign in
+                                            </button>
+                                        ) : null}
+                                    </div>
+                                ) : null}
+                            </div>
+
                             <button
                                 type="button"
                                 className="titlebar-action-icon"

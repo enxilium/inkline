@@ -2,6 +2,7 @@ export type UserErrorContext =
     | "auth-login"
     | "auth-register"
     | "auth-reset-password"
+    | "auth-guest-transition"
     | "generation-image"
     | "generation-audio"
     | "generation-playlist"

@@ -3,11 +3,12 @@ import { ChatMessage } from "../entities/story/chat/ChatMessage";
 
 export interface CreateConversationInput {
     projectId: string;
+    conversationId?: string;
 }
 
 export interface IChatConversationRepository {
     createConversation(
-        input: CreateConversationInput
+        input: CreateConversationInput,
     ): Promise<ChatConversation>;
     findById(conversationId: string): Promise<ChatConversation | null>;
     getConversationsByProjectId(projectId: string): Promise<ChatConversation[]>;

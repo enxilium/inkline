@@ -29,7 +29,7 @@ end $$;
 -- BUG REPORTS (sync terminal failure reporting)
 create table if not exists public.bug_reports (
   id uuid default gen_random_uuid() primary key,
-  user_id uuid references auth.users(id) on delete cascade not null,
+  user_id uuid references auth.users(id) on delete cascade,
   project_id uuid references public.projects(id) on delete set null,
   entity_type text,
   entity_id text,
@@ -45,7 +45,8 @@ create table if not exists public.bug_reports (
 );
 
 create index if not exists idx_bug_reports_user_created_at
-  on public.bug_reports(user_id, created_at desc);
+  on public.bug_reports(user_id, created_at desc)
+  where user_id is not null;
 
 create index if not exists idx_bug_reports_fingerprint
   on public.bug_reports(failure_fingerprint);
@@ -74,7 +75,10 @@ begin
           and policyname = 'Users can insert their own bug reports'
     ) then
         create policy "Users can insert their own bug reports" on public.bug_reports
-          for insert with check (auth.uid() = user_id);
+          for insert with check (
+            user_id is null
+            or auth.uid() = user_id
+          );
     end if;
 end $$;
 

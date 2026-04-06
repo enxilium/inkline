@@ -30,6 +30,7 @@ export const WorkspaceFooter: React.FC<{
         chapters,
         autosaveStatus,
         autosaveError,
+        isGuestSession,
         syncStatus,
         lastSyncedAt,
         workspaceViewMode,
@@ -198,15 +199,17 @@ export const WorkspaceFooter: React.FC<{
                             {renderAutosaveIcon()}
                         </div>
                     ) : null}
-                    <div
-                        className={`workspace-footer-connection is-${syncStatus}`}
-                        title={getSyncStatusTitle(syncStatus, lastSyncedAt)}
-                    >
-                        {renderSyncIcon(syncStatus)}
-                        <span className="workspace-footer-connection-label">
-                            {getSyncStatusLabel(syncStatus)}
-                        </span>
-                    </div>
+                    {!isGuestSession ? (
+                        <div
+                            className={`workspace-footer-connection is-${syncStatus}`}
+                            title={getSyncStatusTitle(syncStatus, lastSyncedAt)}
+                        >
+                            {renderSyncIcon(syncStatus)}
+                            <span className="workspace-footer-connection-label">
+                                {getSyncStatusLabel(syncStatus)}
+                            </span>
+                        </div>
+                    ) : null}
                 </div>
 
                 <div className="workspace-footer-center">

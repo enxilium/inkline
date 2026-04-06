@@ -1,5 +1,5 @@
 export type BugReportRecord = {
-    userId: string;
+    userId: string | null;
     projectId: string | null;
     entityType: string | null;
     entityId: string | null;

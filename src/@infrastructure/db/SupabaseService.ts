@@ -4,6 +4,12 @@ import { SupabaseAuthStorageAdapter } from "./SupabaseAuthStorageAdapter";
 export class SupabaseService {
     private static instance: SupabaseClient;
 
+    public static hasCredentials(): boolean {
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_PUBLIC_KEY;
+        return Boolean(supabaseUrl && supabaseKey);
+    }
+
     /**
      * Returns the singleton instance of the SupabaseClient.
      * Initializes it if it hasn't been initialized yet.
@@ -17,7 +23,7 @@ export class SupabaseService {
 
             if (!supabaseUrl || !supabaseKey) {
                 throw new Error(
-                    "Supabase credentials missing. Please ensure SUPABASE_URL and SUPABASE_ANON_KEY are set in your environment variables."
+                    "Supabase credentials missing. Please ensure SUPABASE_URL and SUPABASE_PUBLIC_KEY are set in your environment variables.",
                 );
             }
 

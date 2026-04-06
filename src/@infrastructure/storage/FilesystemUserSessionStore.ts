@@ -1,7 +1,10 @@
 import { promises as fs } from "fs";
 import path from "path";
 import { app } from "electron";
-import { IUserSessionStore } from "../../@core/domain/services/IUserSessionStore";
+import {
+    IUserSessionStore,
+    LocalSessionPreferences,
+} from "../../@core/domain/services/IUserSessionStore";
 import { User } from "../../@core/domain/entities/user/User";
 import {
     UserPreferences,
@@ -35,9 +38,7 @@ type SessionFileSchema = {
  * Schema for device-local preferences that persist across logouts.
  * These settings are device-specific and should NOT be cleared on logout.
  */
-type LocalPreferencesSchema = {
-    geminiApiKey?: string;
-};
+type LocalPreferencesSchema = LocalSessionPreferences;
 
 export class FilesystemUserSessionStore implements IUserSessionStore {
     private static SESSION_FILENAME = "user-session.json";
@@ -47,7 +48,9 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
 
     private enqueue<T>(operation: () => Promise<T>): Promise<T> {
         const nextPromise = this.operationQueue.then(operation);
-        this.operationQueue = nextPromise.catch((): void => {/* noop */});
+        this.operationQueue = nextPromise.catch((): void => {
+            /* noop */
+        });
         return nextPromise;
     }
 
@@ -97,6 +100,20 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
         });
     }
 
+    async loadLocalPreferences(): Promise<LocalSessionPreferences> {
+        return this.enqueue(async () => {
+            return this.loadLocalPreferencesInternal();
+        });
+    }
+
+    async saveLocalPreferences(
+        preferences: LocalSessionPreferences,
+    ): Promise<void> {
+        return this.enqueue(async () => {
+            await this.saveLocalPreferencesInternal(preferences);
+        });
+    }
+
     async save(user: User): Promise<void> {
         return this.enqueue(async () => {
             const filePath = await this.resolveSessionFilePath();
@@ -113,11 +130,17 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             });
 
             // Also persist device-local preferences so they survive logout
-            if (user.preferences.geminiApiKey) {
-                await this.saveLocalPreferencesInternal({
+            await this.saveLocalPreferencesInternal(
+                {
+                    theme: user.preferences.theme,
+                    accentColor: user.preferences.accentColor,
+                    editorFontSize: user.preferences.editorFontSize,
+                    editorFontFamily: user.preferences.editorFontFamily,
+                    defaultImageAiModel: user.preferences.defaultImageAiModel,
                     geminiApiKey: user.preferences.geminiApiKey,
-                });
-            }
+                },
+                { replace: true },
+            );
         });
     }
 
@@ -167,7 +190,8 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
             const filePath = await this.resolveLocalPrefsFilePath();
             const raw = await fs.readFile(filePath, "utf-8");
             try {
-                return JSON.parse(raw) as LocalPreferencesSchema;
+                const parsed = JSON.parse(raw) as LocalPreferencesSchema;
+                return parsed;
             } catch (parseError) {
                 console.warn(
                     "[SessionStore] Local Prefs JSON Parse Error. Raw content was:",
@@ -186,15 +210,20 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
 
     private async saveLocalPreferencesInternal(
         prefs: LocalPreferencesSchema,
+        options?: { replace?: boolean },
     ): Promise<void> {
         try {
             const filePath = await this.resolveLocalPrefsFilePath();
             const directory = path.dirname(filePath);
             await fs.mkdir(directory, { recursive: true });
 
-            // Merge with existing preferences
-            const existing = await this.loadLocalPreferencesInternal();
-            const merged = { ...existing, ...prefs };
+            const existing = options?.replace
+                ? {}
+                : await this.loadLocalPreferencesInternal();
+            const merged = this.pruneUndefined({
+                ...existing,
+                ...prefs,
+            });
 
             await fs.writeFile(filePath, JSON.stringify(merged, null, 2), {
                 encoding: "utf-8",
@@ -202,6 +231,14 @@ export class FilesystemUserSessionStore implements IUserSessionStore {
         } catch (error) {
             console.warn("Failed to save local preferences:", error);
         }
+    }
+
+    private pruneUndefined<T extends Record<string, unknown>>(
+        value: T,
+    ): Partial<T> {
+        return Object.fromEntries(
+            Object.entries(value).filter(([, entry]) => entry !== undefined),
+        ) as Partial<T>;
     }
 
     private serialize(user: User): StoredUserPayload {

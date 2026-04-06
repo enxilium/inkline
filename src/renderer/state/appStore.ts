@@ -1,7 +1,12 @@
 import { create } from "zustand";
 
 import type { RendererApi } from "../../@interface-adapters/controllers/contracts";
+import type { AuthStatePayload } from "../../@interface-adapters/controllers/auth/AuthStateGateway";
 import type { ConflictPayload } from "../../@interface-adapters/controllers/sync/SyncStateGateway";
+import {
+    GUEST_USER_ID,
+    type GuestTransitionDecision,
+} from "../../@core/domain/constants/GuestUserConstants";
 import { showToast } from "../components/ui/GenerationProgressToast";
 import { globalSearchEngine } from "./globalSearchEngine";
 import type {
@@ -606,9 +611,16 @@ type AppStore = {
     authMode: AuthMode;
     authForm: typeof initialAuthForm;
     authError: string | null;
+    authNotice: string | null;
     isAuthSubmitting: boolean;
     user: RendererUser | null;
     currentUserId: string;
+    isGuestSession: boolean;
+    isAuthMigrationInProgress: boolean;
+    pendingGuestTransition: {
+        guestProjectCount: number;
+    } | null;
+    isResolvingGuestTransition: boolean;
     projects: ProjectSummary[];
     projectCovers: Record<string, WorkspaceImageAsset>;
     projectsStatus: ProjectsStatus;
@@ -705,6 +717,11 @@ type AppStore = {
     openSettings: () => void;
     closeSettings: () => void;
     bootstrapSession: () => Promise<void>;
+    openAuthScreen: () => void;
+    closeAuthScreen: () => void;
+    resolveGuestTransitionDecision: (
+        decision: GuestTransitionDecision,
+    ) => Promise<void>;
     setAuthField: (field: keyof typeof initialAuthForm, value: string) => void;
     setAuthMode: (mode: AuthMode) => void;
     toggleAuthMode: () => void;
@@ -1026,17 +1043,28 @@ export const useAppStore = create<AppStore>((set, get) => {
         pendingTitleFocusDocument: null,
     });
 
-    const applyUnauthenticatedState = () => {
+    const applyGuestState = (
+        snapshot?: Pick<
+            AuthStatePayload,
+            "currentUserId" | "migrationInProgress"
+        >,
+    ) => {
+        const guestUserId = snapshot?.currentUserId?.trim() || GUEST_USER_ID;
         set({
             ...resetWorkspaceState(),
             user: null,
-            stage: "auth",
+            stage: "projectSelect",
             projects: [],
+            projectCovers: {},
             projectsStatus: "idle",
             projectsError: null,
             projectSelectionError: null,
             openingProjectId: null,
-            currentUserId: "",
+            currentUserId: guestUserId,
+            isGuestSession: true,
+            isAuthMigrationInProgress: snapshot?.migrationInProgress ?? false,
+            pendingGuestTransition: null,
+            isResolvingGuestTransition: false,
         });
     };
 
@@ -1075,24 +1103,64 @@ export const useAppStore = create<AppStore>((set, get) => {
         );
     };
 
-    const syncAuthState = async (user: RendererUser | null) => {
-        const previousUserId = get().user?.id ?? null;
-        if (!user) {
-            applyUnauthenticatedState();
+    const syncAuthState = async (snapshot: AuthStatePayload) => {
+        const previousState = get();
+        const previousUserId = previousState.currentUserId?.trim() || null;
+
+        if (!snapshot.isAuthenticated || !snapshot.user) {
+            const guestUserId = snapshot.currentUserId.trim() || GUEST_USER_ID;
+            const shouldResetWorkspace =
+                previousState.user !== null || previousUserId !== guestUserId;
+
+            set({
+                ...(shouldResetWorkspace
+                    ? {
+                          ...resetWorkspaceState(),
+                          projects: [] as ProjectSummary[],
+                          projectCovers: {},
+                      }
+                    : {}),
+                user: null,
+                currentUserId: guestUserId,
+                isGuestSession: true,
+                isAuthMigrationInProgress: snapshot.migrationInProgress,
+                pendingGuestTransition: null,
+                isResolvingGuestTransition: false,
+            });
+
+            set({ stage: "projectSelect" });
+
+            const shouldLoadProjects =
+                shouldResetWorkspace || previousState.projects.length === 0;
+            if (shouldLoadProjects) {
+                await get().loadProjects(guestUserId);
+            }
+
             return;
         }
 
-        const isNewUser = !previousUserId || previousUserId !== user.id;
+        const resolvedUserId =
+            snapshot.currentUserId.trim() || snapshot.user.id;
+        const isNewUser = !previousUserId || previousUserId !== resolvedUserId;
+
         set({
-            user,
-            currentUserId: user.id,
+            user: snapshot.user,
+            currentUserId: resolvedUserId,
+            isGuestSession: false,
+            isAuthMigrationInProgress: snapshot.migrationInProgress,
+            pendingGuestTransition: null,
+            isResolvingGuestTransition: false,
             ...(isNewUser
-                ? { ...resetWorkspaceState(), projects: [] as ProjectSummary[] }
+                ? {
+                      ...resetWorkspaceState(),
+                      projects: [] as ProjectSummary[],
+                      projectCovers: {},
+                  }
                 : {}),
         });
 
         if (isNewUser) {
-            await get().loadProjects(user.id);
+            await get().loadProjects(resolvedUserId);
         }
 
         const currentStage = get().stage;
@@ -1106,7 +1174,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             return;
         }
         unsubscribeAuthState = authEvents.onStateChanged((payload) => {
-            void syncAuthState(payload.user);
+            void syncAuthState(payload);
         });
     };
 
@@ -1283,17 +1351,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         return;
                     }
 
-                    const userId = state.user?.id?.trim();
-                    if (!userId) {
-                        showToast({
-                            variant: "error",
-                            title: "Sign in required",
-                            description:
-                                "You must be signed in to submit a bug report.",
-                            durationMs: 3500,
-                        });
-                        return;
-                    }
+                    const userId = state.user?.id?.trim() || null;
 
                     if (
                         submittedFailureFingerprints.has(
@@ -1871,10 +1929,15 @@ export const useAppStore = create<AppStore>((set, get) => {
         authMode: "login",
         authForm: initialAuthForm,
         authError: null,
+        authNotice: null,
         isAuthSubmitting: false,
         resetPasswordSuccess: false,
         user: null,
-        currentUserId: "",
+        currentUserId: GUEST_USER_ID,
+        isGuestSession: true,
+        isAuthMigrationInProgress: false,
+        pendingGuestTransition: null,
+        isResolvingGuestTransition: false,
         projects: [],
         projectCovers: {},
         projectsStatus: "idle",
@@ -1917,9 +1980,72 @@ export const useAppStore = create<AppStore>((set, get) => {
             set({ stage: "checkingSession" });
             try {
                 const snapshot = await rendererApi.auth.getState();
-                await syncAuthState(snapshot.user);
+                await syncAuthState(snapshot);
             } catch (_error) {
-                applyUnauthenticatedState();
+                applyGuestState();
+            }
+        },
+        openAuthScreen: () => {
+            set({
+                stage: "auth",
+                authMode: "login",
+                authError: null,
+                authNotice: null,
+                resetPasswordSuccess: false,
+                pendingGuestTransition: null,
+                isResolvingGuestTransition: false,
+            });
+        },
+        closeAuthScreen: () => {
+            set({
+                stage: "projectSelect",
+                authMode: "login",
+                authError: null,
+                authNotice: null,
+                isAuthSubmitting: false,
+                resetPasswordSuccess: false,
+                pendingGuestTransition: null,
+                isResolvingGuestTransition: false,
+            });
+        },
+        resolveGuestTransitionDecision: async (decision) => {
+            if (!get().pendingGuestTransition) {
+                return;
+            }
+
+            set({
+                isResolvingGuestTransition: true,
+                authError: null,
+                authNotice: null,
+            });
+
+            try {
+                const response = await rendererApi.auth.resolveGuestTransition({
+                    decision,
+                });
+
+                if (response.status === "cancelled") {
+                    set({
+                        pendingGuestTransition: null,
+                        authNotice: "Stayed in guest mode.",
+                    });
+                    return;
+                }
+
+                set({
+                    pendingGuestTransition: null,
+                    authNotice: "Account switched. Refreshing your projects...",
+                });
+            } catch (error) {
+                set({
+                    authError: normalizeUserFacingError(
+                        error,
+                        "Unable to complete guest transition.",
+                        "auth-guest-transition",
+                    ),
+                });
+            } finally {
+                set({ isResolvingGuestTransition: false });
             }
         },
         setAuthField: (field, value) => {
@@ -1928,12 +2054,14 @@ export const useAppStore = create<AppStore>((set, get) => {
                     ...state.authForm,
                     [field]: value,
                 },
+                authNotice: null,
             }));
         },
         setAuthMode: (mode) => {
             set({
                 authMode: mode,
                 authError: null,
+                authNotice: null,
                 resetPasswordSuccess: false,
             });
         },
@@ -1941,6 +2069,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             set((state) => ({
                 authMode: state.authMode === "login" ? "register" : "login",
                 authError: null,
+                authNotice: null,
                 resetPasswordSuccess: false,
             }));
         },
@@ -1953,18 +2082,39 @@ export const useAppStore = create<AppStore>((set, get) => {
                 return;
             }
 
-            set({ isAuthSubmitting: true, authError: null });
+            set({ isAuthSubmitting: true, authError: null, authNotice: null });
             try {
                 if (authMode === "login") {
-                    await rendererApi.auth.loginUser({ email, password });
+                    const loginResponse = await rendererApi.auth.loginUser({
+                        email,
+                        password,
+                    });
+
+                    if (loginResponse.requiresGuestTransition) {
+                        set({
+                            pendingGuestTransition: {
+                                guestProjectCount:
+                                    loginResponse.guestProjectCount,
+                            },
+                            authForm: initialAuthForm,
+                        });
+                        return;
+                    }
+
+                    set({ authForm: initialAuthForm });
                 } else {
                     await rendererApi.auth.registerUser({
                         email,
                         password,
                     });
+                    set({
+                        authMode: "login",
+                        authForm: initialAuthForm,
+                        authNotice:
+                            "Account created. Verify your email, then sign in.",
+                        pendingGuestTransition: null,
+                    });
                 }
-
-                set({ authForm: initialAuthForm });
             } catch (error) {
                 set({
                     authError: normalizeUserFacingError(
@@ -1988,6 +2138,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             set({
                 isAuthSubmitting: true,
                 authError: null,
+                authNotice: null,
                 resetPasswordSuccess: false,
             });
             try {
@@ -2006,7 +2157,7 @@ export const useAppStore = create<AppStore>((set, get) => {
             }
         },
         loadProjects: async (userId) => {
-            const resolvedUserId = userId ?? get().user?.id ?? "";
+            const resolvedUserId = userId?.trim() ?? get().currentUserId.trim();
             if (!resolvedUserId) {
                 set({
                     projects: [],
@@ -2040,15 +2191,15 @@ export const useAppStore = create<AppStore>((set, get) => {
             set({ projectsError: message });
         },
         createProject: async ({ title }) => {
-            const { user } = get();
-            if (!user) {
+            const userId = get().currentUserId.trim();
+            if (!userId) {
                 throw new Error("User session missing");
             }
 
             set({ projectsError: null });
             try {
                 const { project } = await rendererApi.project.createProject({
-                    userId: user.id,
+                    userId,
                     title,
                 });
 
@@ -2057,7 +2208,7 @@ export const useAppStore = create<AppStore>((set, get) => {
 
                 // Keep the list fresh for the next time project selection is shown.
                 get()
-                    .loadProjects(user.id)
+                    .loadProjects(userId)
                     .catch(() => {
                         /* noop */
                     });
@@ -2071,8 +2222,8 @@ export const useAppStore = create<AppStore>((set, get) => {
             }
         },
         importProject: async () => {
-            const { user } = get();
-            if (!user) {
+            const userId = get().currentUserId.trim();
+            if (!userId) {
                 throw new Error("User session missing");
             }
 
@@ -2098,10 +2249,10 @@ export const useAppStore = create<AppStore>((set, get) => {
 
             try {
                 await rendererApi.project.importProject({
-                    userId: user.id,
+                    userId,
                     filePath,
                 });
-                await get().loadProjects(user.id);
+                await get().loadProjects(userId);
             } catch (error) {
                 set({
                     projectsError: createErrorMessage(
@@ -2181,8 +2332,8 @@ export const useAppStore = create<AppStore>((set, get) => {
             }
         },
         returnToProjects: async () => {
-            const { user } = get();
-            if (!user) {
+            const userId = get().currentUserId.trim();
+            if (!userId) {
                 return;
             }
 
@@ -2219,7 +2370,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                 lastSavedAt: null,
                 stage: "projectSelect",
             });
-            await get().loadProjects(user.id);
+            await get().loadProjects(userId);
         },
         logout: async () => {
             if (!confirmDiscardPendingEdits()) {
@@ -2798,8 +2949,8 @@ export const useAppStore = create<AppStore>((set, get) => {
             );
         },
         deleteProject: async (projectId) => {
-            const { user } = get();
-            if (!user) {
+            const userId = get().currentUserId.trim();
+            if (!userId) {
                 throw new Error("User session missing");
             }
 
@@ -2807,9 +2958,9 @@ export const useAppStore = create<AppStore>((set, get) => {
             try {
                 await rendererApi.project.deleteProject({
                     projectId,
-                    userId: user.id,
+                    userId,
                 });
-                await get().loadProjects(user.id);
+                await get().loadProjects(userId);
             } catch (error) {
                 set({
                     projectsError: createErrorMessage(

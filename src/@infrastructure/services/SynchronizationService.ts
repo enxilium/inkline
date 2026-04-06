@@ -25,6 +25,9 @@ import { SupabaseEditorTemplateRepository } from "../db/SupabaseEditorTemplateRe
 import { FileSystemEditorTemplateRepository } from "../db/filesystem/FileSystemEditorTemplateRepository";
 import { SupabaseService } from "../db/SupabaseService";
 import { fileSystemService } from "../storage/FileSystemService";
+import { Image } from "../../@core/domain/entities/story/world/Image";
+import { BGM } from "../../@core/domain/entities/story/world/BGM";
+import { Playlist } from "../../@core/domain/entities/story/world/Playlist";
 import * as path from "path";
 import { Buffer } from "buffer";
 import { deletionLog, EntityType } from "../db/offline/DeletionLog";
@@ -512,9 +515,8 @@ export class SynchronizationService extends EventEmitter {
         try {
             switch (entityType) {
                 case "editorTemplate": {
-                    const template = await this.fsEditorTemplateRepo.findById(
-                        entityId,
-                    );
+                    const template =
+                        await this.fsEditorTemplateRepo.findById(entityId);
                     return template?.projectId ?? null;
                 }
                 case "metafieldDefinition": {
@@ -1167,9 +1169,8 @@ export class SynchronizationService extends EventEmitter {
                     return scrapNote?.title ?? null;
                 }
                 case "editorTemplate": {
-                    const template = await this.fsEditorTemplateRepo.findById(
-                        id,
-                    );
+                    const template =
+                        await this.fsEditorTemplateRepo.findById(id);
                     return template ? `${template.editorType} template` : id;
                 }
                 case "metafieldDefinition": {
@@ -1247,9 +1248,8 @@ export class SynchronizationService extends EventEmitter {
                 return null;
             }
             case "editorTemplate": {
-                const template = await this.supabaseEditorTemplateRepo.findById(
-                    id,
-                );
+                const template =
+                    await this.supabaseEditorTemplateRepo.findById(id);
                 if (template) {
                     await this.fsEditorTemplateRepo.update(template);
                     return template;
@@ -1347,9 +1347,8 @@ export class SynchronizationService extends EventEmitter {
                 break;
             }
             case "editorTemplate": {
-                const template = await this.supabaseEditorTemplateRepo.findById(
-                    id,
-                );
+                const template =
+                    await this.supabaseEditorTemplateRepo.findById(id);
                 if (template) await this.fsEditorTemplateRepo.update(template);
                 break;
             }
@@ -1573,7 +1572,10 @@ export class SynchronizationService extends EventEmitter {
                         await this.fsAssetRepo.saveImage(projectId, image);
                     }
                     await this.uploadAsset(image.storagePath);
-                    await this.supabaseAssetRepo.saveImage(projectId, image);
+                    await this.supabaseAssetRepo.saveImage(
+                        projectId,
+                        this.toRemoteImageAsset(image),
+                    );
                     return image;
                 }
                 return null;
@@ -1586,7 +1588,10 @@ export class SynchronizationService extends EventEmitter {
                         await this.fsAssetRepo.saveBGM(projectId, bgm);
                     }
                     await this.uploadAsset(bgm.storagePath);
-                    await this.supabaseAssetRepo.saveBGM(projectId, bgm);
+                    await this.supabaseAssetRepo.saveBGM(
+                        projectId,
+                        this.toRemoteBgmAsset(bgm),
+                    );
                     return bgm;
                 }
                 return null;
@@ -1605,7 +1610,7 @@ export class SynchronizationService extends EventEmitter {
                         await this.uploadAsset(playlist.storagePath);
                     await this.supabaseAssetRepo.savePlaylist(
                         projectId,
-                        playlist,
+                        this.toRemotePlaylistAsset(playlist),
                     );
                     return playlist;
                 }
@@ -1844,10 +1849,10 @@ export class SynchronizationService extends EventEmitter {
         mode: "normal" | "reconnect",
     ) {
         const shouldNotifyConflicts = this.shouldNotifyConflictsForMode(mode);
-        const remote = await this.supabaseEditorTemplateRepo.findByProjectId(
-            projectId,
-        );
-        const local = await this.fsEditorTemplateRepo.findByProjectId(projectId);
+        const remote =
+            await this.supabaseEditorTemplateRepo.findByProjectId(projectId);
+        const local =
+            await this.fsEditorTemplateRepo.findByProjectId(projectId);
         const localMap = new Map(local.map((item) => [item.id, item]));
         const remoteMap = new Map(remote.map((item) => [item.id, item]));
 
@@ -2354,12 +2359,26 @@ export class SynchronizationService extends EventEmitter {
                     });
                 }
             }
+
+            if (
+                !remoteImg.url.startsWith("http") &&
+                localImg.storagePath?.trim().length
+            ) {
+                await this.uploadAsset(localImg.storagePath);
+                await this.supabaseAssetRepo.saveImage(
+                    projectId,
+                    this.toRemoteImageAsset(localImg),
+                );
+            }
         }
 
         for (const localImg of local) {
             if (!remoteMap.has(localImg.id)) {
                 await this.uploadAsset(localImg.storagePath);
-                await this.supabaseAssetRepo.saveImage(projectId, localImg);
+                await this.supabaseAssetRepo.saveImage(
+                    projectId,
+                    this.toRemoteImageAsset(localImg),
+                );
             }
         }
     }
@@ -2408,12 +2427,26 @@ export class SynchronizationService extends EventEmitter {
                     });
                 }
             }
+
+            if (
+                !remoteBGM.url.startsWith("http") &&
+                localBGM.storagePath?.trim().length
+            ) {
+                await this.uploadAsset(localBGM.storagePath);
+                await this.supabaseAssetRepo.saveBGM(
+                    projectId,
+                    this.toRemoteBgmAsset(localBGM),
+                );
+            }
         }
 
         for (const localBGM of local) {
             if (!remoteMap.has(localBGM.id)) {
                 await this.uploadAsset(localBGM.storagePath);
-                await this.supabaseAssetRepo.saveBGM(projectId, localBGM);
+                await this.supabaseAssetRepo.saveBGM(
+                    projectId,
+                    this.toRemoteBgmAsset(localBGM),
+                );
             }
         }
     }
@@ -2499,6 +2532,17 @@ export class SynchronizationService extends EventEmitter {
                     });
                 }
             }
+
+            if (
+                !remotePlaylist.url.startsWith("http") &&
+                localPlaylist.storagePath?.trim().length
+            ) {
+                await this.uploadAsset(localPlaylist.storagePath);
+                await this.supabaseAssetRepo.savePlaylist(
+                    projectId,
+                    this.toRemotePlaylistAsset(localPlaylist),
+                );
+            }
         }
 
         for (const localPlaylist of local) {
@@ -2508,7 +2552,7 @@ export class SynchronizationService extends EventEmitter {
                 }
                 await this.supabaseAssetRepo.savePlaylist(
                     projectId,
-                    localPlaylist,
+                    this.toRemotePlaylistAsset(localPlaylist),
                 );
             }
         }
@@ -2884,7 +2928,9 @@ export class SynchronizationService extends EventEmitter {
 
             if (!storagePath) return;
 
-            const localPath = path.join("assets", storagePath);
+            const localPath = this.resolveLocalAssetPath(storagePath);
+            if (!localPath) return;
+
             if (await fileSystemService.exists(localPath)) {
                 await fileSystemService.deleteFile(localPath);
             }
@@ -2897,36 +2943,146 @@ export class SynchronizationService extends EventEmitter {
     // ASSET FILE SYNC
     // ========================================================================
 
-    private async uploadAsset(storagePath: string): Promise<void> {
-        if (!storagePath) return;
+    private normalizeStorageObjectPath(storagePath: string): string {
+        return storagePath.trim().replace(/\\/g, "/").replace(/^\/+/, "");
+    }
 
-        const localPath = path.join("assets", storagePath);
+    private toRemoteObjectPath(storagePath: string): string {
+        const normalized = this.normalizeStorageObjectPath(storagePath);
+        if (!normalized) {
+            return "";
+        }
+
+        return normalized.startsWith("assets/")
+            ? normalized.slice("assets/".length)
+            : normalized;
+    }
+
+    private getCloudAssetUrl(storagePath: string): string {
+        const objectPath = this.toRemoteObjectPath(storagePath);
+        if (!objectPath) {
+            return "";
+        }
+
+        const client = SupabaseService.getClient();
+        return client.storage.from("inkline-assets").getPublicUrl(objectPath)
+            .data.publicUrl;
+    }
+
+    private toRemoteImageAsset(image: Image): Image {
+        const remoteStoragePath = this.toRemoteObjectPath(image.storagePath);
+        const cloudUrl = this.getCloudAssetUrl(image.storagePath);
+        return new Image(
+            image.id,
+            cloudUrl || image.url,
+            remoteStoragePath || image.storagePath,
+            image.createdAt,
+            image.updatedAt,
+        );
+    }
+
+    private toRemoteBgmAsset(track: BGM): BGM {
+        const remoteStoragePath = this.toRemoteObjectPath(track.storagePath);
+        const cloudUrl = this.getCloudAssetUrl(track.storagePath);
+        return new BGM(
+            track.id,
+            track.title,
+            track.artist,
+            cloudUrl || track.url,
+            remoteStoragePath || track.storagePath,
+            track.createdAt,
+            track.updatedAt,
+        );
+    }
+
+    private toRemotePlaylistAsset(playlist: Playlist): Playlist {
+        if (!playlist.storagePath?.trim()) {
+            return playlist;
+        }
+
+        const remoteStoragePath = this.toRemoteObjectPath(playlist.storagePath);
+        const cloudUrl = this.getCloudAssetUrl(playlist.storagePath);
+        return new Playlist(
+            playlist.id,
+            playlist.name,
+            playlist.description,
+            [...playlist.tracks],
+            cloudUrl || playlist.url,
+            remoteStoragePath || playlist.storagePath,
+            playlist.createdAt,
+            playlist.updatedAt,
+        );
+    }
+
+    private resolveLocalAssetPath(storagePath: string): string {
+        const objectPath = this.normalizeStorageObjectPath(storagePath);
+        if (!objectPath) {
+            return "";
+        }
+
+        return objectPath.startsWith("assets/")
+            ? objectPath
+            : path.join("assets", objectPath);
+    }
+
+    private async uploadAsset(storagePath: string): Promise<void> {
+        const localObjectPath = this.normalizeStorageObjectPath(storagePath);
+        if (!localObjectPath) return;
+
+        const remoteObjectPath = this.toRemoteObjectPath(localObjectPath);
+        if (!remoteObjectPath) return;
+
+        const localPath = this.resolveLocalAssetPath(localObjectPath);
+        if (!localPath) return;
+
         if (!(await fileSystemService.exists(localPath))) return;
 
         const buffer = await fileSystemService.readBuffer(localPath);
         if (!buffer) return;
 
         const client = SupabaseService.getClient();
-        await client.storage
+        const { error } = await client.storage
             .from("inkline-assets")
-            .upload(storagePath, buffer, { upsert: true });
+            .upload(remoteObjectPath, buffer, { upsert: true });
+
+        if (error) {
+            throw new Error(
+                `Failed to upload asset ${remoteObjectPath}: ${error.message}`,
+            );
+        }
     }
 
     private async downloadAsset(storagePath: string): Promise<boolean> {
-        if (!storagePath) return false;
+        const localObjectPath = this.normalizeStorageObjectPath(storagePath);
+        if (!localObjectPath) return false;
 
-        const localPath = path.join("assets", storagePath);
+        const remoteObjectPath = this.toRemoteObjectPath(localObjectPath);
+        if (!remoteObjectPath) return false;
+
+        const localPath = this.resolveLocalAssetPath(localObjectPath);
+        if (!localPath) return false;
+
         const client = SupabaseService.getClient();
+        const candidates =
+            remoteObjectPath === localObjectPath
+                ? [remoteObjectPath]
+                : [remoteObjectPath, localObjectPath];
 
-        const { data, error } = await client.storage
-            .from("inkline-assets")
-            .download(storagePath);
+        for (const objectPath of candidates) {
+            const { data, error } = await client.storage
+                .from("inkline-assets")
+                .download(objectPath);
 
-        if (!error && data) {
-            const buffer = await data.arrayBuffer();
-            await fileSystemService.writeFile(localPath, Buffer.from(buffer));
-            return true;
+            if (!error && data) {
+                const buffer = await data.arrayBuffer();
+                await fileSystemService.writeFile(
+                    localPath,
+                    Buffer.from(buffer),
+                );
+                return true;
+            }
         }
+
         return false;
     }
 
@@ -3050,7 +3206,7 @@ export class SynchronizationService extends EventEmitter {
             }
 
             try {
-                await this.replayPendingUpdate(entry);
+                await this.replayPendingUpdate(entry, userId);
                 await pendingUpdates.remove(
                     entry.entityId,
                     entry.operation,
@@ -3215,10 +3371,7 @@ export class SynchronizationService extends EventEmitter {
             return next;
         }
 
-        if (
-            typeof value === "string" &&
-            this.shouldRehydrateAsDateField(key)
-        ) {
+        if (typeof value === "string" && this.shouldRehydrateAsDateField(key)) {
             const parsed = new Date(value);
             if (!Number.isNaN(parsed.getTime())) {
                 return parsed;
@@ -3233,10 +3386,15 @@ export class SynchronizationService extends EventEmitter {
             return false;
         }
 
-        return key === "createdAt" || key === "updatedAt" || key === "deletedAt";
+        return (
+            key === "createdAt" || key === "updatedAt" || key === "deletedAt"
+        );
     }
 
-    private async replayPendingUpdate(entry: PendingUpdate): Promise<void> {
+    private async replayPendingUpdate(
+        entry: PendingUpdate,
+        userId: string,
+    ): Promise<void> {
         const payload = this.rehydratePendingPayload(entry.payload);
         const payloadRecord = payload as Record<string, unknown>;
 
@@ -3246,10 +3404,7 @@ export class SynchronizationService extends EventEmitter {
                     SupabaseProjectRepository["update"]
                 >[0];
                 if (entry.operation === "create") {
-                    await this.supabaseProjectRepo.create(
-                        entry.projectId,
-                        project,
-                    );
+                    await this.supabaseProjectRepo.create(userId, project);
                 } else if (entry.operation === "update") {
                     await this.supabaseProjectRepo.update(project);
                 }
@@ -3274,7 +3429,7 @@ export class SynchronizationService extends EventEmitter {
                             ? payloadRecord.updatedAt
                             : payloadRecord.updatedAt
                               ? new Date(String(payloadRecord.updatedAt))
-                            : undefined,
+                              : undefined,
                     );
                 }
                 return;
@@ -3340,7 +3495,7 @@ export class SynchronizationService extends EventEmitter {
                             ? payloadRecord.updatedAt
                             : payloadRecord.updatedAt
                               ? new Date(String(payloadRecord.updatedAt))
-                            : undefined,
+                              : undefined,
                     );
                 }
                 return;
@@ -3396,9 +3551,13 @@ export class SynchronizationService extends EventEmitter {
                     SupabaseAssetRepository["saveImage"]
                 >[1];
                 if (entry.operation === "save") {
+                    if (image.storagePath?.trim()) {
+                        await this.uploadAsset(image.storagePath);
+                    }
+
                     await this.supabaseAssetRepo.saveImage(
                         entry.projectId,
-                        image,
+                        this.toRemoteImageAsset(image),
                     );
                 }
                 return;
@@ -3408,7 +3567,14 @@ export class SynchronizationService extends EventEmitter {
                     SupabaseAssetRepository["saveBGM"]
                 >[1];
                 if (entry.operation === "save") {
-                    await this.supabaseAssetRepo.saveBGM(entry.projectId, bgm);
+                    if (bgm.storagePath?.trim()) {
+                        await this.uploadAsset(bgm.storagePath);
+                    }
+
+                    await this.supabaseAssetRepo.saveBGM(
+                        entry.projectId,
+                        this.toRemoteBgmAsset(bgm),
+                    );
                 }
                 return;
             }
@@ -3417,9 +3583,13 @@ export class SynchronizationService extends EventEmitter {
                     SupabaseAssetRepository["savePlaylist"]
                 >[1];
                 if (entry.operation === "save") {
+                    if (playlist.storagePath?.trim()) {
+                        await this.uploadAsset(playlist.storagePath);
+                    }
+
                     await this.supabaseAssetRepo.savePlaylist(
                         entry.projectId,
-                        playlist,
+                        this.toRemotePlaylistAsset(playlist),
                     );
                 }
                 return;

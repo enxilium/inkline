@@ -22,7 +22,7 @@ type ProjectRelations = {
 
 const mapProjectRowToEntity = (
     row: ProjectRow,
-    relations?: ProjectRelations
+    relations?: ProjectRelations,
 ): Project =>
     new Project(
         row.id,
@@ -35,7 +35,7 @@ const mapProjectRowToEntity = (
         [...(relations?.organizationIds ?? [])],
         [...(relations?.timelineIds ?? [])],
         new Date(row.created_at),
-        new Date(row.updated_at)
+        new Date(row.updated_at),
     );
 
 export class SupabaseProjectRepository implements IProjectRepository {
@@ -69,18 +69,31 @@ export class SupabaseProjectRepository implements IProjectRepository {
 
     async findAllByUserId(userId: string): Promise<Project[]> {
         const client = SupabaseService.getClient();
-        const { data, error } = await client
-            .from("projects")
-            .select("*")
-            .eq("user_id", userId);
+        const pageSize = 500;
+        const rows: ProjectRow[] = [];
+        let offset = 0;
 
-        if (error) throw new Error(error.message);
+        while (true) {
+            const { data, error } = await client
+                .from("projects")
+                .select("*")
+                .eq("user_id", userId)
+                .order("created_at", { ascending: true })
+                .range(offset, offset + pageSize - 1);
 
-        if (!data) {
-            return [];
+            if (error) throw new Error(error.message);
+
+            const batch = (data as ProjectRow[] | null) ?? [];
+            rows.push(...batch);
+
+            if (batch.length < pageSize) {
+                break;
+            }
+
+            offset += pageSize;
         }
 
-        return (data as ProjectRow[]).map((row) => mapProjectRowToEntity(row));
+        return rows.map((row) => mapProjectRowToEntity(row));
     }
 
     async update(project: Project): Promise<void> {
@@ -104,7 +117,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
     }
 
     private async loadProjectRelations(
-        projectId: string
+        projectId: string,
     ): Promise<ProjectRelations> {
         const client = SupabaseService.getClient();
 
@@ -119,7 +132,7 @@ export class SupabaseProjectRepository implements IProjectRepository {
             }
 
             return ((data as Array<{ id: string }> | null) ?? []).map(
-                (row) => row.id
+                (row) => row.id,
             );
         };
 

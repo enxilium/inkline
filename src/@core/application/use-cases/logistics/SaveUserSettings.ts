@@ -1,6 +1,9 @@
 import { UserPreferences } from "../../../domain/entities/user/UserPreferences";
 import { IUserRepository } from "../../../domain/repositories/IUserRepository";
-import { IUserSessionStore } from "../../../domain/services/IUserSessionStore";
+import {
+    IUserSessionStore,
+    type LocalSessionPreferences,
+} from "../../../domain/services/IUserSessionStore";
 
 export interface SaveUserSettingsRequest {
     userId: string;
@@ -16,6 +19,7 @@ export class SaveUserSettings {
     async execute(request: SaveUserSettingsRequest): Promise<void> {
         const { userId, preferences } = request;
         const normalizedAccent = preferences.accentColor?.trim();
+        const localPreferencesPatch: LocalSessionPreferences = {};
 
         if (!userId.trim()) {
             throw new Error("User ID is required.");
@@ -50,6 +54,32 @@ export class SaveUserSettings {
             throw new Error("Accent color must be a valid hex color.");
         }
 
+        if (preferences.theme !== undefined) {
+            localPreferencesPatch.theme = preferences.theme;
+        }
+
+        if (normalizedAccent !== undefined) {
+            localPreferencesPatch.accentColor = normalizedAccent;
+        }
+
+        if (preferences.editorFontSize !== undefined) {
+            localPreferencesPatch.editorFontSize = preferences.editorFontSize;
+        }
+
+        if (preferences.editorFontFamily !== undefined) {
+            localPreferencesPatch.editorFontFamily =
+                preferences.editorFontFamily;
+        }
+
+        if (preferences.defaultImageAiModel !== undefined) {
+            localPreferencesPatch.defaultImageAiModel =
+                preferences.defaultImageAiModel;
+        }
+
+        if (preferences.geminiApiKey !== undefined) {
+            localPreferencesPatch.geminiApiKey = preferences.geminiApiKey;
+        }
+
         // Check if anything actually changed
         const hasChanges =
             user.preferences.theme !== updatedPreferences.theme ||
@@ -71,6 +101,10 @@ export class SaveUserSettings {
             if (storedUser?.id === user.id) {
                 await this.sessionStore.save(user);
             }
+        }
+
+        if (Object.keys(localPreferencesPatch).length > 0) {
+            await this.sessionStore.saveLocalPreferences(localPreferencesPatch);
         }
     }
 }

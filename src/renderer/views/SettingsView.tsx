@@ -27,6 +27,7 @@ type ThemeMode = "dark" | "light";
 
 export const SettingsView: React.FC = () => {
     const user = useAppStore((state) => state.user);
+    const isGuestSession = useAppStore((state) => state.isGuestSession);
     const currentUserId = useAppStore((state) => state.currentUserId);
     const saveUserSettings = useAppStore((state) => state.saveUserSettings);
     const updateAccountEmail = useAppStore((state) => state.updateAccountEmail);
@@ -37,8 +38,9 @@ export const SettingsView: React.FC = () => {
     const logout = useAppStore((state) => state.logout);
     const returnToProjects = useAppStore((state) => state.returnToProjects);
 
-    const [activeSection, setActiveSection] =
-        useState<SettingsSection>("account");
+    const [activeSection, setActiveSection] = useState<SettingsSection>(() =>
+        isGuestSession ? "theme" : "account",
+    );
 
     // Theme & personalization (CSS vars)
     const [accent, setAccent] = useState("#2ef6ad");
@@ -125,6 +127,12 @@ export const SettingsView: React.FC = () => {
         // Seed fields with current values (without exposing secrets).
         setNewEmail(user.email);
     }, [user]);
+
+    useEffect(() => {
+        if (isGuestSession && activeSection === "account") {
+            setActiveSection("theme");
+        }
+    }, [activeSection, isGuestSession]);
 
     useEffect(() => {
         let isMounted = true;
@@ -417,41 +425,43 @@ export const SettingsView: React.FC = () => {
         syncTitleBarOverlay();
     };
 
-    const navItems = useMemo(
-        () =>
-            [
-                {
-                    id: "account" as const,
-                    title: "Account",
-                    subtitle: "Email and password",
-                    icon: personIcon,
-                },
-                {
-                    id: "theme" as const,
-                    title: "Theme & Personalization",
-                    subtitle: "Colors and UI appearance",
-                    icon: sparkleIcon,
-                },
-                {
-                    id: "features" as const,
-                    title: "AI Features",
-                    subtitle: "Image & audio generation",
-                    icon: inkyIcon,
-                },
-                {
-                    id: "models" as const,
-                    title: "Model Configuration",
-                    subtitle: "Gemini API key",
-                    icon: wrenchIcon,
-                },
-            ] satisfies Array<{
-                id: SettingsSection;
-                title: string;
-                subtitle: string;
-                icon: string;
-            }>,
-        [],
-    );
+    const navItems = useMemo(() => {
+        const items = [
+            {
+                id: "account" as const,
+                title: "Account",
+                subtitle: "Email and password",
+                icon: personIcon,
+            },
+            {
+                id: "theme" as const,
+                title: "Theme & Personalization",
+                subtitle: "Colors and UI appearance",
+                icon: sparkleIcon,
+            },
+            {
+                id: "features" as const,
+                title: "AI Features",
+                subtitle: "Image & audio generation",
+                icon: inkyIcon,
+            },
+            {
+                id: "models" as const,
+                title: "Model Configuration",
+                subtitle: "Gemini API key",
+                icon: wrenchIcon,
+            },
+        ] satisfies Array<{
+            id: SettingsSection;
+            title: string;
+            subtitle: string;
+            icon: string;
+        }>;
+
+        return isGuestSession
+            ? items.filter((item) => item.id !== "account")
+            : items;
+    }, [isGuestSession]);
 
     const startupIntegrityMessage = useMemo(() => {
         if (!featureConfig) {
@@ -967,7 +977,7 @@ export const SettingsView: React.FC = () => {
                             </>
                         ) : null}
 
-                        {activeSection === "account" ? (
+                        {activeSection === "account" && !isGuestSession ? (
                             <>
                                 <h2>Account</h2>
                                 <p className="panel-subtitle">

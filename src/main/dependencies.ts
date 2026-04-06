@@ -8,15 +8,20 @@ import { SupabaseCharacterRepository } from "../@infrastructure/db/SupabaseChara
 import { SupabaseLocationRepository } from "../@infrastructure/db/SupabaseLocationRepository";
 import { SupabaseOrganizationRepository } from "../@infrastructure/db/SupabaseOrganizationRepository";
 import { SupabaseChatConversationRepository } from "../@infrastructure/db/SupabaseChatConversationRepository";
+import { FileSystemChatConversationRepository } from "../@infrastructure/db/filesystem/FileSystemChatConversationRepository";
+import { OfflineFirstChatConversationRepository } from "../@infrastructure/db/offline/OfflineFirstChatConversationRepository";
 import { SupabaseAssetRepository } from "../@infrastructure/db/SupabaseAssetRepository";
 import { SupabaseAuthService } from "../@infrastructure/db/SupabaseAuthService";
 import { SupabaseStorageService } from "../@infrastructure/storage/SupabaseStorageService";
+import { FileSystemStorageService } from "../@infrastructure/storage/FileSystemStorageService";
+import { SessionAwareStorageService } from "../@infrastructure/storage/SessionAwareStorageService";
 import { FilesystemUserSessionStore } from "../@infrastructure/storage/FilesystemUserSessionStore";
 import { GeminiAITextService } from "../@infrastructure/ai/GeminiAITextService";
 import { ComfyAssetGenerationService } from "../@infrastructure/ai/ComfyAssetGenerationService";
 import { PlaylistGenerationService } from "../@infrastructure/ai/PlaylistGenerationService";
 import { ExportService } from "../@infrastructure/ai/ExportService";
 import { EpubImportService } from "../@infrastructure/services/EpubImportService";
+import { GuestSessionTransitionService } from "../@infrastructure/services/GuestSessionTransitionService";
 
 import { FileSystemProjectRepository } from "../@infrastructure/db/filesystem/FileSystemProjectRepository";
 import { OfflineFirstProjectRepository } from "../@infrastructure/db/offline/OfflineFirstProjectRepository";
@@ -36,10 +41,16 @@ import { FileSystemMetafieldDefinitionRepository } from "../@infrastructure/db/f
 import { FileSystemMetafieldAssignmentRepository } from "../@infrastructure/db/filesystem/FileSystemMetafieldAssignmentRepository";
 import { OfflineFirstMetafieldDefinitionRepository } from "../@infrastructure/db/offline/OfflineFirstMetafieldDefinitionRepository";
 import { OfflineFirstMetafieldAssignmentRepository } from "../@infrastructure/db/offline/OfflineFirstMetafieldAssignmentRepository";
+import { FileSystemUserRepository } from "../@infrastructure/db/filesystem/FileSystemUserRepository";
+import { OfflineFirstUserRepository } from "../@infrastructure/db/offline/OfflineFirstUserRepository";
 import { SynchronizationService } from "../@infrastructure/services/SynchronizationService";
 import { SupabaseDeletionLogRepository } from "../@infrastructure/db/SupabaseDeletionLogRepository";
 import { SupabaseTimelineRepository } from "../@infrastructure/db/SupabaseTimelineRepository";
 import { SupabaseEventRepository } from "../@infrastructure/db/SupabaseEventRepository";
+import { FileSystemTimelineRepository } from "../@infrastructure/db/filesystem/FileSystemTimelineRepository";
+import { FileSystemEventRepository } from "../@infrastructure/db/filesystem/FileSystemEventRepository";
+import { OfflineFirstTimelineRepository } from "../@infrastructure/db/offline/OfflineFirstTimelineRepository";
+import { OfflineFirstEventRepository } from "../@infrastructure/db/offline/OfflineFirstEventRepository";
 import { SupabaseMetafieldDefinitionRepository } from "../@infrastructure/db/SupabaseMetafieldDefinitionRepository";
 import { SupabaseMetafieldAssignmentRepository } from "../@infrastructure/db/SupabaseMetafieldAssignmentRepository";
 import { SupabaseEditorTemplateRepository } from "../@infrastructure/db/SupabaseEditorTemplateRepository";
@@ -97,11 +108,30 @@ export function resolveDependencies(): AppBuilderDependencies {
         fsAssetRepo,
     );
 
-    const userRepository = new SupabaseUserRepository();
-    const chatConversationRepository = new SupabaseChatConversationRepository();
+    const supabaseUserRepo = new SupabaseUserRepository();
+    const fsUserRepo = new FileSystemUserRepository();
+    const userRepository = new OfflineFirstUserRepository(
+        supabaseUserRepo,
+        fsUserRepo,
+    );
+    const guestTransitionService = new GuestSessionTransitionService(
+        fsUserRepo,
+    );
+    const supabaseChatConversationRepo =
+        new SupabaseChatConversationRepository();
+    const fsChatConversationRepo = new FileSystemChatConversationRepository();
+    const chatConversationRepository =
+        new OfflineFirstChatConversationRepository(
+            supabaseChatConversationRepo,
+            fsChatConversationRepo,
+        );
     const authService = new SupabaseAuthService();
-    const storageService = new SupabaseStorageService();
     const sessionStore = new FilesystemUserSessionStore();
+    const storageService = new SessionAwareStorageService(
+        sessionStore,
+        new SupabaseStorageService(),
+        new FileSystemStorageService(),
+    );
 
     const aiTextService = new GeminiAITextService(
         sessionStore,
@@ -137,6 +167,16 @@ export function resolveDependencies(): AppBuilderDependencies {
 
     const supabaseTimelineRepo = new SupabaseTimelineRepository();
     const supabaseEventRepo = new SupabaseEventRepository();
+    const fsTimelineRepo = new FileSystemTimelineRepository();
+    const fsEventRepo = new FileSystemEventRepository();
+    const timelineRepository = new OfflineFirstTimelineRepository(
+        supabaseTimelineRepo,
+        fsTimelineRepo,
+    );
+    const eventRepository = new OfflineFirstEventRepository(
+        supabaseEventRepo,
+        fsEventRepo,
+    );
     const supabaseMetafieldDefinitionRepo =
         new SupabaseMetafieldDefinitionRepository();
     const supabaseMetafieldAssignmentRepo =
@@ -195,8 +235,8 @@ export function resolveDependencies(): AppBuilderDependencies {
             chatConversation: chatConversationRepository,
             location: locationRepository,
             organization: organizationRepository,
-            timeline: supabaseTimelineRepo,
-            event: supabaseEventRepo,
+            timeline: timelineRepository,
+            event: eventRepository,
             metafieldDefinition: metafieldDefinitionRepository,
             metafieldAssignment: metafieldAssignmentRepository,
             editorTemplate: editorTemplateRepository,
@@ -215,6 +255,7 @@ export function resolveDependencies(): AppBuilderDependencies {
             playlistGeneration: playlistGenerationService,
             storage: storageService,
             sessionStore,
+            guestTransition: guestTransitionService,
         },
         syncService: syncService,
     };

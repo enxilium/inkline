@@ -1,6 +1,7 @@
 import { IpcController } from "../Controller";
 import { GenerateCharacterImage } from "../../../@core/application/use-cases/generation/GenerateCharacterImage";
 import { IpcMainInvokeEvent } from "electron";
+import { createGenerationProgressRelay } from "./generationProgress";
 
 type ExecuteParams = Parameters<GenerateCharacterImage["execute"]>;
 type ControllerArgs = [ExecuteParams[0], ExecuteParams[1]?];
@@ -25,11 +26,19 @@ export class GenerateCharacterImageController implements IpcController<
         ...args: ControllerArgs
     ): Promise<Awaited<ReturnType<GenerateCharacterImage["execute"]>>> {
         const [request] = args;
-        return this.generateCharacterImage.execute(request, (progress) => {
-            event.sender.send("generation-progress", {
-                type: "image",
-                progress,
-            });
-        });
+        const progressRelay = createGenerationProgressRelay(
+            event.sender,
+            "image",
+        );
+        progressRelay.startWarmup();
+
+        try {
+            return await this.generateCharacterImage.execute(
+                request,
+                progressRelay.onProgress,
+            );
+        } finally {
+            progressRelay.stopWarmup();
+        }
     }
 }

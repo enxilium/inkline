@@ -38,9 +38,14 @@ const App: React.FC = () => {
         authMode,
         authForm,
         authError,
+        authNotice,
         isAuthSubmitting,
+        pendingGuestTransition,
+        isResolvingGuestTransition,
         resetPasswordSuccess,
         user,
+        currentUserId,
+        isGuestSession,
         projects,
         projectCovers,
         projectsStatus,
@@ -51,6 +56,8 @@ const App: React.FC = () => {
         setAuthField,
         setAuthMode,
         toggleAuthMode,
+        closeAuthScreen,
+        resolveGuestTransitionDecision,
         submitAuth,
         requestPasswordReset,
         loadProjects,
@@ -322,6 +329,10 @@ const App: React.FC = () => {
         setAuthMode("resetPassword");
     }, [setAuthMode]);
 
+    const handleCancelAuth = React.useCallback(() => {
+        closeAuthScreen();
+    }, [closeAuthScreen]);
+
     const handleResetPassword = React.useCallback(
         (event: React.FormEvent<HTMLFormElement>) => {
             event.preventDefault();
@@ -332,9 +343,18 @@ const App: React.FC = () => {
         [requestPasswordReset],
     );
 
+    const handleResolveGuestTransition = React.useCallback(
+        (decision: "migrate" | "discard" | "cancel") => {
+            resolveGuestTransitionDecision(decision).catch(() => {
+                /* noop */
+            });
+        },
+        [resolveGuestTransitionDecision],
+    );
+
     const handleCreateProject = React.useCallback(
         async (title: string) => {
-            if (!user) {
+            if (!currentUserId.trim()) {
                 return;
             }
 
@@ -346,17 +366,17 @@ const App: React.FC = () => {
 
             await createProject({ title: trimmed });
         },
-        [createProject, setProjectsError, user],
+        [createProject, currentUserId, setProjectsError],
     );
 
     const handleRefreshProjects = React.useCallback(() => {
-        if (!user) {
+        if (!currentUserId.trim()) {
             return;
         }
-        loadProjects(user.id).catch(() => {
+        loadProjects(currentUserId).catch(() => {
             /* noop */
         });
-    }, [loadProjects, user]);
+    }, [currentUserId, loadProjects]);
 
     const handleOpenProject = React.useCallback(
         (project: ProjectSummary) => {
@@ -450,13 +470,25 @@ const App: React.FC = () => {
                             mode={authMode}
                             form={authForm}
                             error={authError}
+                            notice={authNotice}
                             isSubmitting={isAuthSubmitting}
+                            pendingGuestProjectCount={
+                                pendingGuestTransition?.guestProjectCount ??
+                                null
+                            }
+                            isResolvingGuestTransition={
+                                isResolvingGuestTransition
+                            }
                             resetPasswordSuccess={resetPasswordSuccess}
                             onSubmit={handleAuthSubmit}
                             onFieldChange={handleAuthFieldChange}
                             onToggleMode={handleToggleAuthMode}
                             onForgotPassword={handleForgotPassword}
                             onResetPassword={handleResetPassword}
+                            onCancel={handleCancelAuth}
+                            onResolveGuestTransition={
+                                handleResolveGuestTransition
+                            }
                         />
                     </div>
                 );
@@ -511,7 +543,8 @@ const App: React.FC = () => {
             {/* Show once per launch after user has signed in */}
             {(stage === "projectSelect" ||
                 stage === "workspace" ||
-                stage === "settings") && <FeaturePromptDialog />}
+                stage === "settings") &&
+                !isGuestSession && <FeaturePromptDialog />}
         </div>
     );
 };
