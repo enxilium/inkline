@@ -2111,7 +2111,7 @@ export const useAppStore = create<AppStore>((set, get) => {
                         authMode: "login",
                         authForm: initialAuthForm,
                         authNotice:
-                            "Account created. Verify your email, then sign in.",
+                            "Account created. Sign in to access your projects.",
                         pendingGuestTransition: null,
                     });
                 }
