@@ -14,7 +14,7 @@
   <Identity
     Name="enxilium.Inkline"
     Publisher="CN=5B66C477-496B-4C07-9C68-E57AA75C6DAB"
-    Version="1.0.1.0" />
+    Version="1.1.0.0" />
 
   <Properties>
     <DisplayName>Inkline</DisplayName>
