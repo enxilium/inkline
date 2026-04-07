@@ -39,7 +39,6 @@
         "@electron-forge/plugin-webpack": "^7.10.2",
         "@electron-forge/publisher-github": "^7.11.1",
         "@electron/fuses": "^1.8.0",
-        "@microsoft/winappcli": "^0.2.0",
         "@pmmmwh/react-refresh-webpack-plugin": "^0.6.2",
         "@types/pdfkit": "^0.17.4",
         "@types/react": "^19.2.6",
@@ -130,5 +129,8 @@
         "typescript": "^5.9.3",
         "update-electron-app": "^3.1.2",
         "zustand": "^5.0.8"
+    },
+    "optionalDependencies": {
+        "@microsoft/winappcli": "^0.2.0"
     }
 }
