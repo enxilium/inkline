@@ -991,11 +991,19 @@ const bootstrap = async (): Promise<void> => {
             /^\//,
             "",
         );
-        const basePath = fileSystemService.getBasePath();
-        const filePath = path.join(basePath, relativePath);
+        const basePath = path.resolve(fileSystemService.getBasePath());
+        const filePath = path.resolve(
+            fileSystemService.resolvePath(relativePath),
+        );
+
+        const normalizedBasePath = basePath.toLowerCase();
+        const normalizedFilePath = filePath.toLowerCase();
 
         // Security check: Ensure the resolved path is still within the base path
-        if (!filePath.startsWith(basePath)) {
+        if (
+            normalizedFilePath !== normalizedBasePath &&
+            !normalizedFilePath.startsWith(`${normalizedBasePath}${path.sep}`)
+        ) {
             logger.error(
                 `[Security] Blocked path traversal attempt: ${relativePath}`,
             );

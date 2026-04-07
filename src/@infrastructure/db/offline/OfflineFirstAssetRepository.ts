@@ -538,7 +538,7 @@ export class OfflineFirstAssetRepository implements IAssetRepository {
 
     private toLocalAbsolutePath(storagePath: string): string {
         const objectPath = this.toLocalObjectPath(storagePath);
-        return path.join(fileSystemService.getBasePath(), objectPath);
+        return fileSystemService.resolvePath(objectPath);
     }
 
     private async hasLocalAssetFile(storagePath: string): Promise<boolean> {

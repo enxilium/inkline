@@ -171,7 +171,7 @@ export class GuestSessionTransitionService implements IGuestSessionTransitionSer
     }
 
     private toAbsolutePath(relativePath: string): string {
-        return path.join(fileSystemService.getBasePath(), relativePath);
+        return fileSystemService.resolvePath(relativePath);
     }
 
     private async copyDirectoryMerging(

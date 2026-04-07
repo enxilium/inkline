@@ -19,7 +19,7 @@ export class FileSystemService {
     }
 
     async writeJson<T>(filePath: string, data: T): Promise<void> {
-        const fullPath = path.join(this.basePath, filePath);
+        const fullPath = this.resolvePath(filePath);
         const tempPath = this.createTempPath(fullPath);
         const dir = path.dirname(fullPath);
 
@@ -33,7 +33,7 @@ export class FileSystemService {
         filePath: string,
         data: Buffer | Uint8Array,
     ): Promise<void> {
-        const fullPath = path.join(this.basePath, filePath);
+        const fullPath = this.resolvePath(filePath);
         const tempPath = this.createTempPath(fullPath);
         const dir = path.dirname(fullPath);
 
@@ -51,7 +51,7 @@ export class FileSystemService {
     }
 
     async readJson<T>(filePath: string): Promise<T | null> {
-        const fullPath = path.join(this.basePath, filePath);
+        const fullPath = this.resolvePath(filePath);
         try {
             const content = await fs.readFile(fullPath, "utf-8");
             return JSON.parse(content) as T;
@@ -61,7 +61,7 @@ export class FileSystemService {
     }
 
     async readBuffer(filePath: string): Promise<Buffer | null> {
-        const fullPath = path.join(this.basePath, filePath);
+        const fullPath = this.resolvePath(filePath);
         try {
             return await fs.readFile(fullPath);
         } catch {
@@ -70,7 +70,7 @@ export class FileSystemService {
     }
 
     async deleteFile(filePath: string): Promise<void> {
-        const fullPath = path.join(this.basePath, filePath);
+        const fullPath = this.resolvePath(filePath);
         try {
             await fs.unlink(fullPath);
         } catch (error) {
@@ -79,7 +79,7 @@ export class FileSystemService {
     }
 
     async deleteDirectory(dirPath: string): Promise<void> {
-        const fullPath = path.join(this.basePath, dirPath);
+        const fullPath = this.resolvePath(dirPath);
         try {
             await fs.rm(fullPath, { recursive: true, force: true });
         } catch (error) {
@@ -88,7 +88,7 @@ export class FileSystemService {
     }
 
     async listFiles(dirPath: string): Promise<string[]> {
-        const fullPath = path.join(this.basePath, dirPath);
+        const fullPath = this.resolvePath(dirPath);
         try {
             return await fs.readdir(fullPath);
         } catch {
@@ -97,7 +97,7 @@ export class FileSystemService {
     }
 
     async exists(filePath: string): Promise<boolean> {
-        const fullPath = path.join(this.basePath, filePath);
+        const fullPath = this.resolvePath(filePath);
         try {
             await fs.access(fullPath);
             return true;
@@ -108,6 +108,13 @@ export class FileSystemService {
 
     getBasePath(): string {
         return this.basePath;
+    }
+
+    resolvePath(relativePath: string): string {
+        const normalizedPath = relativePath
+            .replace(/\\/g, "/")
+            .replace(/^\/+/, "");
+        return path.join(this.basePath, normalizedPath);
     }
 }
 
