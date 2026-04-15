@@ -2726,6 +2726,9 @@ input.toolbar-color:focus {
     border-radius: var(--radius-sm);
     color: var(--text-subtle);
 }
+.binder-header {
+    padding: 0rem 0.5rem;
+}
 
 .binder-active-actions {
     display: inline-flex;
