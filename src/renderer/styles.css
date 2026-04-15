@@ -3072,7 +3072,8 @@ input.toolbar-color:focus {
     background: transparent;
     display: flex;
     flex-direction: column;
-    overflow-y: hidden;
+    overflow: visible;
+    min-height: 0;
 }
 
 .entity-editor {
@@ -3081,8 +3082,9 @@ input.toolbar-color:focus {
     flex-direction: column;
     gap: 1rem;
     width: 100%;
-    height: 100%;
-    overflow-y: auto;
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
 }
 
 .entity-header {
@@ -4032,8 +4034,34 @@ input.toolbar-color:focus {
     opacity: 0.5;
 }
 
-.workspace-main-tabset .flexlayout__tabset_content {
+.workspace-main-tabset .flexlayout__tabset_content,
+.flexlayout__tabset_content:has(.entity-editor) {
     background: transparent;
+    overflow: auto;
+}
+
+/* Prevent nested scrollbars in workspace entity editors.
+   The FlexLayout tab content should be the single scroll container so
+   dropdowns can open without forcing .entity-editor to become an inner scroller. */
+.workspace-main-tabset .entity-editor-panel {
+    overflow: visible;
+    min-height: 0;
+}
+
+.workspace-main-tabset .entity-editor {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+}
+
+.workspace-main-tabset .entity-column-dropzone {
+    overflow: visible;
+}
+
+/* Keep modal editor behavior unchanged (modal itself can scroll). */
+.dialog-modal-editor .entity-editor {
+    height: 100%;
+    overflow-y: auto;
 }
 
 /* Added for individual editor container styling */
