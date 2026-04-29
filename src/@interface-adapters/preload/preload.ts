@@ -2,7 +2,9 @@ import { contextBridge, ipcRenderer } from "electron";
 import { controllerChannels, type RendererApi } from "../controllers/contracts";
 import {
     AUTH_STATE_CHANGED_CHANNEL,
+    AUTH_PASSWORD_RECOVERY_CHANNEL,
     type AuthStatePayload,
+    type PasswordRecoveryPayload,
 } from "../controllers/auth/AuthStateGateway";
 import {
     FEATURE_CHANNELS,
@@ -97,6 +99,7 @@ const api = createRendererApi();
 contextBridge.exposeInMainWorld("api", api);
 
 type AuthStateListener = (payload: AuthStatePayload) => void;
+type PasswordRecoveryListener = (payload: PasswordRecoveryPayload) => void;
 
 const createAuthEvents = () => {
     const onStateChanged = (listener: AuthStateListener) => {
@@ -111,7 +114,19 @@ const createAuthEvents = () => {
             ipcRenderer.removeListener(AUTH_STATE_CHANGED_CHANNEL, handler);
     };
 
-    return { onStateChanged };
+    const onPasswordRecovery = (listener: PasswordRecoveryListener) => {
+        const handler = (
+            _event: Electron.IpcRendererEvent,
+            payload: PasswordRecoveryPayload,
+        ) => {
+            listener(payload);
+        };
+        ipcRenderer.on(AUTH_PASSWORD_RECOVERY_CHANNEL, handler);
+        return () =>
+            ipcRenderer.removeListener(AUTH_PASSWORD_RECOVERY_CHANNEL, handler);
+    };
+
+    return { onStateChanged, onPasswordRecovery };
 };
 
 const authEvents = createAuthEvents();

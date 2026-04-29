@@ -35,6 +35,10 @@ import {
     type FeatureKind,
     type StartupIntegrityStatus,
 } from "../@interface-adapters/controllers/setup/setupChannels";
+import {
+    AUTH_PASSWORD_RECOVERY_CHANNEL,
+    type PasswordRecoveryPayload,
+} from "../@interface-adapters/controllers/auth/AuthStateGateway";
 
 const logger = createTerminalLogger("Main");
 installTerminalErrorRedirection("Console");
@@ -138,6 +142,74 @@ if (handleSquirrelEvent()) {
     app.quit();
 }
 
+const APP_PROTOCOL = "inkline";
+const PASSWORD_RECOVERY_PATH = "/auth/password-recovery";
+
+const getDeepLinkFromArgv = (argv: string[]): string | null => {
+    const protocolPrefix = `${APP_PROTOCOL}://`;
+    for (const arg of argv) {
+        if (arg.startsWith(protocolPrefix)) {
+            return arg;
+        }
+    }
+    return null;
+};
+
+const parsePasswordRecoveryPayload = (
+    rawUrl: string,
+): PasswordRecoveryPayload | null => {
+    try {
+        const url = new URL(rawUrl);
+        const normalizedPath = `/${url.hostname}${url.pathname}`;
+        if (
+            url.protocol !== `${APP_PROTOCOL}:` ||
+            !normalizedPath.startsWith(PASSWORD_RECOVERY_PATH)
+        ) {
+            return null;
+        }
+
+        const hash = url.hash.startsWith("#") ? url.hash.slice(1) : url.hash;
+        const hashParams = new URLSearchParams(hash);
+        const searchParams = url.searchParams;
+        const type = hashParams.get("type") ?? searchParams.get("type");
+        if (type !== "recovery") {
+            return null;
+        }
+
+        const accessToken =
+            hashParams.get("access_token") ?? searchParams.get("access_token");
+        const refreshToken =
+            hashParams.get("refresh_token") ??
+            searchParams.get("refresh_token");
+        if (!accessToken || !refreshToken) {
+            return null;
+        }
+
+        return {
+            accessToken,
+            refreshToken,
+        };
+    } catch {
+        return null;
+    }
+};
+
+const registerAppProtocolClient = (): void => {
+    if (process.defaultApp && process.argv.length >= 2) {
+        app.setAsDefaultProtocolClient(APP_PROTOCOL, process.execPath, [
+            path.resolve(process.argv[1]),
+        ]);
+        return;
+    }
+
+    app.setAsDefaultProtocolClient(APP_PROTOCOL);
+};
+
+const hasSingleInstanceLock = app.requestSingleInstanceLock();
+if (!hasSingleInstanceLock) {
+    app.quit();
+}
+
 // Register custom protocol scheme for serving local assets securely.
 // Must be called before app is ready.
 protocol.registerSchemesAsPrivileged([
@@ -157,8 +229,30 @@ updateElectronApp();
 const dependencies = resolveDependencies();
 const appBuilder = new AppBuilder(dependencies);
 
+let mainWindow: BrowserWindow | null = null;
 let loadingWindow: BrowserWindow | null = null;
 let setupWindow: BrowserWindow | null = null;
+let pendingPasswordRecoveryPayload: PasswordRecoveryPayload | null = null;
+
+const dispatchPasswordRecoveryPayload = (
+    payload: PasswordRecoveryPayload,
+): void => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(AUTH_PASSWORD_RECOVERY_CHANNEL, payload);
+        return;
+    }
+
+    pendingPasswordRecoveryPayload = payload;
+};
+
+const handleIncomingDeepLink = (rawUrl: string): void => {
+    const payload = parsePasswordRecoveryPayload(rawUrl);
+    if (!payload) {
+        return;
+    }
+
+    dispatchPasswordRecoveryPayload(payload);
+};
 
 const LEGAL_VERSION = "2026-03-22";
 const LEGAL_POLICIES_RELATIVE_PATH = path.join(
@@ -813,7 +907,7 @@ const setupFeatureIpcHandlers = (): void => {
 };
 
 const createWindow = (): void => {
-    const mainWindow = new BrowserWindow({
+    mainWindow = new BrowserWindow({
         height: 600,
         width: 800,
         minWidth: 1200,
@@ -853,8 +947,21 @@ const createWindow = (): void => {
     });
 
     mainWindow.loadURL(MAIN_WINDOW_WEBPACK_ENTRY);
+    mainWindow.webContents.on("did-finish-load", () => {
+        if (!pendingPasswordRecoveryPayload) {
+            return;
+        }
+        mainWindow?.webContents.send(
+            AUTH_PASSWORD_RECOVERY_CHANNEL,
+            pendingPasswordRecoveryPayload,
+        );
+        pendingPasswordRecoveryPayload = null;
+    });
     mainWindow.maximize();
     mainWindow.show();
+    mainWindow.on("closed", () => {
+        mainWindow = null;
+    });
 };
 
 const setupContextMenu = (): void => {
@@ -981,6 +1088,13 @@ const applyForcedFreshSetupIfRequested = async (): Promise<void> => {
 };
 
 const bootstrap = async (): Promise<void> => {
+    registerAppProtocolClient();
+
+    const startupDeepLink = getDeepLinkFromArgv(process.argv);
+    if (startupDeepLink) {
+        handleIncomingDeepLink(startupDeepLink);
+    }
+
     // Register the custom protocol handler first.
     // This handles inkline-asset://local/assets/project/xxx/image.jpg URLs
     protocol.handle("inkline-asset", (request) => {
@@ -1064,12 +1178,35 @@ const bootstrap = async (): Promise<void> => {
     }, 1200);
 };
 
-app.whenReady()
-    .then(() => bootstrap())
-    .catch((error) => {
-        logger.error("Failed to bootstrap application", error);
-        app.quit();
-    });
+app.on("second-instance", (_event, argv) => {
+    const deepLink = getDeepLinkFromArgv(argv);
+    if (deepLink) {
+        handleIncomingDeepLink(deepLink);
+    }
+
+    if (!mainWindow || mainWindow.isDestroyed()) {
+        return;
+    }
+
+    if (mainWindow.isMinimized()) {
+        mainWindow.restore();
+    }
+    mainWindow.focus();
+});
+
+app.on("open-url", (event, url) => {
+    event.preventDefault();
+    handleIncomingDeepLink(url);
+});
+
+if (hasSingleInstanceLock) {
+    app.whenReady()
+        .then(() => bootstrap())
+        .catch((error) => {
+            logger.error("Failed to bootstrap application", error);
+            app.quit();
+        });
+}
 
 ipcMain.handle(
     "window:setTitleBarOverlay",

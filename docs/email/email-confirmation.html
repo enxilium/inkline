@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confirm your Inkline email</title>
+</head>
+<body style="margin:0;padding:0;background:#202022;font-family:'Segoe UI',Inter,Roboto,Helvetica,Arial,sans-serif;color:#f6f7fb;">
+  <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="background:#202022;padding:28px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:620px;background:#222324;border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;">
+          <tr>
+            <td style="background:#2ef6ad;padding:0;">
+              <img src="https://cdn.jsdelivr.net/gh/enxilium/inkline@main/assets/banner.png" alt="" width="620" style="display:block;width:100%;height:auto;border:0;line-height:0;font-size:0;" />
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 28px 10px 28px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="vertical-align:middle;padding-right:12px;">
+                    <img src="https://cdn.jsdelivr.net/gh/enxilium/inkline@main/assets/app-icon.png" alt="" width="44" height="44" style="display:block;border:1px solid rgba(255,255,255,0.18);border-radius:10px;line-height:0;font-size:0;" />
+                  </td>
+                  <td style="vertical-align:middle;">
+                    <p style="margin:0;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;color:#7a8091;">Inkline account</p>
+                    <p style="margin:4px 0 0 0;font-size:24px;line-height:1.25;color:#f6f7fb;font-weight:700;">Confirm your email</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:8px 28px 0 28px;">
+              <p style="margin:0;font-size:15px;line-height:1.75;color:#d9dce6;">
+                Welcome to Inkline. Confirm your email address to activate your account and start syncing your stories.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 28px 6px 28px;">
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td align="center" bgcolor="#2ef6ad" style="border-radius:10px;">
+                    <a href="{{ .ConfirmationURL }}" style="display:inline-block;padding:13px 22px;font-size:15px;line-height:1;font-weight:700;color:#202022;text-decoration:none;border-radius:10px;">
+                      Confirm email
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:10px 28px 0 28px;">
+              <p style="margin:0;font-size:12px;line-height:1.7;color:#7a8091;">
+                If the button doesn't open, copy and paste this URL:
+              </p>
+              <p style="margin:8px 0 0 0;font-size:12px;line-height:1.7;word-break:break-all;">
+                <a href="{{ .ConfirmationURL }}" style="color:#b4ffeb;text-decoration:underline;">{{ .ConfirmationURL }}</a>
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:18px 28px 28px 28px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid rgba(255,255,255,0.08);">
+                <tr>
+                  <td style="padding-top:14px;font-size:12px;line-height:1.7;color:#7a8091;">
+                    If you didn't create an Inkline account, you can safely ignore this email.
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

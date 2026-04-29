@@ -3,6 +3,12 @@ import type { ThemePreference } from "../../../@core/domain/entities/user/UserPr
 import { GUEST_USER_ID } from "../../../@core/domain/constants/GuestUserConstants";
 
 export const AUTH_STATE_CHANGED_CHANNEL = "auth:stateChanged";
+export const AUTH_PASSWORD_RECOVERY_CHANNEL = "auth:passwordRecovery";
+
+export type PasswordRecoveryPayload = {
+    accessToken: string;
+    refreshToken: string;
+};
 
 export type SerializableUser = {
     id: string;

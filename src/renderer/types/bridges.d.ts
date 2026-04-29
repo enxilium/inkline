@@ -1,6 +1,9 @@
 import type { IpcRenderer } from "electron";
 import type { RendererApi } from "../../@interface-adapters/controllers/contracts";
-import type { AuthStatePayload } from "../../@interface-adapters/controllers/auth/AuthStateGateway";
+import type {
+    AuthStatePayload,
+    PasswordRecoveryPayload,
+} from "../../@interface-adapters/controllers/auth/AuthStateGateway";
 import type { TutorialState } from "../../@interface-adapters/controllers/setup/setupChannels";
 import type {
     SyncStatePayload,
@@ -45,6 +48,9 @@ declare global {
         authEvents: {
             onStateChanged(
                 listener: (payload: AuthStatePayload) => void,
+            ): () => IpcRenderer;
+            onPasswordRecovery(
+                listener: (payload: PasswordRecoveryPayload) => void,
             ): () => IpcRenderer;
         };
         generationEvents: {

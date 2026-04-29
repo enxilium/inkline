@@ -15,6 +15,7 @@ import { RegisterUser } from "../@core/application/use-cases/auth/RegisterUser";
 import { LoadStoredSession } from "../@core/application/use-cases/auth/LoadStoredSession";
 import { UpdateUserEmail } from "../@core/application/use-cases/auth/UpdateUserEmail";
 import { UpdateUserPassword } from "../@core/application/use-cases/auth/UpdateUserPassword";
+import { CompletePasswordRecovery } from "../@core/application/use-cases/auth/CompletePasswordRecovery";
 import { ResetPassword } from "../@core/application/use-cases/auth/ResetPassword";
 import { DeleteAccount } from "../@core/application/use-cases/auth/DeleteAccount";
 import { GenerateCharacterImage } from "../@core/application/use-cases/generation/GenerateCharacterImage";
@@ -89,6 +90,7 @@ import { LogoutUserController } from "../@interface-adapters/controllers/auth/Lo
 import { RegisterUserController } from "../@interface-adapters/controllers/auth/RegisterUserController";
 import { GetAuthStateController } from "../@interface-adapters/controllers/auth/GetAuthStateController";
 import { ResolveGuestTransitionController } from "../@interface-adapters/controllers/auth/ResolveGuestTransitionController";
+import { CompletePasswordRecoveryController } from "../@interface-adapters/controllers/auth/CompletePasswordRecoveryController";
 import { UpdateUserEmailController } from "../@interface-adapters/controllers/auth/UpdateUserEmailController";
 import { UpdateUserPasswordController } from "../@interface-adapters/controllers/auth/UpdateUserPasswordController";
 import { ResetPasswordController } from "../@interface-adapters/controllers/auth/ResetPasswordController";
@@ -240,6 +242,7 @@ type UseCaseMap = {
         logoutUser: LogoutUser;
         registerUser: RegisterUser;
         loadStoredSession: LoadStoredSession;
+        completePasswordRecovery: CompletePasswordRecovery;
         updateEmail: UpdateUserEmail;
         updatePassword: UpdateUserPassword;
         resetPassword: ResetPassword;
@@ -452,6 +455,9 @@ export class AppBuilder {
                 registerUser: new RegisterUser(svc.auth, repo.user),
                 loadStoredSession: new LoadStoredSession(
                     svc.sessionStore,
+                    svc.auth,
+                ),
+                completePasswordRecovery: new CompletePasswordRecovery(
                     svc.auth,
                 ),
                 updateEmail: new UpdateUserEmail(
@@ -793,6 +799,9 @@ export class AppBuilder {
                     this.dependencies.services.auth,
                     this.dependencies.services.sessionStore,
                     this.authStateGateway,
+                ),
+                completePasswordRecovery: new CompletePasswordRecoveryController(
+                    useCases.auth.completePasswordRecovery,
                 ),
                 updateEmail: new UpdateUserEmailController(
                     useCases.auth.updateEmail,

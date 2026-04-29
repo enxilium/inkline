@@ -1517,29 +1517,99 @@ html {
 
 /* ── Auth reset flow ── */
 
+.auth-reset-card {
+    width: 100%;
+    gap: 0.9rem;
+    padding: clamp(2.25rem, 4vw, 3rem);
+}
+
+.auth-reset-header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+}
+
+.auth-reset-subtitle {
+    max-width: 340px;
+    line-height: 1.45;
+}
+
 .auth-reset-icon {
     display: flex;
     justify-content: center;
     align-items: center;
-    width: 48px;
-    height: 48px;
+    width: 54px;
+    height: 54px;
     border-radius: 50%;
-    background: color-mix(in srgb, var(--accent) 12%, transparent);
+    border: 1px solid color-mix(in srgb, var(--accent) 28%, transparent);
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
     color: var(--accent);
-    margin-bottom: 0.25rem;
+    margin-bottom: 0.2rem;
+}
+
+.auth-reset-divider-animation {
+    width: 100%;
+    height: 20px;
+    margin: 0.2rem 0 0.8rem;
+}
+
+.auth-reset-form {
+    margin-top: 0;
+}
+
+.auth-reset-form .auth-form-inputs {
+    margin-top: 0.25rem;
+}
+
+.auth-reset-form .card-hint {
+    text-align: left;
+    line-height: 1.4;
+}
+
+.auth-reset-actions {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+}
+
+.auth-reset-btn {
+    width: 100%;
+}
+
+.auth-reset-btn-borderless {
+    border: 0;
 }
 
 .auth-reset-success {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.75rem;
-    padding: 1rem;
+    gap: 0.5rem;
+    padding: 1.1rem;
     border: 1px solid color-mix(in srgb, var(--accent) 25%, transparent);
     border-radius: var(--radius);
     background: color-mix(in srgb, var(--accent) 6%, transparent);
-    color: var(--accent);
     width: 100%;
+}
+
+.auth-reset-success-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    color: var(--accent);
+}
+
+.auth-reset-success-title {
+    margin: 0;
+    font-size: var(--text-md);
+    font-weight: 600;
 }
 
 .auth-reset-success-text {
@@ -1547,6 +1617,8 @@ html {
     color: var(--text-subtle);
     text-align: center;
     margin: 0;
+    max-width: 320px;
+    line-height: 1.45;
 }
 
 /* ── Danger callout (settings delete-account) ── */

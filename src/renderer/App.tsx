@@ -43,6 +43,8 @@ const App: React.FC = () => {
         pendingGuestTransition,
         isResolvingGuestTransition,
         resetPasswordSuccess,
+        isPasswordRecoveryFlow,
+        passwordRecoveryCompleted,
         user,
         currentUserId,
         isGuestSession,
@@ -60,6 +62,7 @@ const App: React.FC = () => {
         resolveGuestTransitionDecision,
         submitAuth,
         requestPasswordReset,
+        completePasswordRecovery,
         loadProjects,
         setProjectsError,
         createProject,
@@ -343,6 +346,16 @@ const App: React.FC = () => {
         [requestPasswordReset],
     );
 
+    const handleCompletePasswordRecovery = React.useCallback(
+        (event: React.FormEvent<HTMLFormElement>) => {
+            event.preventDefault();
+            completePasswordRecovery().catch(() => {
+                /* noop */
+            });
+        },
+        [completePasswordRecovery],
+    );
+
     const handleResolveGuestTransition = React.useCallback(
         (decision: "migrate" | "discard" | "cancel") => {
             resolveGuestTransitionDecision(decision).catch(() => {
@@ -480,11 +493,18 @@ const App: React.FC = () => {
                                 isResolvingGuestTransition
                             }
                             resetPasswordSuccess={resetPasswordSuccess}
+                            isPasswordRecoveryFlow={isPasswordRecoveryFlow}
+                            passwordRecoveryCompleted={
+                                passwordRecoveryCompleted
+                            }
                             onSubmit={handleAuthSubmit}
                             onFieldChange={handleAuthFieldChange}
                             onToggleMode={handleToggleAuthMode}
                             onForgotPassword={handleForgotPassword}
                             onResetPassword={handleResetPassword}
+                            onCompletePasswordRecovery={
+                                handleCompletePasswordRecovery
+                            }
                             onCancel={handleCancelAuth}
                             onResolveGuestTransition={
                                 handleResolveGuestTransition

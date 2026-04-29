@@ -4,6 +4,10 @@ import { UserPreferences } from "../../@core/domain/entities/user/UserPreference
 import { SupabaseService } from "./SupabaseService";
 
 export class SupabaseAuthService implements IAuthService {
+    private readonly passwordResetRedirectUrl =
+        process.env.SUPABASE_PASSWORD_RESET_REDIRECT_URL?.trim() ||
+        "inkline://auth/password-recovery";
+
     private mapAuthErrorMessage(errorMessage: string, action: string): string {
         const normalized = errorMessage.toLowerCase();
 
@@ -87,9 +91,24 @@ export class SupabaseAuthService implements IAuthService {
         return this.mapSupabaseUserToDomainUser(session.user);
     }
 
+    async setSession(accessToken: string, refreshToken: string): Promise<void> {
+        const client = SupabaseService.getClient();
+        const { error } = await client.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+        });
+        if (error) {
+            throw new Error(
+                this.mapAuthErrorMessage(error.message, "set-session"),
+            );
+        }
+    }
+
     async resetPassword(email: string): Promise<void> {
         const client = SupabaseService.getClient();
-        const { error } = await client.auth.resetPasswordForEmail(email);
+        const { error } = await client.auth.resetPasswordForEmail(email, {
+            redirectTo: this.passwordResetRedirectUrl,
+        });
         if (error) {
             throw new Error(
                 this.mapAuthErrorMessage(error.message, "reset-password"),

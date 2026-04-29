@@ -5,6 +5,7 @@ export interface IAuthService {
     register(email: string, password: string): Promise<User>;
     logout(): Promise<void>;
     getCurrentUser(): Promise<User | null>;
+    setSession(accessToken: string, refreshToken: string): Promise<void>;
     resetPassword(email: string): Promise<void>;
 
     updateEmail(newEmail: string): Promise<User>;

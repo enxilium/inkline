@@ -1,7 +1,10 @@
 import { create } from "zustand";
 
 import type { RendererApi } from "../../@interface-adapters/controllers/contracts";
-import type { AuthStatePayload } from "../../@interface-adapters/controllers/auth/AuthStateGateway";
+import type {
+    AuthStatePayload,
+    PasswordRecoveryPayload,
+} from "../../@interface-adapters/controllers/auth/AuthStateGateway";
 import type { ConflictPayload } from "../../@interface-adapters/controllers/sync/SyncStateGateway";
 import {
     GUEST_USER_ID,
@@ -91,6 +94,7 @@ const rendererApi = getRendererApi();
 const authEvents = getAuthEvents();
 const syncEvents = getSyncEvents();
 let unsubscribeAuthState: (() => void) | null = null;
+let unsubscribePasswordRecovery: (() => void) | null = null;
 const unsubscribeSyncListeners: Array<() => void> = [];
 const recentlyResolvedConflicts = new Map<string, number>();
 const recentLocalMetafieldWrites = new Map<string, number>();
@@ -613,6 +617,9 @@ type AppStore = {
     authError: string | null;
     authNotice: string | null;
     isAuthSubmitting: boolean;
+    isPasswordRecoveryFlow: boolean;
+    passwordRecoveryCompleted: boolean;
+    passwordRecoveryTokens: PasswordRecoveryPayload | null;
     user: RendererUser | null;
     currentUserId: string;
     isGuestSession: boolean;
@@ -727,6 +734,7 @@ type AppStore = {
     toggleAuthMode: () => void;
     submitAuth: () => Promise<void>;
     requestPasswordReset: () => Promise<void>;
+    completePasswordRecovery: () => Promise<void>;
     loadProjects: (userId?: string) => Promise<void>;
     setProjectsError: (message: string | null) => void;
     createProject: (params: { title: string }) => Promise<void>;
@@ -1170,12 +1178,35 @@ export const useAppStore = create<AppStore>((set, get) => {
     };
 
     const ensureAuthSubscription = () => {
-        if (unsubscribeAuthState) {
+        if (unsubscribeAuthState && unsubscribePasswordRecovery) {
             return;
         }
-        unsubscribeAuthState = authEvents.onStateChanged((payload) => {
-            void syncAuthState(payload);
-        });
+        if (!unsubscribeAuthState) {
+            unsubscribeAuthState = authEvents.onStateChanged((payload) => {
+                void syncAuthState(payload);
+            });
+        }
+        if (!unsubscribePasswordRecovery) {
+            unsubscribePasswordRecovery = authEvents.onPasswordRecovery(
+                (payload) => {
+                    set({
+                        stage: "auth",
+                        authMode: "resetPassword",
+                        authForm: initialAuthForm,
+                        authError: null,
+                        authNotice:
+                            "Create a new password to finish recovering your account.",
+                        isAuthSubmitting: false,
+                        resetPasswordSuccess: false,
+                        isPasswordRecoveryFlow: true,
+                        passwordRecoveryCompleted: false,
+                        passwordRecoveryTokens: payload,
+                        pendingGuestTransition: null,
+                        isResolvingGuestTransition: false,
+                    });
+                },
+            );
+        }
     };
 
     const applyTemplateSlices = (payload: OpenProjectPayload): void => {
@@ -1931,6 +1962,9 @@ export const useAppStore = create<AppStore>((set, get) => {
         authError: null,
         authNotice: null,
         isAuthSubmitting: false,
+        isPasswordRecoveryFlow: false,
+        passwordRecoveryCompleted: false,
+        passwordRecoveryTokens: null,
         resetPasswordSuccess: false,
         user: null,
         currentUserId: GUEST_USER_ID,
@@ -1992,6 +2026,9 @@ export const useAppStore = create<AppStore>((set, get) => {
                 authError: null,
                 authNotice: null,
                 resetPasswordSuccess: false,
+                isPasswordRecoveryFlow: false,
+                passwordRecoveryCompleted: false,
+                passwordRecoveryTokens: null,
                 pendingGuestTransition: null,
                 isResolvingGuestTransition: false,
             });
@@ -2004,6 +2041,9 @@ export const useAppStore = create<AppStore>((set, get) => {
                 authNotice: null,
                 isAuthSubmitting: false,
                 resetPasswordSuccess: false,
+                isPasswordRecoveryFlow: false,
+                passwordRecoveryCompleted: false,
+                passwordRecoveryTokens: null,
                 pendingGuestTransition: null,
                 isResolvingGuestTransition: false,
             });
@@ -2063,6 +2103,9 @@ export const useAppStore = create<AppStore>((set, get) => {
                 authError: null,
                 authNotice: null,
                 resetPasswordSuccess: false,
+                isPasswordRecoveryFlow: false,
+                passwordRecoveryCompleted: false,
+                passwordRecoveryTokens: null,
             });
         },
         toggleAuthMode: () => {
@@ -2071,6 +2114,9 @@ export const useAppStore = create<AppStore>((set, get) => {
                 authError: null,
                 authNotice: null,
                 resetPasswordSuccess: false,
+                isPasswordRecoveryFlow: false,
+                passwordRecoveryCompleted: false,
+                passwordRecoveryTokens: null,
             }));
         },
         submitAuth: async () => {
@@ -2140,6 +2186,9 @@ export const useAppStore = create<AppStore>((set, get) => {
                 authError: null,
                 authNotice: null,
                 resetPasswordSuccess: false,
+                isPasswordRecoveryFlow: false,
+                passwordRecoveryCompleted: false,
+                passwordRecoveryTokens: null,
             });
             try {
                 await rendererApi.auth.resetPassword({ email });
@@ -2150,6 +2199,52 @@ export const useAppStore = create<AppStore>((set, get) => {
                         error,
                         "Unable to send reset email.",
                         "auth-reset-password",
+                    ),
+                });
+            } finally {
+                set({ isAuthSubmitting: false });
+            }
+        },
+        completePasswordRecovery: async () => {
+            const { authForm, passwordRecoveryTokens } = get();
+            const nextPassword = authForm.password;
+            if (!passwordRecoveryTokens) {
+                set({
+                    authError:
+                        "Recovery session expired. Open the password reset link again.",
+                });
+                return;
+            }
+            if (!nextPassword) {
+                set({ authError: "New password is required." });
+                return;
+            }
+
+            set({
+                isAuthSubmitting: true,
+                authError: null,
+                authNotice: null,
+                resetPasswordSuccess: false,
+            });
+            try {
+                await rendererApi.auth.completePasswordRecovery({
+                    accessToken: passwordRecoveryTokens.accessToken,
+                    refreshToken: passwordRecoveryTokens.refreshToken,
+                    newPassword: nextPassword,
+                });
+                set({
+                    authForm: { ...initialAuthForm },
+                    resetPasswordSuccess: true,
+                    isPasswordRecoveryFlow: false,
+                    passwordRecoveryCompleted: true,
+                    passwordRecoveryTokens: null,
+                });
+            } catch (error) {
+                set({
+                    authError: normalizeUserFacingError(
+                        error,
+                        "Unable to update password.",
+                        "auth-complete-password-recovery",
                     ),
                 });
             } finally {

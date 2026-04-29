@@ -2,6 +2,7 @@ export type UserErrorContext =
     | "auth-login"
     | "auth-register"
     | "auth-reset-password"
+    | "auth-complete-password-recovery"
     | "auth-guest-transition"
     | "generation-image"
     | "generation-audio"
@@ -69,6 +70,15 @@ const mapByContext = (
             ])
         ) {
             return "We couldn't send a reset link for that email. Check the address and try again.";
+        }
+    }
+
+    if (context === "auth-complete-password-recovery") {
+        if (includesAny(normalizedMessage, ["invalid", "expired", "session"])) {
+            return "Recovery session expired. Open the password reset link again.";
+        }
+        if (includesAny(normalizedMessage, ["at least 6"])) {
+            return "Choose a stronger password with at least 6 characters.";
         }
     }
 
