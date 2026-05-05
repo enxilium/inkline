@@ -203,6 +203,8 @@ const COMFYUI_DOWNLOAD_URL =
 // LanguageTool download URLs
 const LANGUAGETOOL_SERVER_URL =
     "https://internal1.languagetool.org/snapshots/LanguageTool-latest-snapshot.zip";
+const LANGUAGETOOL_FALLBACK_URL =
+    "https://internal1.languagetool.org/snapshots/LanguageTool-20260504-snapshot.zip";
 
 export const MODELS: Record<string, ModelInfo> = {
     image: {
@@ -235,6 +237,60 @@ export class ModelDownloadService extends EventEmitter {
     private cleanupPaths: Map<string, string[]> = new Map();
     // Track active extraction processes for cancellation
     private activeExtractions: Map<string, { kill: () => void }> = new Map();
+    // Prevent concurrent LanguageTool installation tasks
+    private languageToolDownloadPromise: Promise<void> | null = null;
+
+    /**
+     * Safely rename a directory, working around Windows EPERM file locking issues.
+     * Often caused by Windows Defender or VS Code File Watcher scanning extracted files.
+     * Retries the rename, and if it still fails, falls back to copy+delete.
+     */
+    private async safeRenameDir(src: string, dest: string): Promise<void> {
+        for (let i = 0; i < 15; i++) {
+            try {
+                await fsPromises.rename(src, dest);
+                return;
+            } catch (err: unknown) {
+                const nodeErr = err as NodeJS.ErrnoException;
+                if (i === 14 || (nodeErr.code !== "EPERM" && nodeErr.code !== "EBUSY")) {
+                    if (nodeErr.code === "EPERM" || nodeErr.code === "EBUSY") {
+                        break; // Move to fallback
+                    }
+                    throw err;
+                }
+                await new Promise((resolve) => setTimeout(resolve, 300));
+            }
+        }
+        
+        logger.warn(`Rename failed after retries, falling back to copy+rm for ${src} -> ${dest}`);
+        // Fallback: copy recursively and then remove source
+        await fsPromises.cp(src, dest, { recursive: true, force: true });
+        await fsPromises.rm(src, { recursive: true, force: true }).catch((err) => {
+            logger.warn(`Failed to clean up source dir after copy fallback: ${src}`, err);
+        });
+    }
+
+    /**
+     * Retry an async operation with delay, useful for Windows EPERM locking issues
+     */
+    private async withWindowsRetry<T>(
+        operation: () => Promise<T>,
+        retries = 10,
+        delayMs = 300,
+    ): Promise<T> {
+        for (let i = 0; i < retries; i++) {
+            try {
+                return await operation();
+            } catch (err: unknown) {
+                const nodeErr = err as NodeJS.ErrnoException;
+                if (i === retries - 1 || (nodeErr.code !== "EPERM" && nodeErr.code !== "EBUSY")) {
+                    throw err;
+                }
+                await new Promise((resolve) => setTimeout(resolve, delayMs));
+            }
+        }
+        throw new Error("Retry failed"); // Unreachable
+    }
 
     constructor() {
         super();
@@ -655,6 +711,7 @@ export class ModelDownloadService extends EventEmitter {
                         if (response.statusCode !== 200) {
                             progress.status = "error";
                             progress.error = `HTTP ${response.statusCode}`;
+                            response.destroy();
                             onProgress(progress);
                             reject(
                                 new Error(
@@ -713,7 +770,7 @@ export class ModelDownloadService extends EventEmitter {
                             }
 
                             try {
-                                await fsPromises.rename(tempPath, destPath);
+                                await this.withWindowsRetry(() => fsPromises.rename(tempPath, destPath));
                                 this.activeDownloads.delete(downloadType);
                                 resolve();
                             } catch (err) {
@@ -810,6 +867,25 @@ export class ModelDownloadService extends EventEmitter {
      * Download and install LanguageTool server with embedded Java JRE
      */
     async downloadLanguageTool(
+        onProgress: (progress: DownloadProgress) => void,
+    ): Promise<void> {
+        if (this.languageToolDownloadPromise) {
+            logger.info(
+                "LanguageTool download already in progress. Waiting for existing task to complete.",
+            );
+            return this.languageToolDownloadPromise;
+        }
+
+        this.languageToolDownloadPromise = this._executeDownloadLanguageTool(
+            onProgress,
+        ).finally(() => {
+            this.languageToolDownloadPromise = null;
+        });
+
+        return this.languageToolDownloadPromise;
+    }
+
+    private async _executeDownloadLanguageTool(
         onProgress: (progress: DownloadProgress) => void,
     ): Promise<void> {
         this.refreshBasePaths();
@@ -936,7 +1012,7 @@ export class ModelDownloadService extends EventEmitter {
                 recursive: true,
                 force: true,
             });
-            await fsPromises.rename(jreExtractedDir, javaEmbededPath);
+            await this.safeRenameDir(jreExtractedDir, javaEmbededPath);
 
             if (process.platform !== "win32") {
                 for (const javaExecPath of getEmbeddedJavaCandidatePaths(
@@ -953,18 +1029,46 @@ export class ModelDownloadService extends EventEmitter {
         // Step 2: Download and extract LanguageTool
         logger.info("Downloading LanguageTool server");
 
-        await this.downloadFile(
-            LANGUAGETOOL_SERVER_URL,
-            ltZipPath,
-            "languagetool",
-            (progress) => {
-                // Scale to 40-90% for LanguageTool download
-                onProgress({
-                    ...progress,
-                    percentage: 40 + Math.round(progress.percentage * 0.5),
-                });
-            },
-        );
+        try {
+            await this.downloadFile(
+                LANGUAGETOOL_SERVER_URL,
+                ltZipPath,
+                "languagetool",
+                (progress) => {
+                    // Suppress error progress events for the primary attempt so it doesn't fail the UI
+                    if (progress.status === "error") {
+                        return;
+                    }
+                    // Scale to 40-90% for LanguageTool download
+                    onProgress({
+                        ...progress,
+                        percentage: 40 + Math.round(progress.percentage * 0.5),
+                    });
+                },
+            );
+        } catch (err) {
+            logger.warn("Primary LanguageTool URL failed, falling back to backup.");
+            // Reset download state for the clean retry
+            onProgress({
+                downloadType: "languagetool",
+                downloadedBytes: 0,
+                totalBytes: 0,
+                percentage: 40,
+                status: "downloading",
+            });
+            
+            await this.downloadFile(
+                LANGUAGETOOL_FALLBACK_URL,
+                ltZipPath,
+                "languagetool",
+                (progress) => {
+                    onProgress({
+                        ...progress,
+                        percentage: 40 + Math.round(progress.percentage * 0.5),
+                    });
+                },
+            );
+        }
 
         // Extract LanguageTool
         onProgress({
@@ -1003,7 +1107,7 @@ export class ModelDownloadService extends EventEmitter {
             const languagePath = path.join(this.serverBasePath, "language");
             // Remove existing if present
             await fsPromises.rm(languagePath, { recursive: true, force: true });
-            await fsPromises.rename(ltExtractedDir, languagePath);
+            await this.safeRenameDir(ltExtractedDir, languagePath);
         }
 
         // Clean up LanguageTool zip

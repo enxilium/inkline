@@ -1173,9 +1173,11 @@ const bootstrap = async (): Promise<void> => {
 
     createWindow();
 
-    setTimeout(() => {
-        void runStartupIntegrityCheck();
-    }, 1200);
+    if (!isFirstRun) {
+        setTimeout(() => {
+            void runStartupIntegrityCheck();
+        }, 1200);
+    }
 };
 
 app.on("second-instance", (_event, argv) => {

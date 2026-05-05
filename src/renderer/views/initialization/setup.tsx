@@ -1109,8 +1109,7 @@ const FinalizingStep: React.FC<{
 
 const CompleteStep: React.FC<{
     onComplete: () => void;
-    onBack: () => void;
-}> = ({ onComplete, onBack }) => (
+}> = ({ onComplete }) => (
     <div style={styles.stepContainer}>
         <div style={styles.successIcon}>
             <img
@@ -1124,10 +1123,7 @@ const CompleteStep: React.FC<{
             Inkline is ready to help you tell your stories.
         </p>
 
-        <div style={styles.buttonRow}>
-            <button style={styles.secondaryButton} onClick={onBack}>
-                Back
-            </button>
+        <div style={{ ...styles.buttonRow, justifyContent: "flex-end" }}>
             <button style={styles.primaryButton} onClick={onComplete}>
                 Launch Inkline
             </button>
@@ -1378,7 +1374,7 @@ const SetupWizard: React.FC = () => {
                     <FinalizingStep onNext={goNext} />
                 )}
                 {currentStep === "complete" && (
-                    <CompleteStep onComplete={handleComplete} onBack={goBack} />
+                    <CompleteStep onComplete={handleComplete} />
                 )}
             </div>
         </div>
