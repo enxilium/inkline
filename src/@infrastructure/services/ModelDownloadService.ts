@@ -252,7 +252,10 @@ export class ModelDownloadService extends EventEmitter {
                 return;
             } catch (err: unknown) {
                 const nodeErr = err as NodeJS.ErrnoException;
-                if (i === 14 || (nodeErr.code !== "EPERM" && nodeErr.code !== "EBUSY")) {
+                if (
+                    i === 14 ||
+                    (nodeErr.code !== "EPERM" && nodeErr.code !== "EBUSY")
+                ) {
                     if (nodeErr.code === "EPERM" || nodeErr.code === "EBUSY") {
                         break; // Move to fallback
                     }
@@ -261,13 +264,20 @@ export class ModelDownloadService extends EventEmitter {
                 await new Promise((resolve) => setTimeout(resolve, 300));
             }
         }
-        
-        logger.warn(`Rename failed after retries, falling back to copy+rm for ${src} -> ${dest}`);
+
+        logger.warn(
+            `Rename failed after retries, falling back to copy+rm for ${src} -> ${dest}`,
+        );
         // Fallback: copy recursively and then remove source
         await fsPromises.cp(src, dest, { recursive: true, force: true });
-        await fsPromises.rm(src, { recursive: true, force: true }).catch((err) => {
-            logger.warn(`Failed to clean up source dir after copy fallback: ${src}`, err);
-        });
+        await fsPromises
+            .rm(src, { recursive: true, force: true })
+            .catch((err) => {
+                logger.warn(
+                    `Failed to clean up source dir after copy fallback: ${src}`,
+                    err,
+                );
+            });
     }
 
     /**
@@ -283,7 +293,10 @@ export class ModelDownloadService extends EventEmitter {
                 return await operation();
             } catch (err: unknown) {
                 const nodeErr = err as NodeJS.ErrnoException;
-                if (i === retries - 1 || (nodeErr.code !== "EPERM" && nodeErr.code !== "EBUSY")) {
+                if (
+                    i === retries - 1 ||
+                    (nodeErr.code !== "EPERM" && nodeErr.code !== "EBUSY")
+                ) {
                     throw err;
                 }
                 await new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -770,7 +783,9 @@ export class ModelDownloadService extends EventEmitter {
                             }
 
                             try {
-                                await this.withWindowsRetry(() => fsPromises.rename(tempPath, destPath));
+                                await this.withWindowsRetry(() =>
+                                    fsPromises.rename(tempPath, destPath),
+                                );
                                 this.activeDownloads.delete(downloadType);
                                 resolve();
                             } catch (err) {
@@ -1047,7 +1062,9 @@ export class ModelDownloadService extends EventEmitter {
                 },
             );
         } catch (err) {
-            logger.warn("Primary LanguageTool URL failed, falling back to backup.");
+            logger.warn(
+                "Primary LanguageTool URL failed, falling back to backup.",
+            );
             // Reset download state for the clean retry
             onProgress({
                 downloadType: "languagetool",
@@ -1056,7 +1073,7 @@ export class ModelDownloadService extends EventEmitter {
                 percentage: 40,
                 status: "downloading",
             });
-            
+
             await this.downloadFile(
                 LANGUAGETOOL_FALLBACK_URL,
                 ltZipPath,
