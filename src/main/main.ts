@@ -195,14 +195,11 @@ const parsePasswordRecoveryPayload = (
 };
 
 const registerAppProtocolClient = (): void => {
-    if (process.defaultApp && process.argv.length >= 2) {
-        app.setAsDefaultProtocolClient(APP_PROTOCOL, process.execPath, [
-            path.resolve(process.argv[1]),
-        ]);
-        return;
+    // Only register the protocol when running in production (packaged)
+    // so that local development doesn't hijack protocol links intended for the installed app.
+    if (app.isPackaged) {
+        app.setAsDefaultProtocolClient(APP_PROTOCOL);
     }
-
-    app.setAsDefaultProtocolClient(APP_PROTOCOL);
 };
 
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
