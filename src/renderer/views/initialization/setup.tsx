@@ -1123,7 +1123,7 @@ const CompleteStep: React.FC<{
             Inkline is ready to help you tell your stories.
         </p>
 
-        <div style={{ ...styles.buttonRow, justifyContent: "flex-end" }}>
+        <div style={{ ...styles.buttonRow, justifyContent: "center" }}>
             <button style={styles.primaryButton} onClick={onComplete}>
                 Launch Inkline
             </button>
