@@ -50,11 +50,11 @@ https://github.com/user-attachments/assets/1a32900d-767d-4b53-afd5-9ca8c03a2fa8
 ![Download](./docs/download.png)
 
 ### Windows
-[Download](https://github.com/enxilium/inkline/releases/download/v0.1.1-alpha/inkline-0.1.1-alpha.Setup.exe)
+[Download](https://github.com/enxilium/inkline/releases/download/v1.1.0/Inkline.msix)
 ### MacOS
-[Download](https://github.com/enxilium/inkline/releases/download/v0.1.1-alpha/inkline-0.1.1-alpha-arm64.dmg)
+[Download](https://github.com/enxilium/inkline/releases/download/v1.1.0/Inkline-1.1.0-arm64.dmg )
 ### Linux (.deb)
-[Download](https://github.com/enxilium/inkline/releases/download/v0.1.1-alpha/inkline_0.1.1.alpha_amd64.deb)
+[Download](https://github.com/enxilium/inkline/releases/download/v1.1.0/inkline_1.1.0_amd64.deb)
 
 To build it yourself, you can find the binaries on the [**Releases**](https://github.com/enxilium/inkline/releases) page.
 
