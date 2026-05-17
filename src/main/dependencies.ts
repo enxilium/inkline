@@ -159,6 +159,7 @@ export function resolveDependencies(): AppBuilderDependencies {
     const exportService = new ExportService(
         projectRepository,
         chapterRepository,
+        scrapNoteRepository,
     );
 
     const epubImportService = new EpubImportService();

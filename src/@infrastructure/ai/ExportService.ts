@@ -4,6 +4,7 @@ import * as fsPromises from "fs/promises";
 import { IExportService } from "../../@core/domain/services/IExportService";
 import { IProjectRepository } from "../../@core/domain/repositories/IProjectRepository";
 import { IChapterRepository } from "../../@core/domain/repositories/IChapterRepository";
+import { IScrapNoteRepository } from "../../@core/domain/repositories/IScrapNoteRepository";
 import { Chapter } from "../../@core/domain/entities/story/Chapter";
 
 // ─── Tiptap JSON types ───────────────────────────────────────────────────────
@@ -82,18 +83,31 @@ function renderMarks(text: string, marks: TiptapMark[] | undefined): string {
     return html;
 }
 
-function renderNode(node: TiptapNode): string {
+interface RenderContext {
+    listStart?: number;
+    isFirstListItem?: boolean;
+}
+
+function renderNode(node: TiptapNode, context?: RenderContext): string {
     switch (node.type) {
         case "doc":
-            return renderChildren(node);
+            return renderChildren(node, context);
 
         case "paragraph": {
+            const styles: string[] = [];
             const align = node.attrs?.textAlign as string | undefined;
-            const style =
-                align && align !== "left"
-                    ? ` style="text-align: ${escapeAttr(align)}"`
-                    : "";
-            return `<p${style}>${renderChildren(node) || "&nbsp;"}</p>\n`;
+            if (align && align !== "left")
+                styles.push(`text-align: ${escapeAttr(align)}`);
+            if (node.attrs?.marginLeft)
+                styles.push(`margin-left: ${node.attrs.marginLeft}px`);
+            if (node.attrs?.textIndent)
+                styles.push(`text-indent: ${node.attrs.textIndent}px`);
+            if (node.attrs?.marginRight)
+                styles.push(`margin-right: ${node.attrs.marginRight}px`);
+
+            const styleString =
+                styles.length > 0 ? ` style="${styles.join("; ")}"` : "";
+            return `<p${styleString}>${renderChildren(node, context) || "&nbsp;"}</p>\n`;
         }
 
         case "heading": {
@@ -101,35 +115,48 @@ function renderNode(node: TiptapNode): string {
                 Math.max(Number(node.attrs?.level) || 1, 1),
                 6,
             );
+            const styles: string[] = [];
             const align = node.attrs?.textAlign as string | undefined;
-            const style =
-                align && align !== "left"
-                    ? ` style="text-align: ${escapeAttr(align)}"`
-                    : "";
-            return `<h${level}${style}>${renderChildren(node)}</h${level}>\n`;
+            if (align && align !== "left")
+                styles.push(`text-align: ${escapeAttr(align)}`);
+            if (node.attrs?.marginLeft)
+                styles.push(`margin-left: ${node.attrs.marginLeft}px`);
+            if (node.attrs?.textIndent)
+                styles.push(`text-indent: ${node.attrs.textIndent}px`);
+            if (node.attrs?.marginRight)
+                styles.push(`margin-right: ${node.attrs.marginRight}px`);
+
+            const styleString =
+                styles.length > 0 ? ` style="${styles.join("; ")}"` : "";
+            return `<h${level}${styleString}>${renderChildren(node, context)}</h${level}>\n`;
         }
 
         case "bulletList":
-            return `<ul>\n${renderChildren(node)}</ul>\n`;
+            return `<ul>\n${renderChildren(node, context)}</ul>\n`;
 
         case "orderedList": {
             const start = node.attrs?.start as number | undefined;
             const attr = start && start !== 1 ? ` start="${start}"` : "";
-            return `<ol${attr}>\n${renderChildren(node)}</ol>\n`;
+            return `<ol${attr}>\n${renderChildren(node, { ...context, listStart: start || 1 })}</ol>\n`;
         }
 
-        case "listItem":
-            return `<li>${renderChildren(node)}</li>\n`;
+        case "listItem": {
+            const valAttr =
+                context?.listStart && context.isFirstListItem
+                    ? ` value="${context.listStart}"`
+                    : "";
+            return `<li${valAttr}>${renderChildren(node, context)}</li>\n`;
+        }
 
         case "blockquote":
-            return `<blockquote>\n${renderChildren(node)}</blockquote>\n`;
+            return `<blockquote>\n${renderChildren(node, context)}</blockquote>\n`;
 
         case "codeBlock": {
             const language = node.attrs?.language as string | undefined;
             const cls = language
                 ? ` class="language-${escapeAttr(language)}"`
                 : "";
-            return `<pre><code${cls}>${renderChildren(node)}</code></pre>\n`;
+            return `<pre><code${cls}>${renderChildren(node, context)}</code></pre>\n`;
         }
 
         case "hardBreak":
@@ -156,15 +183,28 @@ function renderNode(node: TiptapNode): string {
 
         default:
             // Unknown node type – render children if any to avoid data loss
-            return renderChildren(node);
+            return renderChildren(node, context);
     }
 }
 
-function renderChildren(node: TiptapNode): string {
+function renderChildren(node: TiptapNode, context?: RenderContext): string {
     if (!node.content || node.content.length === 0) {
         return "";
     }
-    return node.content.map(renderNode).join("");
+    let listItemCount = 0;
+    return node.content
+        .map((child) => {
+            let childContext = context;
+            if (context?.listStart !== undefined && child.type === "listItem") {
+                listItemCount++;
+                childContext = {
+                    ...context,
+                    isFirstListItem: listItemCount === 1,
+                };
+            }
+            return renderNode(child, childContext);
+        })
+        .join("");
 }
 
 function escapeHtml(text: string): string {
@@ -244,7 +284,58 @@ export class ExportService implements IExportService {
     constructor(
         private readonly projectRepository: IProjectRepository,
         private readonly chapterRepository: IChapterRepository,
+        private readonly scrapNoteRepository: IScrapNoteRepository,
     ) {}
+
+    async exportDocument(
+        projectId: string,
+        documentId: string,
+        documentType: "chapter" | "scrapNote",
+        _format: "epub",
+        destinationPath: string,
+        author?: string,
+    ): Promise<void> {
+        const project = await this.projectRepository.findById(projectId);
+        if (!project) {
+            throw new Error(`Project with ID ${projectId} not found.`);
+        }
+
+        let title = "Document";
+        let content: any = null;
+
+        if (documentType === "chapter") {
+            const chapter = await this.chapterRepository.findById(documentId);
+            if (!chapter || chapter.id !== documentId) {
+                throw new Error(
+                    `Chapter ${documentId} not found in project ${projectId}`,
+                );
+            }
+            title = chapter.title;
+            content = chapter.content;
+        } else {
+            const note = await this.scrapNoteRepository.findById(documentId);
+            if (!note || note.id !== documentId) {
+                throw new Error(
+                    `ScrapNote ${documentId} not found in project ${projectId}`,
+                );
+            }
+            title = note.title;
+            content = note.content;
+        }
+
+        const htmlContent = this.convertContentToHtml(content);
+        const stripped = htmlContent.replace(/<[^>]*>/g, "").trim();
+        if (stripped.length === 0) {
+            throw new Error("No content to export. Write some content first.");
+        }
+
+        await this.exportToEpub(
+            title,
+            [{ title, content: htmlContent } as any],
+            destinationPath,
+            author || "Unknown",
+        );
+    }
 
     async exportProject(
         projectId: string,

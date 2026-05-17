@@ -13,6 +13,7 @@ import {
 } from "../../tiptap/documentReference";
 import { LanguageTool } from "../../tiptap/languageTool";
 import { NightModeDisplayColorShift } from "../../tiptap/nightModeDisplayColorShift";
+import { EmDash } from "../../tiptap/emDash";
 import { LanguageToolPopup } from "../workspace/LanguageToolPopup";
 import type { DocumentRef } from "./ListInput";
 import classNames from "clsx";
@@ -87,8 +88,12 @@ export const RichTextAreaInput = forwardRef<
 
         const editor = useEditor({
             extensions: [
+                EmDash,
                 NightModeDisplayColorShift,
-                StarterKit,
+                StarterKit.configure({
+                    bulletList: { keepMarks: false, keepAttributes: false },
+                    orderedList: { keepMarks: false, keepAttributes: false },
+                }),
                 DocumentReference.configure({
                     suggestion: createDocumentReferenceSuggestion({
                         availableDocuments: () => docsRef.current,

@@ -73,42 +73,87 @@ export const WorkspaceView: React.FC = () => {
     const setRenamingDocument = useAppStore(
         (state) => state.setRenamingDocument,
     );
+    const chapters = useAppStore((state) => state.chapters);
+    const scrapNotes = useAppStore((state) => state.scrapNotes);
 
     React.useEffect(() => {
-        const removeListener = window.ui.onContextMenuCommand((payload) => {
-            const { command, data } = payload;
-            if (command === "close-project") {
-                closeProject();
-            } else if (command === "delete") {
-                if (!isContextMenuEntityData(data)) {
-                    return;
-                }
+        const removeListener = window.ui.onContextMenuCommand(
+            async (payload) => {
+                const { command, data } = payload;
+                if (command === "close-project") {
+                    closeProject();
+                } else if (command === "export") {
+                    if (!isContextMenuEntityData(data) || !projectId) return;
 
-                if (
-                    confirm(
-                        `Are you sure you want to delete this ${data.kind}?`,
-                    )
-                ) {
-                    if (data.kind === "chapter") {
-                        deleteChapter(data.id);
-                    } else if (data.kind === "scrapNote") {
-                        deleteScrapNote(data.id);
-                    } else if (data.kind === "character") {
-                        deleteCharacter(data.id);
-                    } else if (data.kind === "location") {
-                        deleteLocation(data.id);
-                    } else if (data.kind === "organization") {
-                        deleteOrganization(data.id);
+                    if (data.kind === "chapter" || data.kind === "scrapNote") {
+                        try {
+                            const defaultFileName =
+                                data.kind === "chapter"
+                                    ? chapters.find((c) => c.id === data.id)
+                                          ?.title
+                                    : scrapNotes.find((n) => n.id === data.id)
+                                          ?.title;
+
+                            const saveResult =
+                                await window.fileDialog.showSaveDialog({
+                                    title: `Export ${data.kind === "chapter" ? "Chapter" : "Section"}`,
+                                    defaultPath: `${defaultFileName || "Document"}.epub`,
+                                    filters: [
+                                        {
+                                            name: "EPUB Document",
+                                            extensions: ["epub"],
+                                        },
+                                    ],
+                                });
+                            const savePath = saveResult.filePath;
+
+                            if (savePath) {
+                                await useAppStore.getState().exportDocument({
+                                    channel: "project:exportDocument",
+                                    projectId: projectId,
+                                    documentId: data.id,
+                                    documentType: data.kind,
+                                    format: "epub",
+                                    destinationPath: savePath,
+                                    author: undefined,
+                                } as any);
+                            }
+                        } catch (error) {
+                            console.error("Failed to export document:", error);
+                            // Optionally show an error dialog here
+                        }
                     }
-                }
-            } else if (command === "rename") {
-                if (!isContextMenuEntityData(data)) {
-                    return;
-                }
+                } else if (command === "delete") {
+                    if (!isContextMenuEntityData(data)) {
+                        return;
+                    }
 
-                setRenamingDocument({ kind: data.kind, id: data.id });
-            }
-        });
+                    if (
+                        confirm(
+                            `Are you sure you want to delete this ${data.kind}?`,
+                        )
+                    ) {
+                        if (data.kind === "chapter") {
+                            deleteChapter(data.id);
+                        } else if (data.kind === "scrapNote") {
+                            deleteScrapNote(data.id);
+                        } else if (data.kind === "character") {
+                            deleteCharacter(data.id);
+                        } else if (data.kind === "location") {
+                            deleteLocation(data.id);
+                        } else if (data.kind === "organization") {
+                            deleteOrganization(data.id);
+                        }
+                    }
+                } else if (command === "rename") {
+                    if (!isContextMenuEntityData(data)) {
+                        return;
+                    }
+
+                    setRenamingDocument({ kind: data.kind, id: data.id });
+                }
+            },
+        );
         return () => {
             removeListener();
         };

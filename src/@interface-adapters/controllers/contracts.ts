@@ -44,6 +44,7 @@ import type { UpdateScrapNoteController } from "./manuscript/UpdateScrapNoteCont
 import type { CreateProjectController } from "./project/CreateProjectController";
 import type { DeleteProjectController } from "./project/DeleteProjectController";
 import type { ExportManuscriptController } from "./project/ExportManuscriptController";
+import type { ExportDocumentController } from "./project/ExportDocumentController";
 import type { LoadProjectListController } from "./project/LoadProjectListController";
 import type { OpenProjectController } from "./project/OpenProjectController";
 import type { RenameProjectController } from "./project/RenameProjectController";
@@ -141,6 +142,7 @@ export interface ControllerInstanceMap {
         createProject: CreateProjectController;
         deleteProject: DeleteProjectController;
         exportManuscript: ExportManuscriptController;
+        exportDocument: ExportDocumentController;
         importProject: ImportProjectController;
         loadProjectList: LoadProjectListController;
         openProject: OpenProjectController;
@@ -260,6 +262,7 @@ export const controllerChannels: ControllerChannelMap = {
         createProject: "project:createProject",
         deleteProject: "project:deleteProject",
         exportManuscript: "project:exportManuscript",
+        exportDocument: "project:exportDocument",
         importProject: "project:importProject",
         loadProjectList: "project:loadProjectList",
         openProject: "project:openProject",

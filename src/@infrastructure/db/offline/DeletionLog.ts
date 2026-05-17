@@ -1,5 +1,7 @@
 import { fileSystemService } from "../../storage/FileSystemService";
 
+import { isGuestUserId } from "../../../@core/domain/constants/GuestUserConstants";
+
 export type EntityType =
     | "chapter"
     | "character"
@@ -46,6 +48,11 @@ export class DeletionLog {
 
     clearActiveUserId(): void {
         this.activeUserId = null;
+    }
+
+    isGuestAction(userId?: string): boolean {
+        const scopedUserId = userId?.trim() || this.activeUserId;
+        return isGuestUserId(scopedUserId);
     }
 
     private resolveUserId(userId?: string): string {

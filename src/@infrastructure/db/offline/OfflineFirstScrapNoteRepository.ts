@@ -19,6 +19,8 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
 
     async create(projectId: string, note: ScrapNote): Promise<void> {
         await this.fsRepo.create(projectId, note);
+        if (pendingUpdates.isGuestAction()) return;
+
         try {
             await this.supabaseRepo.create(projectId, note);
         } catch (error) {
@@ -100,6 +102,8 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
 
         const timestamp = updatedAt || new Date();
         await this.fsRepo.updateContent(noteId, content, timestamp);
+        if (pendingUpdates.isGuestAction()) return;
+
         try {
             const local = await this.fsRepo.findById(noteId);
             if (local) {
@@ -135,6 +139,8 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
 
     async update(note: ScrapNote): Promise<void> {
         await this.fsRepo.update(note);
+        if (pendingUpdates.isGuestAction()) return;
+
         try {
             await this.supabaseRepo.update(note);
         } catch (error) {
@@ -162,6 +168,8 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         const projectId = await this.getProjectId(id);
 
         await this.fsRepo.delete(id);
+        if (pendingUpdates.isGuestAction()) return;
+
         await deletionLog.add({
             entityType: "scrapNote",
             entityId: id,
@@ -185,16 +193,20 @@ export class OfflineFirstScrapNoteRepository implements IScrapNoteRepository {
         const notes = await this.fsRepo.findByProjectId(projectId);
         const timestamp = Date.now();
 
-        for (const note of notes) {
-            await deletionLog.add({
-                entityType: "scrapNote",
-                entityId: note.id,
-                projectId,
-                timestamp,
-            });
+        if (!pendingUpdates.isGuestAction()) {
+            for (const note of notes) {
+                await deletionLog.add({
+                    entityType: "scrapNote",
+                    entityId: note.id,
+                    projectId,
+                    timestamp,
+                });
+            }
         }
 
         await this.fsRepo.deleteByProjectId(projectId);
+
+        if (pendingUpdates.isGuestAction()) return;
 
         try {
             await this.supabaseRepo.deleteByProjectId(projectId);

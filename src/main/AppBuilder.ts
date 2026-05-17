@@ -51,6 +51,7 @@ import { LoadProjectList } from "../@core/application/use-cases/project/LoadProj
 import { OpenProject } from "../@core/application/use-cases/project/OpenProject";
 import { RenameProject } from "../@core/application/use-cases/project/RenameProject";
 import { ReorderProjectItems } from "../@core/application/use-cases/project/ReorderProjectItems";
+import { ExportDocument } from "../@core/application/use-cases/project/ExportDocument";
 import { ImportProject } from "../@core/application/use-cases/project/ImportProject";
 import { CreateCharacter } from "../@core/application/use-cases/world/CreateCharacter";
 import { CreateLocation } from "../@core/application/use-cases/world/CreateLocation";
@@ -129,6 +130,7 @@ import { LoadProjectListController } from "../@interface-adapters/controllers/pr
 import { OpenProjectController } from "../@interface-adapters/controllers/project/OpenProjectController";
 import { RenameProjectController } from "../@interface-adapters/controllers/project/RenameProjectController";
 import { ReorderProjectItemsController } from "../@interface-adapters/controllers/project/ReorderProjectItemsController";
+import { ExportDocumentController } from "../@interface-adapters/controllers/project/ExportDocumentController";
 import { ImportProjectController } from "../@interface-adapters/controllers/project/ImportProjectController";
 import { CreateCharacterController } from "../@interface-adapters/controllers/world/CreateCharacterController";
 import { CreateLocationController } from "../@interface-adapters/controllers/world/CreateLocationController";
@@ -297,6 +299,7 @@ type UseCaseMap = {
         createProject: CreateProject;
         deleteProject: DeleteProject;
         exportManuscript: ExportManuscript;
+        exportDocument: ExportDocument;
         importProject: ImportProject;
         loadProjectList: LoadProjectList;
         openProject: OpenProject;
@@ -643,6 +646,7 @@ export class AppBuilder {
                     repo.user,
                 ),
                 exportManuscript: new ExportManuscript(svc.export),
+                exportDocument: new ExportDocument(svc.export),
                 importProject: new ImportProject(
                     svc.epubImport,
                     repo.project,
@@ -800,9 +804,10 @@ export class AppBuilder {
                     this.dependencies.services.sessionStore,
                     this.authStateGateway,
                 ),
-                completePasswordRecovery: new CompletePasswordRecoveryController(
-                    useCases.auth.completePasswordRecovery,
-                ),
+                completePasswordRecovery:
+                    new CompletePasswordRecoveryController(
+                        useCases.auth.completePasswordRecovery,
+                    ),
                 updateEmail: new UpdateUserEmailController(
                     useCases.auth.updateEmail,
                     this.authStateGateway,
@@ -952,6 +957,9 @@ export class AppBuilder {
                 ),
                 exportManuscript: new ExportManuscriptController(
                     useCases.project.exportManuscript,
+                ),
+                exportDocument: new ExportDocumentController(
+                    useCases.project.exportDocument,
                 ),
                 importProject: new ImportProjectController(
                     useCases.project.importProject,

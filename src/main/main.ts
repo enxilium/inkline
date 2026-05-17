@@ -998,6 +998,15 @@ const setupContextMenu = (): void => {
                     },
                 },
                 {
+                    label: "Export",
+                    click: () => {
+                        event.sender.send("context-menu-command", {
+                            command: "export",
+                            data,
+                        });
+                    },
+                },
+                {
                     label: "Delete",
                     click: () => {
                         event.sender.send("context-menu-command", {

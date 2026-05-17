@@ -1,5 +1,6 @@
 import React from "react";
 import { useEditor, Extension } from "@tiptap/react";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { StarterKit } from "@tiptap/starter-kit";
 import { TextStyle } from "@tiptap/extension-text-style";
 import { Color } from "@tiptap/extension-color";
@@ -14,6 +15,7 @@ import { LanguageTool } from "../../tiptap/languageTool";
 import { InlineComment } from "../../tiptap/inlineComment";
 import CommentExtension from "../../tiptap/commentExtension";
 import { NightModeDisplayColorShift } from "../../tiptap/nightModeDisplayColorShift";
+import { EmDash } from "../../tiptap/emDash";
 import {
     DocumentReference,
     createDocumentReferenceSuggestion,
@@ -31,6 +33,175 @@ import { countWords } from "../../utils/textStats";
 import type { UserChapterComment } from "../workspace/CommentsSidebar";
 
 const AUTOSAVE_DELAY_MS = 1200;
+
+const BlockIndent = Extension.create({
+    name: "blockIndent",
+    addProseMirrorPlugins() {
+        return [
+            new Plugin({
+                key: new PluginKey("removeIndentInList"),
+                appendTransaction(transactions, oldState, newState) {
+                    if (!transactions.some((tr) => tr.docChanged)) return null;
+                    let tr = newState.tr;
+                    let modified = false;
+                    newState.doc.descendants((node, pos, parent) => {
+                        if (
+                            node.type.name === "paragraph" &&
+                            parent &&
+                            parent.type.name === "listItem"
+                        ) {
+                            if (
+                                node.attrs.textIndentLevel !== undefined &&
+                                node.attrs.textIndentLevel !== 0
+                            ) {
+                                tr.setNodeMarkup(pos, undefined, {
+                                    ...node.attrs,
+                                    textIndentLevel: 0,
+                                });
+                                modified = true;
+                            }
+                        }
+                    });
+                    return modified ? tr : null;
+                },
+            }),
+        ];
+    },
+    addGlobalAttributes() {
+        return [
+            {
+                types: ["paragraph", "heading"],
+                attributes: {
+                    textIndentLevel: {
+                        default: 0,
+                        keepOnSplit: true,
+                        renderHTML: (attributes) => {
+                            if (!attributes.textIndentLevel) return {};
+                            return {
+                                style: `margin-left: ${attributes.textIndentLevel * 2}rem`,
+                            };
+                        },
+                        parseHTML: (element) => {
+                            const marginLeft = element.style.marginLeft;
+                            if (!marginLeft) return 0;
+                            const match = marginLeft.match(/([\d.]+)rem/);
+                            return match
+                                ? Math.round(parseFloat(match[1]) / 2)
+                                : 0;
+                        },
+                    },
+                },
+            },
+        ];
+    },
+});
+
+const ListBackspace = Extension.create({
+    name: "listBackspace",
+
+    addKeyboardShortcuts() {
+        return {
+            Backspace: () => {
+                const { state } = this.editor;
+                const { selection } = state;
+
+                if (!selection.empty) return false;
+
+                const { $from } = selection;
+                if ($from.parentOffset !== 0) return false;
+
+                if ($from.depth < 1) return false;
+                const parent = $from.node($from.depth - 1);
+
+                if (parent && parent.type.name === "listItem") {
+                    let listDepth = 0;
+                    for (let i = $from.depth; i > 0; i--) {
+                        const n = $from.node(i);
+                        if (
+                            n.type.name === "bulletList" ||
+                            n.type.name === "orderedList"
+                        ) {
+                            listDepth++;
+                        }
+                    }
+
+                    const marks = state.storedMarks || $from.marks();
+                    let chain = this.editor.chain();
+
+                    for (let i = 0; i < listDepth; i++) {
+                        chain = chain.liftListItem("listItem");
+                    }
+
+                    return chain
+                        .command(({ tr, state, dispatch }) => {
+                            if (dispatch) {
+                                if (listDepth > 0) {
+                                    // Use tr.selection because previous steps in the chain (like liftListItem) modified tr
+                                    const { selection } = tr;
+                                    const blockPos = selection.$from.before();
+                                    const node = tr.doc.nodeAt(blockPos);
+                                    if (node) {
+                                        tr.setNodeMarkup(blockPos, undefined, {
+                                            ...node.attrs,
+                                            textIndentLevel: listDepth,
+                                        });
+                                    }
+                                }
+                                if (marks && marks.length > 0) {
+                                    for (const mark of marks) {
+                                        tr.addStoredMark(mark);
+                                    }
+                                }
+                            }
+                            return true;
+                        })
+                        .run();
+                }
+
+                return false;
+            },
+        };
+    },
+});
+
+const IndentBackspace = Extension.create({
+    name: "indentBackspace",
+
+    addKeyboardShortcuts() {
+        return {
+            Backspace: () => {
+                const { state, dispatch } = this.editor.view;
+                const { selection } = state;
+
+                if (!selection.empty) return false;
+
+                const { $from } = selection;
+                if ($from.parentOffset !== 0) return false;
+
+                const parent = $from.parent;
+                if (
+                    (parent.type.name === "paragraph" ||
+                        parent.type.name === "heading") &&
+                    parent.attrs.textIndentLevel &&
+                    parent.attrs.textIndentLevel > 0
+                ) {
+                    if (dispatch) {
+                        const tr = state.tr;
+                        const blockPos = $from.before();
+                        tr.setNodeMarkup(blockPos, undefined, {
+                            ...parent.attrs,
+                            textIndentLevel: parent.attrs.textIndentLevel - 1,
+                        });
+                        dispatch(tr);
+                    }
+                    return true;
+                }
+
+                return false;
+            },
+        };
+    },
+});
 
 const TabIndentation = Extension.create({
     name: "tabIndentation",
@@ -305,22 +476,74 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             }
         },
         onTransaction: ({ editor, transaction }) => {
-            // When all content is deleted, re-apply last text style as stored marks
             const saved = lastTextStyleRef.current;
-            if (
-                transaction.docChanged &&
-                editor.isEmpty &&
-                Object.keys(saved).length
-            ) {
+            if (!saved || Object.keys(saved).length === 0) return;
+
+            // Sync document font to .editor-body li elements
+            queueMicrotask(() => {
+                const dom = editor.view.dom;
+                if (!dom) return;
+                const lis = dom.querySelectorAll("li");
+                lis.forEach((li) => {
+                    const firstSpan = li.querySelector("span[style]");
+                    if (firstSpan) {
+                        const style = window.getComputedStyle(firstSpan);
+                        if (style.fontFamily)
+                            li.style.fontFamily = style.fontFamily;
+                        if (style.color) li.style.color = style.color;
+                    } else if (saved) {
+                        if (saved.fontFamily)
+                            li.style.fontFamily = saved.fontFamily;
+                        if (saved.color) li.style.color = saved.color;
+                    }
+                });
+            });
+
+            if (transaction.docChanged && editor.isEmpty) {
                 queueMicrotask(() => {
                     const chain = editor.chain();
                     if (saved.fontFamily) chain.setFontFamily(saved.fontFamily);
                     if (saved.color) chain.setColor(saved.color);
                     chain.run();
                 });
+                return;
+            }
+
+            const { selection } = editor.state;
+            if (selection.empty) {
+                const { $from } = selection;
+                const parent = $from.parent;
+                if (parent.isTextblock && parent.content.size === 0) {
+                    const currentMarks =
+                        editor.state.storedMarks || $from.marks();
+                    const hasTextStyle = currentMarks.some(
+                        (m) => m.type.name === "textStyle",
+                    );
+                    if (!hasTextStyle) {
+                        queueMicrotask(() => {
+                            const chain = editor.chain();
+                            if (saved.fontFamily)
+                                chain.setFontFamily(saved.fontFamily);
+                            if (saved.color) chain.setColor(saved.color);
+                            chain.run();
+                        });
+                    }
+                }
             }
         },
         onSelectionUpdate: ({ editor }) => {
+            const attrs = editor.getAttributes("textStyle") as Record<
+                string,
+                string
+            >;
+            const active: Record<string, string> = {};
+            for (const [k, v] of Object.entries(attrs)) {
+                if (v) active[k] = v;
+            }
+            if (Object.keys(active).length) {
+                lastTextStyleRef.current = active;
+            }
+
             const { from, to, empty } = editor.state.selection;
             if (empty) {
                 setCurrentSelection(null);
@@ -348,6 +571,8 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             });
         },
         extensions: [
+            EmDash,
+            BlockIndent,
             NightModeDisplayColorShift,
             Color.configure({ types: ["textStyle"] }),
             TextStyle,
@@ -365,8 +590,8 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             }),
             StarterKit.configure({
                 heading: { levels: [1, 2, 3] },
-                bulletList: { keepMarks: true },
-                orderedList: { keepMarks: true },
+                bulletList: { keepMarks: false, keepAttributes: false },
+                orderedList: { keepMarks: false, keepAttributes: false },
                 link: {
                     autolink: true,
                     linkOnPaste: true,
@@ -384,6 +609,8 @@ export const ConnectedTextEditor: React.FC<ConnectedTextEditorProps> = ({
             }),
             TabIndentation,
             AlignmentBackspace,
+            IndentBackspace,
+            ListBackspace,
             CommentExtension.configure({
                 onCommentActivated: (commentId: string) => {
                     setActiveCommentId(commentId ? commentId : null);

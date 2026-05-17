@@ -28,6 +28,7 @@ import "@fontsource/playfair-display/index.css";
 import "@fontsource/crimson-pro/index.css";
 import "@fontsource/roboto-slab/index.css";
 import "@fontsource/ibm-plex-mono/index.css";
+import "@fontsource/spectral/index.css";
 
 import "flexlayout-react/style/dark.css";
 import "./styles.css";

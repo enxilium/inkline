@@ -838,6 +838,7 @@ type AppStore = {
 
     // IPC wrappers: keep renderer calls centralized here.
     exportManuscript: RendererApi["project"]["exportManuscript"];
+    exportDocument: (request: any) => Promise<any>;
     analyzeText: RendererApi["analysis"]["analyzeText"];
     editChapters: RendererApi["analysis"]["editChapters"];
     generalChat: RendererApi["analysis"]["generalChat"];
@@ -4278,7 +4279,10 @@ export const useAppStore = create<AppStore>((set, get) => {
         },
 
         exportManuscript: async (request) => {
-            return rendererApi.project.exportManuscript(request);
+            return window.api.project.exportManuscript(request);
+        },
+        exportDocument: async (request: any) => {
+            return (window.api.project as any).exportDocument(request);
         },
         analyzeText: async (request) => {
             return rendererApi.analysis.analyzeText(request);

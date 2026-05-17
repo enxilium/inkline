@@ -1,5 +1,7 @@
 import { fileSystemService } from "../../storage/FileSystemService";
 
+import { isGuestUserId } from "../../../@core/domain/constants/GuestUserConstants";
+
 export type PendingUpdateEntityType =
     | "project"
     | "chapter"
@@ -40,6 +42,12 @@ export class PendingUpdates {
 
     clearActiveUserId(): void {
         this.activeUserId = null;
+    }
+
+    isGuestAction(userId?: string): boolean {
+        // If a specific userId is passed, check it; otherwise fallback to activeUserId
+        const scopedUserId = userId?.trim() || this.activeUserId;
+        return isGuestUserId(scopedUserId);
     }
 
     async clearForUser(userId: string): Promise<void> {

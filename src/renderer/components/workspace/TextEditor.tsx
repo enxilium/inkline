@@ -65,6 +65,9 @@ const fontOptions = [
     { label: "Playfair Display", value: "'Playfair Display', serif" },
     { label: "Crimson Pro", value: "'Crimson Pro', serif" },
     { label: "Roboto Slab", value: "'Roboto Slab', serif" },
+    { label: "Garamond", value: "'Garamond', serif" },
+    { label: "Times New Roman", value: "'Times New Roman', serif" },
+    { label: "Spectral", value: "'Spectral', serif" },
     { label: "IBM Plex Mono", value: "'IBM Plex Mono', monospace" },
 ];
 
@@ -368,10 +371,25 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                             <select
                                 className="toolbar-select"
                                 aria-label="Font family"
-                                value={
-                                    editor.getAttributes("textStyle")
-                                        .fontFamily ?? ""
-                                }
+                                value={(() => {
+                                    if (!editor) return "";
+                                    const currentFont = editor.getAttributes("textStyle").fontFamily;
+                                    if (!currentFont) return "";
+                                    
+                                    const normalizedCurrent = currentFont.replace(/['"]/g, "").toLowerCase();
+                                    
+                                    const exactMatch = fontOptions.find(opt => opt.value.replace(/['"]/g, "").toLowerCase() === normalizedCurrent);
+                                    if (exactMatch) return exactMatch.value;
+                                    
+                                    const primaryFontMatch = fontOptions.find(opt => {
+                                        if (!opt.value) return false;
+                                        const primaryOptFont = opt.value.split(',')[0].replace(/['"]/g, "").toLowerCase().trim();
+                                        const primaryCurrentFont = normalizedCurrent.split(',')[0].trim();
+                                        return primaryOptFont === primaryCurrentFont;
+                                    });
+
+                                    return primaryFontMatch ? primaryFontMatch.value : "";
+                                })()}
                                 onChange={(event) => {
                                     if (!editor) return;
                                     const { value } = event.target;
@@ -391,7 +409,13 @@ export const TextEditor: React.FC<TextEditorProps> = ({
                                 }}
                             >
                                 {fontOptions.map((font) => (
-                                    <option key={font.label} value={font.value}>
+                                    <option
+                                        key={font.label}
+                                        value={font.value}
+                                        style={{
+                                            fontFamily: font.value || "inherit",
+                                        }}
+                                    >
                                         {font.label}
                                     </option>
                                 ))}

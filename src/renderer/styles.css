@@ -2320,6 +2320,7 @@ input.toolbar-color:focus {
 }
 
 .editor-body {
+    tab-size: 2rem;
     flex: 1;
     min-height: 60vh;
     font-size: var(--text-md);
@@ -2368,8 +2369,13 @@ input.toolbar-color:focus {
 
 .editor-body ul,
 .editor-body ol {
-    padding-left: 1.3rem;
+    padding-left: 2rem;
     margin-bottom: 1.1rem;
+}
+
+.editor-body li {
+    font-family: inherit;
+    color: inherit;
 }
 
 .editor-body blockquote {
